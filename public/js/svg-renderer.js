@@ -803,47 +803,43 @@ const SvgRenderer = {
             measuredWidth = textEl.getComputedTextLength();
           }
 
-          // Calculate ratio based on measured width vs max width
-          // The scaleX transform is applied separately by the SVG renderer
-          if (measuredWidth > 0 && Math.abs(measuredWidth - maxWidth) > 1) {
-            var ratio = maxWidth / measuredWidth;
+          // Get actual rect width from SVG (more reliable than maxWidth from DB)
+          var actualRectWidth = maxWidth;
+          var rectWidthMatch = svgString.match(/<rect[^>]*\bwidth=["']([\d.]+)["']/i);
+          if (rectWidthMatch) {
+            var foundWidth = parseFloat(rectWidthMatch[1]);
+            // Use the rect width if it's reasonable (not a huge background rect)
+            var vbWidthMatch = svgString.match(/viewBox=["'][^"']*\s([\d.]+)\s[\d.]+["']/);
+            var vbWidth = vbWidthMatch ? parseFloat(vbWidthMatch[1]) : 1000;
+            if (foundWidth < vbWidth * 0.95) {
+              actualRectWidth = foundWidth;
+            }
+          }
 
-            // Extract rect height from SVG to calculate max font size
-            // This ensures text never exceeds the container vertically
-            var rectHeight = null;
-            var rectMatch = svgString.match(/<rect[^>]*height=["']([\d.]+)["']/i);
-            if (rectMatch) {
-              rectHeight = parseFloat(rectMatch[1]);
+          // Use smaller of DB maxWidth and actual rect width, with padding
+          var effectiveMaxWidth = Math.min(maxWidth, actualRectWidth * 0.85);
+
+          // Calculate ratio based on measured width vs effective max width
+          if (measuredWidth > 0) {
+            var ratio = effectiveMaxWidth / measuredWidth;
+
+            // NEVER increase font size - only decrease if text is too wide
+            if (ratio > 1.0) {
+              ratio = 1.0;
             }
 
-            // Calculate max font size based on rect height
-            // For single line: fit within ~55% of rect height
-            // For multi-line: use same as single-line max, rects will expand to fit
             var numLines = tspans.length || 1;
-            var maxFontFromHeight;
-            if (rectHeight) {
-              // Use same max font for all line counts - rects expand for multi-line
-              maxFontFromHeight = rectHeight * 0.55;
-            } else {
-              maxFontFromHeight = originalFontSize * 3.0; // fallback
-            }
-
             var minFontSize = originalFontSize * 0.4;
             var newFontSize = originalFontSize * ratio;
             var newScaleX = originalScaleX;
-
-            // Clamp: don't exceed max font size based on rect height
-            if (newFontSize > maxFontFromHeight) {
-              newFontSize = maxFontFromHeight;
-            }
 
             if (newFontSize < minFontSize) {
               newFontSize = minFontSize;
               // At min font size, calculate horizontal compression
               var fontRatio = minFontSize / originalFontSize;
               var widthAtMinFont = measuredWidth * fontRatio;
-              if (widthAtMinFont > maxWidth) {
-                newScaleX = originalScaleX * (maxWidth / widthAtMinFont);
+              if (widthAtMinFont > effectiveMaxWidth) {
+                newScaleX = originalScaleX * (effectiveMaxWidth / widthAtMinFont);
               }
             }
 
@@ -1057,21 +1053,24 @@ const SvgRenderer = {
                   var mm = curTrans.match(/matrix\(\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*\)/);
                   if (mm) {
                     var newTx = newFrameCenterX;
-                    var newMat = 'matrix(' + mm[1] + ' ' + mm[2] + ' ' + mm[3] + ' ' + mm[4] + ' ' + newTx.toFixed(4) + ' ' + mm[6] + ')';
+                    var currentScaleX = parseFloat(mm[1]);
+
+                    // For single-line text: compress if text is wider than frame
+                    var framePadding = newFontSize * 0.3;
+                    var availableFrameWidth = frameWidth - framePadding * 2;
+                    if (finalTextWidth > availableFrameWidth) {
+                      // Compress text to fit frame
+                      var compressionRatio = availableFrameWidth / finalTextWidth;
+                      currentScaleX = currentScaleX * compressionRatio;
+                      finalTextWidth = finalTextWidth * compressionRatio;
+                    }
+
+                    var newMat = 'matrix(' + currentScaleX.toFixed(4) + ' ' + mm[2] + ' ' + mm[3] + ' ' + mm[4] + ' ' + newTx.toFixed(4) + ' ' + mm[6] + ')';
                     result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newMat);
                     textTx = newTx;
                     textLeft = textTx - finalTextWidth / 2;
                     textRight = textTx + finalTextWidth / 2;
                   }
-                }
-
-                // Expand contentBounds to include text if text extends beyond frame
-                var textPadding = newFontSize * 0.5;
-                if (textLeft - textPadding < contentBounds.minX) {
-                  contentBounds.minX = textLeft - textPadding;
-                }
-                if (textRight + textPadding > contentBounds.maxX) {
-                  contentBounds.maxX = textRight + textPadding;
                 }
 
                 // Add stroke width padding for viewBox
