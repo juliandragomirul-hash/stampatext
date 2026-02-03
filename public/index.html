@@ -1,15 +1,258 @@
 <!DOCTYPE html>
-<html lang="ro">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>stampatext.com</title>
-  <link rel="stylesheet" href="css/style.css">
+  <title>StampaText - Stamp Your Text on Beautiful Templates</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="container">
-    <h1>stampatext.com</h1>
-    <p>Coming soon</p>
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions" id="header-actions">
+      <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <button class="btn btn-secondary btn-small" id="btn-login" onclick="openModal('login')">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup" onclick="openModal('signup')">Sign Up</button>
+      <a href="/app" class="btn btn-primary btn-small" id="btn-go-app" style="display:none;">Go to App</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="stamp-hero">
+    <h1 class="stamp-hero-title">Welcome, have your text stamped on hundreds of gorgeous models of stamps, stickers, blackboards, speech bubbles, banners, buttons and more</h1>
+    <div class="stamp-hero-input-wrapper">
+      <input type="text" class="stamp-hero-input" id="stamp-input"
+             placeholder="write the text you want to stamp and I'll be on it in seconds"
+             maxlength="300">
+      <button class="btn btn-primary stamp-hero-btn" id="stamp-btn">Stamp</button>
+    </div>
+  </section>
+
+  <!-- Results Section -->
+  <section class="stamp-results" id="stamp-results" style="display:none;">
+    <div id="results-batches"></div>
+  </section>
+
+  <!-- Filters Modal -->
+  <div class="modal-overlay" id="filters-modal">
+    <div class="modal" style="max-width:520px;">
+      <button class="modal-close" id="filters-modal-close">&times;</button>
+      <h3 class="modal-title">Preferences</h3>
+
+      <!-- COLORS -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">COLORS</span>
+          <a href="#" class="filter-select-all" data-target="color-palette">Select all</a>
+        </div>
+        <div class="color-palette" id="color-palette"></div>
+      </div>
+
+      <!-- TILT -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">TILT</span>
+          <a href="#" class="filter-select-all" data-target="tilt-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="tilt-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="0"> Straight</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="-20"> 20 degrees</label>
+        </div>
+      </div>
+
+      <!-- TEXTURE -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">TEXTURE</span>
+          <a href="#" class="filter-select-all" data-target="texture-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="texture-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="none"> No texture</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="grungy_texture"> Grungy texture</label>
+        </div>
+      </div>
+
+      <!-- SHAPE -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">SHAPE</span>
+          <a href="#" class="filter-select-all" data-target="shape-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="shape-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="circle"> Circle</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="square"> Square</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="rectangle"> Rectangle</label>
+        </div>
+      </div>
+
+      <!-- OBJECT -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">OBJECT</span>
+          <a href="#" class="filter-select-all" data-target="object-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="object-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="stamp"> Stamp</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="sticker"> Sticker</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="button"> Button</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="banner"> Banner</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="blackboard"> Blackboard</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="speech_bubble"> Speech Bubble</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="speech_cloud"> Speech Cloud</label>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-apply-filters" style="width:100%;">Show stamps</button>
+    </div>
   </div>
+
+  <!-- Auth Modal -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+
+      <div class="modal-tabs">
+        <button class="modal-tab active" id="tab-login" onclick="switchTab('login')">Login</button>
+        <button class="modal-tab" id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="form-login" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email</label>
+          <input class="form-input" type="email" id="login-email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input class="form-input" type="password" id="login-password" required>
+        </div>
+        <div class="form-error" id="login-error"></div>
+        <button class="btn btn-primary form-submit" type="submit" id="login-submit">Login</button>
+      </form>
+
+      <!-- Sign Up Form -->
+      <form id="form-signup" style="display:none;" onsubmit="handleSignup(event)">
+        <div class="form-group">
+          <label class="form-label" for="signup-email">Email</label>
+          <input class="form-input" type="email" id="signup-email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signup-password">Password</label>
+          <input class="form-input" type="password" id="signup-password" required minlength="6">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signup-confirm">Confirm Password</label>
+          <input class="form-input" type="password" id="signup-confirm" required minlength="6">
+        </div>
+        <div class="form-error" id="signup-error"></div>
+        <button class="btn btn-primary form-submit" type="submit" id="signup-submit">Create Account</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/router.js"></script>
+  <script src="/js/svg-renderer.js"></script>
+  <script src="/js/gallery.js"></script>
+  <script src="/js/stamp-app.js"></script>
+  <script>
+    function openModal(tab) {
+      document.getElementById('auth-modal').classList.add('active');
+      switchTab(tab || 'login');
+    }
+
+    function closeModal() {
+      document.getElementById('auth-modal').classList.remove('active');
+      document.getElementById('login-error').classList.remove('visible');
+      document.getElementById('signup-error').classList.remove('visible');
+    }
+
+    function switchTab(tab) {
+      var tabLogin = document.getElementById('tab-login');
+      var tabSignup = document.getElementById('tab-signup');
+      var formLogin = document.getElementById('form-login');
+      var formSignup = document.getElementById('form-signup');
+
+      if (tab === 'login') {
+        tabLogin.classList.add('active');
+        tabSignup.classList.remove('active');
+        formLogin.style.display = 'block';
+        formSignup.style.display = 'none';
+      } else {
+        tabSignup.classList.add('active');
+        tabLogin.classList.remove('active');
+        formSignup.style.display = 'block';
+        formLogin.style.display = 'none';
+      }
+    }
+
+    function getRedirectUrl() {
+      return window.location.pathname + window.location.search;
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      var email = document.getElementById('login-email').value;
+      var password = document.getElementById('login-password').value;
+      var errorEl = document.getElementById('login-error');
+      var submitBtn = document.getElementById('login-submit');
+
+      errorEl.classList.remove('visible');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Logging in...';
+
+      try {
+        await signIn(email, password);
+        closeModal();
+        window.location.reload();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.add('visible');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Login';
+      }
+    }
+
+    async function handleSignup(e) {
+      e.preventDefault();
+      var email = document.getElementById('signup-email').value;
+      var password = document.getElementById('signup-password').value;
+      var confirm = document.getElementById('signup-confirm').value;
+      var errorEl = document.getElementById('signup-error');
+      var submitBtn = document.getElementById('signup-submit');
+
+      errorEl.classList.remove('visible');
+
+      if (password !== confirm) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating account...';
+
+      try {
+        await signUp(email, password);
+        closeModal();
+        window.location.reload();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.add('visible');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Account';
+      }
+    }
+  </script>
+
 </body>
 </html>

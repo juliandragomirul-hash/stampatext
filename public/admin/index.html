@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StampaText - Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="page-loading">
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/admin" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"> <span style="color:#4f46e5; font-size:0.75rem; vertical-align:middle;">ADMIN</span></a>
+    <div class="header-actions">
+      <span class="header-user" id="admin-email"></span>
+      <div class="dropdown-wrapper">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/app">Go to App</a>
+          <a class="dropdown-item" href="/app/profile">Profilul Meu</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Admin Layout -->
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <nav class="admin-sidebar">
+      <ul class="admin-nav">
+        <li><a class="admin-nav-item active" href="#dashboard">Dashboard</a></li>
+        <li><a class="admin-nav-item" href="#templates">Templates</a></li>
+        <li><a class="admin-nav-item" href="#textures">Textures</a></li>
+        <li><a class="admin-nav-item" href="#users">Users</a></li>
+      </ul>
+    </nav>
+
+    <!-- Main -->
+    <main class="admin-main">
+
+      <!-- Dashboard Section -->
+      <div id="section-dashboard">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Overview of your StampaText platform</p>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-card-label">Total Users</div>
+            <div class="stat-card-value" id="stat-users">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Templates</div>
+            <div class="stat-card-value" id="stat-templates">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Generations Today</div>
+            <div class="stat-card-value" id="stat-generations">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Revenue</div>
+            <div class="stat-card-value" id="stat-revenue">--</div>
+          </div>
+        </div>
+
+        <p style="color:#666;">Select a section from the sidebar to manage your platform.</p>
+      </div>
+
+      <!-- Templates Section -->
+      <div id="section-templates" style="display:none;">
+        <h1 class="page-title">Template Management</h1>
+        <p class="page-subtitle">Upload and manage SVG templates</p>
+
+        <!-- Upload form -->
+        <div class="profile-section">
+          <div class="profile-section-title">Upload New Template</div>
+          <form id="form-upload-template">
+            <div class="form-group">
+              <label class="form-label">Template Name</label>
+              <input class="form-input" type="text" id="tpl-name" required placeholder="e.g. Red Banner Classic">
+            </div>
+            <div class="form-group">
+              <label class="form-label">SVG File</label>
+              <input class="form-input" type="file" id="tpl-svg" accept=".svg" required style="padding:0.4rem;">
+            </div>
+            <button class="btn btn-primary" type="submit">Upload & Parse</button>
+          </form>
+        </div>
+
+        <!-- Auto-parse results (shown after upload) -->
+        <div id="parse-results" style="display:none;">
+          <div class="profile-section">
+            <div class="profile-section-title">SVG Preview</div>
+            <div id="svg-preview" style="max-width:100%; overflow:auto; border:1px solid #e5e5e5; border-radius:8px; padding:1rem; background:#fafafa;"></div>
+          </div>
+
+          <div class="profile-section">
+            <div class="profile-section-title">Detected Text Layers</div>
+            <div id="detected-layers"></div>
+          </div>
+
+          <div class="profile-section">
+            <div class="profile-section-title">Template Metadata</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Shape</label>
+                <select class="form-input" id="tpl-shape">
+                  <option value="rectangle">Rectangle</option>
+                  <option value="square">Square</option>
+                  <option value="circle">Circle</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Object Type</label>
+                <select class="form-input" id="tpl-object">
+                  <option value="stamp">Stamp</option>
+                  <option value="sticker">Sticker</option>
+                  <option value="button">Button</option>
+                  <option value="banner">Banner</option>
+                  <option value="blackboard">Blackboard</option>
+                  <option value="speech_bubble">Speech Bubble</option>
+                  <option value="speech_cloud">Speech Cloud</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dominant Colors (click to select)</label>
+              <div class="color-palette" id="admin-color-palette"></div>
+            </div>
+            <button class="btn btn-primary" id="btn-save-template" style="margin-top:1rem;">Save Template</button>
+          </div>
+        </div>
+
+        <!-- Template list -->
+        <div class="profile-section" id="template-list-section">
+          <div class="profile-section-title">Existing Templates</div>
+          <div id="template-list"></div>
+        </div>
+
+        <!-- Template Edit (hidden by default) -->
+        <div id="template-edit-section" style="display:none;">
+          <div style="margin-bottom:1rem;">
+            <button class="btn btn-secondary btn-small" id="btn-back-to-list">&larr; Back to list</button>
+          </div>
+
+          <div class="profile-section">
+            <div class="profile-section-title">Edit Template: <span id="edit-tpl-name-display"></span></div>
+            <div id="edit-svg-preview" style="max-width:100%; overflow:auto; border:1px solid #e5e5e5; border-radius:8px; padding:1rem; background:#fafafa; margin-bottom:1rem;"></div>
+          </div>
+
+          <div class="profile-section">
+            <div class="profile-section-title">Template Name</div>
+            <div class="form-group">
+              <input class="form-input" type="text" id="edit-tpl-name" required>
+            </div>
+          </div>
+
+          <div class="profile-section">
+            <div class="profile-section-title">Text Layers</div>
+            <div id="edit-detected-layers"></div>
+          </div>
+
+          <div class="profile-section">
+            <div class="profile-section-title">Template Metadata</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Shape</label>
+                <select class="form-input" id="edit-tpl-shape">
+                  <option value="rectangle">Rectangle</option>
+                  <option value="square">Square</option>
+                  <option value="circle">Circle</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Object Type</label>
+                <select class="form-input" id="edit-tpl-object">
+                  <option value="stamp">Stamp</option>
+                  <option value="sticker">Sticker</option>
+                  <option value="button">Button</option>
+                  <option value="banner">Banner</option>
+                  <option value="blackboard">Blackboard</option>
+                  <option value="speech_bubble">Speech Bubble</option>
+                  <option value="speech_cloud">Speech Cloud</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dominant Colors (click to select)</label>
+              <div class="color-palette" id="edit-color-palette"></div>
+            </div>
+            <button class="btn btn-primary" id="btn-update-template" style="margin-top:1rem;">Update Template</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Textures Section -->
+      <div id="section-textures" style="display:none;">
+        <h1 class="page-title">Texture Management</h1>
+        <p class="page-subtitle">Upload and manage grungy textures for stamps</p>
+
+        <!-- Upload form -->
+        <div class="profile-section">
+          <div class="profile-section-title">Upload New Texture</div>
+          <form id="form-upload-texture">
+            <div class="form-group">
+              <label class="form-label">Texture Name</label>
+              <input class="form-input" type="text" id="texture-name" required placeholder="e.g. Grungy Texture 1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">SVG File</label>
+              <input class="form-input" type="file" id="texture-svg" accept=".svg" required style="padding:0.4rem;">
+            </div>
+            <button class="btn btn-primary" type="submit">Upload Texture</button>
+          </form>
+        </div>
+
+        <!-- Texture preview (shown after upload) -->
+        <div id="texture-preview-section" style="display:none;">
+          <div class="profile-section">
+            <div class="profile-section-title">Preview</div>
+            <div id="texture-preview" style="max-width:300px; overflow:hidden; border:1px solid #e5e5e5; border-radius:8px; padding:1rem; background:#333;"></div>
+          </div>
+        </div>
+
+        <!-- Texture list -->
+        <div class="profile-section">
+          <div class="profile-section-title">Existing Textures</div>
+          <div id="texture-list" class="texture-grid"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/router.js"></script>
+  <script src="/js/svg-renderer.js"></script>
+  <script src="/js/admin-templates.js"></script>
+  <script>
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('user-menu');
+      const btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      let profile = null;
+      try {
+        profile = await requireAdmin();
+      } catch (e) {
+        console.error('Admin check failed:', e);
+        window.location.href = '/';
+        return;
+      }
+      if (!profile) return;
+
+      document.getElementById('admin-email').textContent = profile.email;
+
+      showPage();
+    });
+  </script>
+
+</body>
+</html>
