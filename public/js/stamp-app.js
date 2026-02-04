@@ -4,8 +4,8 @@
  */
 (function () {
   // ---- Constants ----
-  var INITIAL_COUNT = 5;
-  var PAGE_SIZE = 5;
+  var INITIAL_COUNT = 9;
+  var DEFAULT_PAGE_SIZE = 9;
 
   // ---- Custom color palette ----
   var PALETTE_COLORS = [
@@ -19,6 +19,7 @@
 
   // ---- State ----
   var currentFilters = { colors: [], tilts: [], textures: [], shapes: [], objects: [] };
+  var currentPageSize = DEFAULT_PAGE_SIZE;
   var isProcessing = false;
 
   // ---- Init ----
@@ -128,7 +129,7 @@
       openFiltersModal();
     } else {
       // Subsequent: load next page
-      Gallery.showNextPage(PAGE_SIZE);
+      Gallery.showNextPage(currentPageSize);
     }
   }
 
@@ -189,6 +190,12 @@
       selectedObjects.push(el.value);
     });
 
+    // Read selected quantity
+    var quantityRadio = document.querySelector('#quantity-filters input[name="quantity"]:checked');
+    if (quantityRadio) {
+      currentPageSize = parseInt(quantityRadio.value, 10);
+    }
+
     currentFilters = {
       colors: selectedColors,
       tilts: selectedTilts,
@@ -204,7 +211,7 @@
     closeFiltersModal();
 
     // Show filtered results as a new batch section (stacks below previous)
-    Gallery.showNextPage(PAGE_SIZE);
+    Gallery.showNextPage(currentPageSize);
   }
 
   // ---- Download handler (delegated) ----

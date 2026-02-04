@@ -79,7 +79,10 @@ const SvgRenderer = {
       { from: "'ARMYRUST'", to: "'ArmyRust'", weight: '400' },
       { from: "'ArmyRust'", to: "'ArmyRust'", weight: '400' },
       { from: "'ARMY RUST'", to: "'ArmyRust'", weight: '400' },
-      { from: "'Army Rust'", to: "'ArmyRust'", weight: '400' }
+      { from: "'Army Rust'", to: "'ArmyRust'", weight: '400' },
+      // Bangers font (Google Fonts)
+      { from: "'Bangers-Regular'", to: "'Bangers'", weight: '400' },
+      { from: "'Bangers'", to: "'Bangers'", weight: '400' }
     ];
     fontMappings.forEach(function(m) {
       // Replace font-family attribute - only add font-weight if not already present
@@ -373,9 +376,9 @@ const SvgRenderer = {
    * @returns {number}
    */
   _getMaxCharsPerLine(len) {
-    // 1-60 chars: 15 chars per line
-    // 61+ chars: 20 chars per line
-    return len <= 60 ? 15 : 20;
+    // 1-60 chars: 12 chars per line
+    // 61+ chars: 22 chars per line
+    return len <= 60 ? 12 : 22;
   },
 
   /**
@@ -632,23 +635,57 @@ const SvgRenderer = {
           .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
         var lines = this.splitTextIntoLines(caseAdjusted);
 
+        // Extract styling attributes from original tspans (if any)
+        // These include: fill, font-family, font-size, font-weight, etc.
+        var tspanStyle = '';
+        var originalTspanMatch = originalText.match(/<tspan([^>]*)>/i);
+        if (originalTspanMatch) {
+          var originalAttrs = originalTspanMatch[1];
+          // Extract styling attributes (exclude x, y, dy which we'll set ourselves)
+          // Note: font-family uses a special regex because the value can contain nested quotes
+          // e.g., font-family="'Bangers'" - the [^"']* would stop at the inner single quote
+          var fillMatch = originalAttrs.match(/fill=["'][^"']*["']/);
+          var fontFamilyMatch = originalAttrs.match(/font-family="([^"]*)"/);  // Match double-quoted value only
+          if (!fontFamilyMatch) {
+            fontFamilyMatch = originalAttrs.match(/font-family='([^']*)'/);  // Try single-quoted
+          }
+          var fontSizeMatch = originalAttrs.match(/font-size=["'][^"']*["']/);
+          var fontWeightMatch = originalAttrs.match(/font-weight=["'][^"']*["']/);
+          if (fillMatch) tspanStyle += ' ' + fillMatch[0];
+          if (fontFamilyMatch) tspanStyle += ' font-family="' + fontFamilyMatch[1] + '"';
+          if (fontSizeMatch) tspanStyle += ' ' + fontSizeMatch[0];
+          if (fontWeightMatch) tspanStyle += ' ' + fontWeightMatch[0];
+        }
+
+        // Check if original used y= (absolute) or dy= (relative) positioning
+        var usesAbsoluteY = originalText.match(/<tspan[^>]*\by=["']/i) && !originalText.match(/<tspan[^>]*\bdy=["']/i);
+
         var content;
         if (lines.length === 1) {
-          // Single line — plain text as before
-          content = lines[0]
+          // Single line — use tspan with preserved styling if available
+          var lineContent = lines[0]
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          if (tspanStyle) {
+            // Wrap in tspan to preserve styling
+            // Use y="0" for Fixed Frame templates (absolute), dy="0" for Dynamic Frame (relative)
+            var yAttr = usesAbsoluteY ? ' y="0"' : ' dy="0"';
+            content = '<tspan x="0"' + yAttr + tspanStyle + '>' + lineContent + '</tspan>';
+          } else {
+            content = lineContent;
+          }
         } else {
-          // Multi-line — use <tspan> elements with PLACEHOLDER dy values.
-          // The actual dy values will be calculated in autoFitTextInString
-          // after we know the final font size. This avoids double-adjustment.
+          // Multi-line — use <tspan> elements with positioning values.
+          // For Fixed Frame (y=), use y values; for Dynamic Frame (dy=), use dy values
           var xAttr = ' x="0"';
 
           content = '';
           for (var li = 0; li < lines.length; li++) {
             var lineEscaped = lines[li]
               .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            // Use placeholder dy="0" - will be recalculated in autoFit
-            content += '<tspan' + xAttr + ' dy="0">' + lineEscaped + '</tspan>';
+            // Use y="0" for first line if original used absolute positioning
+            // Otherwise use dy="0" placeholder - will be recalculated in autoFit
+            var yAttr = usesAbsoluteY ? ' y="0"' : ' dy="0"';
+            content += '<tspan' + xAttr + yAttr + tspanStyle + '>' + lineEscaped + '</tspan>';
           }
         }
 
@@ -753,9 +790,23 @@ const SvgRenderer = {
     if (!maxWidth || maxWidth <= 0) return svgString;
     originalScaleX = originalScaleX || 1;
 
+    // ============================================================
+    // CATEGORY DETECTION: Check if this is a Fixed Frame template
+    // Category 2 = has <image> element (illustrated background)
+    // Category 1 = no image (simple rect-based frame)
+    // ============================================================
+    var hasImage = /<image[^>]*>/i.test(svgString);
+    var isFixedFrame = hasImage;
+
+    if (isFixedFrame) {
+      console.log('Category 2 (Fixed Frame) template detected');
+      return this._autoFitTextFixedFrame(svgString, textIndex, maxWidth, originalFontSize, originalScaleX);
+    }
+
+    // Category 1: Dynamic Frame - TEXT-FIRST approach
     // Create an HTML wrapper with fonts to measure text accurately
     var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-      '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
+      '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
       '<style>' +
       '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:normal;}' +
       '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:normal;}' +
@@ -805,7 +856,7 @@ const SvgRenderer = {
 
           // Get actual rect width from SVG (more reliable than maxWidth from DB)
           var actualRectWidth = maxWidth;
-          var rectWidthMatch = svgString.match(/<rect[^>]*\bwidth=["']([\d.]+)["']/i);
+          var rectWidthMatch = svgString.match(/<rect[^>]*\swidth=["']([\d.]+)["']/i);
           if (rectWidthMatch) {
             var foundWidth = parseFloat(rectWidthMatch[1]);
             // Use the rect width if it's reasonable (not a huge background rect)
@@ -828,7 +879,6 @@ const SvgRenderer = {
               ratio = 1.0;
             }
 
-            var numLines = tspans.length || 1;
             var minFontSize = originalFontSize * 0.4;
             var newFontSize = originalFontSize * ratio;
             var newScaleX = originalScaleX;
@@ -859,127 +909,136 @@ const SvgRenderer = {
               }
             }
 
-            // For multi-line text: expand rects if needed, center text in rect
+            // ============================================================
+            // TEXT-FIRST APPROACH: Position text at viewBox center, then
+            // resize/reposition rects to wrap around the text
+            // ============================================================
+
+            // Get viewBox dimensions - this is our reference frame
+            var vbMatch = result.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*["']/);
+            if (!vbMatch) {
+              resolve(result);
+              return;
+            }
+            var vbX = parseFloat(vbMatch[1]);
+            var vbY = parseFloat(vbMatch[2]);
+            var vbW = parseFloat(vbMatch[3]);
+            var vbH = parseFloat(vbMatch[4]);
+
+            // STEP 1: Calculate text dimensions
+            var numLines = tspans.length > 1 ? tspans.length : 1;
+            var lineHeight = newFontSize * 1.1; // 10% extra spacing between lines
+            var textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.8;
+            var fontRatioCalc = newFontSize / originalFontSize;
+            var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX;
+
+            // STEP 2: Calculate rect dimensions to wrap around text
+            var rectPadding = newFontSize * 0.5;
+            var newRectWidth = textBlockWidth + rectPadding * 2;
+            var newRectHeight = textBlockHeight + rectPadding * 2;
+
+            // STEP 3: Position text at viewBox center (FIXED reference point)
+            var viewBoxCenterX = vbX + vbW / 2;
+            var viewBoxCenterY = vbY + vbH / 2;
+
+            // For multi-line text with tspans
             if (tspans.length > 1) {
-              var numLines = tspans.length;
-              var newLineHeight = newFontSize * 1.0;
-
-              // Get viewBox dimensions
-              var vbMatch = result.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*["']/);
-              if (!vbMatch) {
-                resolve(result);
-                return;
-              }
-              var vbX = parseFloat(vbMatch[1]);
-              var vbY = parseFloat(vbMatch[2]);
-              var vbW = parseFloat(vbMatch[3]);
-              var vbH = parseFloat(vbMatch[4]);
-
-              // Get original rect dimensions (find the main content rect, not background)
-              var origRectY = null;
-              var origRectHeight = null;
-              var rectInfoMatch = result.match(/<rect[^>]*\by=["']([\d.\-]+)["'][^>]*height=["']([\d.]+)["']/i);
-              if (!rectInfoMatch) {
-                rectInfoMatch = result.match(/<rect[^>]*height=["']([\d.]+)["'][^>]*\by=["']([\d.\-]+)["']/i);
-                if (rectInfoMatch) {
-                  origRectHeight = parseFloat(rectInfoMatch[1]);
-                  origRectY = parseFloat(rectInfoMatch[2]);
-                }
-              } else {
-                origRectY = parseFloat(rectInfoMatch[1]);
-                origRectHeight = parseFloat(rectInfoMatch[2]);
-              }
-              if (!origRectHeight) origRectHeight = vbH * 0.6;
-              if (origRectY === null) origRectY = vbY + (vbH - origRectHeight) / 2;
-
-              // Calculate text block height (with padding)
-              var totalTextHeight = (numLines - 1) * newLineHeight + newFontSize * 0.7;
-              var textPadding = newFontSize * 0.4; // padding above and below text
-
-              // Calculate extra height needed
-              var extraHeight = Math.max(0, totalTextHeight + textPadding * 2 - origRectHeight);
-
-              // Expand rects and viewBox if needed
-              if (extraHeight > 0) {
-                result = result.replace(/<rect([^>]*?)\/>/gi, function (m, attrs) {
-                  // Skip background rects
-                  if (attrs.match(/fill=["']#FFFFFF["']/i) || attrs.match(/fill=["']white["']/i)) {
-                    var wMatch = attrs.match(/width=["']([\d.]+)["']/);
-                    if (wMatch && parseFloat(wMatch[1]) > vbW * 0.9) {
-                      return m;
-                    }
-                  }
-                  var hM = attrs.match(/height=["']([\d.]+)["']/);
-                  var yM = attrs.match(/\by=["']([\d.\-]+)["']/);
-                  if (!hM) return m;
-                  var newH = parseFloat(hM[1]) + extraHeight;
-                  var na = attrs.replace(/height=["'][\d.]+["']/, 'height="' + newH.toFixed(2) + '"');
-                  if (yM) {
-                    var newY = parseFloat(yM[1]) - extraHeight / 2;
-                    na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newY.toFixed(2) + '"');
-                  }
-                  return '<rect' + na + '/>';
-                });
-                result = result.replace(/<rect([^>]*?)>/gi, function (m, attrs) {
-                  if (m.endsWith('/>')) return m;
-                  if (attrs.match(/fill=["']#FFFFFF["']/i) || attrs.match(/fill=["']white["']/i)) {
-                    var wMatch = attrs.match(/width=["']([\d.]+)["']/);
-                    if (wMatch && parseFloat(wMatch[1]) > vbW * 0.9) {
-                      return m;
-                    }
-                  }
-                  var hM = attrs.match(/height=["']([\d.]+)["']/);
-                  var yM = attrs.match(/\by=["']([\d.\-]+)["']/);
-                  if (!hM) return m;
-                  var newH = parseFloat(hM[1]) + extraHeight;
-                  var na = attrs.replace(/height=["'][\d.]+["']/, 'height="' + newH.toFixed(2) + '"');
-                  if (yM) {
-                    var newY = parseFloat(yM[1]) - extraHeight / 2;
-                    na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newY.toFixed(2) + '"');
-                  }
-                  return '<rect' + na + '>';
-                });
-                var vbM = result.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*["']/);
-                if (vbM) {
-                  var nvbY = (parseFloat(vbM[2]) - extraHeight / 2).toFixed(2);
-                  var nvbH = (parseFloat(vbM[4]) + extraHeight).toFixed(2);
-                  var nvb = parseFloat(vbM[1]).toFixed(2) + ' ' + nvbY + ' ' + parseFloat(vbM[3]).toFixed(2) + ' ' + nvbH;
-                  result = result.replace(/viewBox=["'][^"']*["']/, 'viewBox="' + nvb + '"');
-                }
-              }
-
-              // Calculate tspan dy values for vertical centering
-              // First line: shift up by half the total span, then down by cap-height offset
-              // The 0.45*fontSize accounts for all-caps visual center being above baseline
-              // Other lines: shift down by lineHeight
-              var totalSpan = (numLines - 1) * newLineHeight;
+              // Calculate tspan dy values for vertical centering around the text position
+              var totalSpan = (numLines - 1) * lineHeight;
               var firstDy = -totalSpan / 2 + newFontSize * 0.40;
 
               var lineIdx = 0;
               result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
                 var before = arguments[1];
-                var newDy = (lineIdx === 0) ? firstDy : newLineHeight;
+                var dyVal = (lineIdx === 0) ? firstDy : lineHeight;
                 lineIdx++;
-                return '<tspan' + before + 'dy="' + newDy.toFixed(2) + '"';
+                return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
               });
 
-              // Position text at RECT center (not viewBox center)
-              // After expansion, rect Y is shifted up by extraHeight/2
-              var finalRectY = origRectY - extraHeight / 2;
-              var finalRectHeight = origRectHeight + extraHeight;
-              var rectCenterY = finalRectY + finalRectHeight / 2;
+              // Set tspan x="0" - in the transformed coordinate system, x=0 is the center
+              // (because the text transform positions at viewBoxCenterX)
+              result = result.replace(/<tspan([^>]*?)\bx=["'][\d.\-]+["']/gi, function (_match, before) {
+                return '<tspan' + before + 'x="0"';
+              });
+            }
 
-              var curTransformMulti = SvgRenderer._getTextAttribute(result, textIndex, 'transform');
-              if (curTransformMulti) {
-                var mMatchMulti = curTransformMulti.match(/matrix\(\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*\)/);
-                if (mMatchMulti) {
-                  // Keep horizontal position, set vertical to rect center
-                  var newTy = rectCenterY;
-                  var newMatMulti = 'matrix(' + mMatchMulti[1] + ' ' + mMatchMulti[2] + ' ' + mMatchMulti[3] + ' ' + mMatchMulti[4] + ' ' + mMatchMulti[5] + ' ' + newTy.toFixed(4) + ')';
-                  result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newMatMulti);
-                }
+            // STEP 4: Position text at viewBox center
+            var curTransform = SvgRenderer._getTextAttribute(result, textIndex, 'transform');
+            if (curTransform) {
+              var mMatch = curTransform.match(/matrix\(\s*([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)\s*\)/);
+              if (mMatch) {
+                // For single-line, add baseline offset; for multi-line, tspan dy handles it
+                var baselineOffset = (tspans.length <= 1) ? newFontSize * 0.40 : 0;
+                var newTx = viewBoxCenterX;
+                var newTy = viewBoxCenterY + baselineOffset;
+                var newMat = 'matrix(' + mMatch[1] + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + mMatch[4] + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
+                result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newMat);
               }
             }
+
+            // Set text-anchor for horizontal centering
+            result = SvgRenderer._setTextAttribute(result, textIndex, 'text-anchor', 'middle');
+
+            // STEP 5: Resize/reposition rects to wrap around text (centered on viewBox center)
+            var newRectX = viewBoxCenterX - newRectWidth / 2;
+            var newRectY = viewBoxCenterY - newRectHeight / 2;
+
+            console.log('STEP 5: Resizing rects. newRectX:', newRectX, 'newRectY:', newRectY, 'newRectWidth:', newRectWidth, 'newRectHeight:', newRectHeight);
+
+            // Count how many rects are in the SVG
+            var allRects = result.match(/<rect[^>]*>/gi) || [];
+            console.log('Total rects found in SVG:', allRects.length);
+
+            // Update all non-background rects to new dimensions
+            result = result.replace(/<rect([^>]*?)(\/?)>/gi, function (m, attrs, selfClose) {
+              // Skip background rects (white fill at origin or very large)
+              if (attrs.match(/fill=["']#FFFFFF["']/i) || attrs.match(/fill=["']white["']/i)) {
+                var wMatch = attrs.match(/\swidth=["']([\d.]+)["']/);
+                var xMatch = attrs.match(/\bx=["']([\d.\-]+)["']/);
+                var xVal = xMatch ? parseFloat(xMatch[1]) : 0;
+                if ((wMatch && parseFloat(wMatch[1]) > vbW * 0.9) || xVal < 10) {
+                  return m; // Skip background
+                }
+              }
+
+              // Check if this rect has x, y, width, height (use \s to avoid matching stroke-width)
+              var hasX = attrs.match(/\bx=["']/);
+              var hasY = attrs.match(/\by=["']/);
+              var hasW = attrs.match(/\swidth=["']/);
+              var hasH = attrs.match(/\sheight=["']/);
+              if (!hasW || !hasH) return m;
+
+              // Get original width to determine if this is inner or outer rect
+              var origW = parseFloat(attrs.match(/\swidth=["']([\d.]+)["']/)[1]);
+
+              // Inner rects have smaller dimensions - preserve the offset ratio
+              var innerPaddingX = 11; // typical offset between outer and inner rect
+              var innerPaddingY = 10;
+
+              // Determine if this is likely the outer or inner rect based on size
+              var isInnerRect = origW < 1230; // inner rect is ~1222, outer is ~1244
+
+              var na = attrs;
+              if (isInnerRect) {
+                // Inner rect: slightly smaller, offset from outer (preserve leading space with $1)
+                na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + (newRectWidth - innerPaddingX * 2).toFixed(2) + '"');
+                na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + (newRectHeight - innerPaddingY * 2).toFixed(2) + '"');
+                if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + (newRectX + innerPaddingX).toFixed(2) + '"');
+                if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + (newRectY + innerPaddingY).toFixed(2) + '"');
+              } else {
+                // Outer rect: wrap text with padding (preserve leading space with $1)
+                na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + newRectWidth.toFixed(2) + '"');
+                na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
+                if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
+                if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
+              }
+
+              // DEBUG: Log the modified rect to see what's happening
+              console.log('Modified rect - isInner:', isInnerRect, 'origW:', origW, 'newW:', isInnerRect ? (newRectWidth - innerPaddingX * 2) : newRectWidth);
+              console.log('Full rect:', '<rect' + na + (selfClose || '') + '>');
+
+              return '<rect' + na + (selfClose || '') + '>';
+            });
 
             // ---- FIT VIEWBOX TO CONTENT ----
             // These templates may use <path> elements for stamp frames (not <rect>).
@@ -987,32 +1046,7 @@ const SvgRenderer = {
 
             var hvbMatch = result.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*["']/);
             if (hvbMatch) {
-              var hvbX = parseFloat(hvbMatch[1]);
-              var hvbY = parseFloat(hvbMatch[2]);
-              var hvbW = parseFloat(hvbMatch[3]);
-              var hvbH = parseFloat(hvbMatch[4]);
-
-              // Get the text transform to calculate text bounds
-              var finalTransform = SvgRenderer._getTextAttribute(result, textIndex, 'transform');
-              var finalScaleX = 1;
-              var textTx = hvbX + hvbW / 2;
-              var textTy = hvbY + hvbH / 2;
-              if (finalTransform) {
-                var matrixMatch = finalTransform.match(/matrix\(\s*([\d.\-]+)\s+[\d.\-]+\s+[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+([\d.\-]+)\s*\)/);
-                if (matrixMatch) {
-                  finalScaleX = parseFloat(matrixMatch[1]);
-                  textTx = parseFloat(matrixMatch[2]);
-                  textTy = parseFloat(matrixMatch[3]);
-                }
-              }
-
-              // Calculate text bounds
-              var fontRatioFinal = newFontSize / originalFontSize;
-              var finalTextWidth = measuredWidth * fontRatioFinal * finalScaleX;
-              var textLeft = textTx - finalTextWidth / 2;
-              var textRight = textTx + finalTextWidth / 2;
-
-              // Find stamp frame bounds from paths with stroke (the visible frame)
+              // Find stamp frame bounds from rects (the visible frame)
               var contentBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
 
               // Check rects (for rect-based templates like buton_straight_corners_gol)
@@ -1020,17 +1054,18 @@ const SvgRenderer = {
               rectMatches.forEach(function(rectTag) {
                 // Skip display:none
                 if (rectTag.match(/display\s*[:=]\s*["']?none/i)) return;
+                // Skip background rects (white fill at origin)
+                var isWhiteFill = rectTag.match(/fill=["']#FFFFFF["']/i) || rectTag.match(/fill=["']white["']/i);
                 var xMatch = rectTag.match(/\bx=["']([\d.\-]+)["']/);
                 var yMatch = rectTag.match(/\by=["']([\d.\-]+)["']/);
-                var wMatch = rectTag.match(/\bwidth=["']([\d.]+)["']/);
-                var hMatch = rectTag.match(/\bheight=["']([\d.]+)["']/);
+                var rx = xMatch ? parseFloat(xMatch[1]) : 0;
+                var ry = yMatch ? parseFloat(yMatch[1]) : 0;
+                if (isWhiteFill && rx < 10 && ry < 10) return; // Background rect
+                var wMatch = rectTag.match(/\swidth=["']([\d.]+)["']/);
+                var hMatch = rectTag.match(/\sheight=["']([\d.]+)["']/);
                 if (wMatch && hMatch) {
-                  var rx = xMatch ? parseFloat(xMatch[1]) : 0;
-                  var ry = yMatch ? parseFloat(yMatch[1]) : 0;
                   var rw = parseFloat(wMatch[1]);
                   var rh = parseFloat(hMatch[1]);
-                  // Skip full-viewBox background rects
-                  if (Math.abs(rw - hvbW) < 30 && Math.abs(rh - hvbH) < 30 && rx < 10 && ry < 10) return;
                   if (rx < contentBounds.minX) contentBounds.minX = rx;
                   if (rx + rw > contentBounds.maxX) contentBounds.maxX = rx + rw;
                   if (ry < contentBounds.minY) contentBounds.minY = ry;
@@ -1040,51 +1075,15 @@ const SvgRenderer = {
 
               // If we found content bounds, use them
               if (contentBounds.minX !== Infinity) {
-                // Calculate stamp frame dimensions BEFORE modifications
-                var frameWidth = contentBounds.maxX - contentBounds.minX;
-                var frameHeight = contentBounds.maxY - contentBounds.minY;
-                var frameCenterX = (contentBounds.minX + contentBounds.maxX) / 2;
-                var frameCenterY = (contentBounds.minY + contentBounds.maxY) / 2;
-
-                // CENTER TEXT at the stamp frame center
-                var newFrameCenterX = frameCenterX;
-                var curTrans = SvgRenderer._getTextAttribute(result, textIndex, 'transform');
-                if (curTrans) {
-                  var mm = curTrans.match(/matrix\(\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*\)/);
-                  if (mm) {
-                    var newTx = newFrameCenterX;
-                    var currentScaleX = parseFloat(mm[1]);
-
-                    // For single-line text: compress if text is wider than frame
-                    var framePadding = newFontSize * 0.3;
-                    var availableFrameWidth = frameWidth - framePadding * 2;
-                    if (finalTextWidth > availableFrameWidth) {
-                      // Compress text to fit frame
-                      var compressionRatio = availableFrameWidth / finalTextWidth;
-                      currentScaleX = currentScaleX * compressionRatio;
-                      finalTextWidth = finalTextWidth * compressionRatio;
-                    }
-
-                    var newMat = 'matrix(' + currentScaleX.toFixed(4) + ' ' + mm[2] + ' ' + mm[3] + ' ' + mm[4] + ' ' + newTx.toFixed(4) + ' ' + mm[6] + ')';
-                    result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newMat);
-                    textTx = newTx;
-                    textLeft = textTx - finalTextWidth / 2;
-                    textRight = textTx + finalTextWidth / 2;
-                  }
-                }
-
-                // Add stroke width padding for viewBox
+                // SIMPLE APPROACH: Just add equal padding around the rect bounds
+                // The text is already centered within the rects (text-anchor="middle")
+                // So centering the rects = centering the whole design
                 var strokePadding = 35;
-                var fitMinX = contentBounds.minX - strokePadding;
-                var fitMaxX = contentBounds.maxX + strokePadding;
-                var fitMinY = contentBounds.minY - strokePadding;
-                var fitMaxY = contentBounds.maxY + strokePadding;
 
-                // Calculate tight viewBox
-                var fitVbX = fitMinX;
-                var fitVbY = fitMinY;
-                var fitVbW = fitMaxX - fitMinX;
-                var fitVbH = fitMaxY - fitMinY;
+                var fitVbX = contentBounds.minX - strokePadding;
+                var fitVbY = contentBounds.minY - strokePadding;
+                var fitVbW = (contentBounds.maxX - contentBounds.minX) + strokePadding * 2;
+                var fitVbH = (contentBounds.maxY - contentBounds.minY) + strokePadding * 2;
 
                 // Apply the tight viewBox
                 result = result.replace(/viewBox=["'][^"']*["']/, 'viewBox="' + fitVbX.toFixed(2) + ' ' + fitVbY.toFixed(2) + ' ' + fitVbW.toFixed(2) + ' ' + fitVbH.toFixed(2) + '"');
@@ -1107,6 +1106,269 @@ const SvgRenderer = {
           URL.revokeObjectURL(url);
         }
         } // end doMeasure
+
+        // Wait for fonts before measuring
+        if (iframe.contentDocument && iframe.contentDocument.fonts) {
+          iframe.contentDocument.fonts.ready.then(function () {
+            setTimeout(doMeasure, 50);
+          }).catch(function () {
+            setTimeout(doMeasure, 500);
+          });
+        } else {
+          setTimeout(doMeasure, 500);
+        }
+      };
+
+      iframe.src = url;
+    });
+  },
+
+  /**
+   * Category 2: Fixed Frame text fitting.
+   * Scales text DOWN to fit within container, preserving rotation and position.
+   * Does NOT modify rects, viewBox, or text position.
+   * @private
+   */
+  async _autoFitTextFixedFrame(svgString, textIndex, maxWidth, originalFontSize, originalScaleX) {
+    originalScaleX = originalScaleX || 1;
+
+    // If originalFontSize is 0 or not provided, extract it from the SVG
+    if (!originalFontSize || originalFontSize <= 0) {
+      // Try to get font-size from the text element or its tspans
+      var fontSizeFromSvg = svgString.match(/<tspan[^>]*font-size=["']([\d.]+)["']/i);
+      if (fontSizeFromSvg) {
+        originalFontSize = parseFloat(fontSizeFromSvg[1]);
+        console.log('Fixed Frame: Extracted font-size from SVG:', originalFontSize);
+      } else {
+        // Try text element
+        var textFontSize = svgString.match(/<text[^>]*font-size=["']([\d.]+)["']/i);
+        if (textFontSize) {
+          originalFontSize = parseFloat(textFontSize[1]);
+          console.log('Fixed Frame: Extracted font-size from text element:', originalFontSize);
+        } else {
+          // Default fallback
+          originalFontSize = 100;
+          console.log('Fixed Frame: Using default font-size:', originalFontSize);
+        }
+      }
+    }
+
+    // Create an HTML wrapper with fonts to measure text accurately
+    var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
+      '<style>' +
+      '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:normal;}' +
+      '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:normal;}' +
+      '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:normal;}' +
+      '*{margin:0;padding:0;}' +
+      '</style>' +
+      '</head><body>' + svgString + '</body></html>';
+    var blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+
+    // Use an iframe to render with Google Fonts loaded
+    var iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.left = '-9999px';
+    iframe.style.top = '-9999px';
+    iframe.style.width = '4000px';
+    iframe.style.height = '4000px';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    return new Promise(function (resolve) {
+      iframe.onload = function () {
+        function doMeasure() {
+          try {
+            var svgDoc = iframe.contentDocument;
+            var textEls = svgDoc.querySelectorAll('text');
+            var textEl = textEls[textIndex];
+
+            if (!textEl) {
+              resolve(svgString);
+              return;
+            }
+
+            // For multi-line text (<tspan> children), measure the longest line
+            var tspans = textEl.querySelectorAll('tspan');
+            var measuredWidth;
+
+            // For Fixed Frame, use mathematical estimation because iframe font loading is unreliable
+            // Bangers font: char width factor ~0.5 (Bangers is narrower than initially thought)
+            var charWidthFactor = 0.5;
+            var longestLineChars = 0;
+            var longestLineText = '';
+
+            if (tspans.length > 1) {
+              for (var ti = 0; ti < tspans.length; ti++) {
+                var lineText = tspans[ti].textContent || '';
+                var lineChars = lineText.length;
+                if (lineChars > longestLineChars) {
+                  longestLineChars = lineChars;
+                  longestLineText = lineText;
+                }
+              }
+            } else {
+              longestLineText = textEl.textContent || '';
+              longestLineChars = longestLineText.length;
+            }
+
+            // Use mathematical estimation (more reliable than broken iframe measurement)
+            measuredWidth = longestLineChars * originalFontSize * charWidthFactor;
+            console.log('Fixed Frame: Estimated width for "' + longestLineText + '" (' + longestLineChars + ' chars) at font ' + originalFontSize + ' = ' + measuredWidth);
+
+            // Find container rect (fill="none" with transform, defines text boundary)
+            var containerWidth = maxWidth;
+            var containerRectMatch = svgString.match(/<rect[^>]*fill=["']none["'][^>]*\swidth=["']([\d.]+)["'][^>]*>/i);
+            if (!containerRectMatch) {
+              // Try alternate order: width before fill
+              containerRectMatch = svgString.match(/<rect[^>]*\swidth=["']([\d.]+)["'][^>]*fill=["']none["'][^>]*>/i);
+            }
+            if (containerRectMatch) {
+              containerWidth = parseFloat(containerRectMatch[1]);
+              console.log('Fixed Frame: Found container rect width:', containerWidth);
+            }
+
+            // Use 95% of container width as max (5% margin)
+            var effectiveMaxWidth = containerWidth * 0.95;
+
+            var result = svgString;
+
+            // Calculate ratio - only scale DOWN (never up)
+            if (measuredWidth > 0 && measuredWidth > effectiveMaxWidth) {
+              var ratio = effectiveMaxWidth / measuredWidth;
+              var minFontSize = originalFontSize * 0.3; // 30% minimum for Fixed Frame
+              var newFontSize = originalFontSize * ratio;
+
+              if (newFontSize < minFontSize) {
+                newFontSize = minFontSize;
+              }
+
+              console.log('Fixed Frame: Scaling font from', originalFontSize, 'to', newFontSize, '(ratio:', ratio, ')');
+
+              // Update font-size on the text element
+              result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', newFontSize.toFixed(2));
+
+              // Also update font-size on all tspans within this text element
+              // Find the text element and update tspans within it
+              var textTagMatch = result.match(new RegExp('<text[^>]*>([\\s\\S]*?)</text>', 'gi'));
+              if (textTagMatch && textTagMatch[textIndex]) {
+                var originalTextBlock = textTagMatch[textIndex];
+                var updatedTextBlock = originalTextBlock.replace(
+                  /(<tspan[^>]*font-size=["'])([\d.]+)(["'][^>]*>)/gi,
+                  '$1' + newFontSize.toFixed(2) + '$3'
+                );
+                result = result.replace(originalTextBlock, updatedTextBlock);
+              }
+
+              // For multi-line: adjust dy values proportionally
+              if (tspans.length > 1) {
+                var fontRatio = newFontSize / originalFontSize;
+                result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function (_match, before, dyVal) {
+                  var originalDy = parseFloat(dyVal);
+                  var newDy = originalDy * fontRatio;
+                  return '<tspan' + before + 'dy="' + newDy.toFixed(2) + '"';
+                });
+              }
+            } else {
+              console.log('Fixed Frame: Text fits, no scaling needed. Estimated:', measuredWidth, 'Max:', effectiveMaxWidth);
+
+              // Even if no scaling, ensure font-size is explicitly set on text element AND all tspans
+              result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', originalFontSize.toFixed(2));
+
+              // Also explicitly set font-size on all tspans within this text element
+              var textTagMatch = result.match(new RegExp('<text[^>]*>([\\s\\S]*?)</text>', 'gi'));
+              if (textTagMatch && textTagMatch[textIndex]) {
+                var originalTextBlock = textTagMatch[textIndex];
+                var updatedTextBlock = originalTextBlock.replace(
+                  /(<tspan[^>]*font-size=["'])([\d.]+)(["'][^>]*>)/gi,
+                  '$1' + originalFontSize.toFixed(2) + '$3'
+                );
+                result = result.replace(originalTextBlock, updatedTextBlock);
+              }
+            }
+
+            // For Fixed Frame, the text positioning is preserved from original template
+            // The tspans use y= (absolute positioning), not dy= (relative)
+            // We only need to adjust y values if we have multi-line text
+            var numLines = tspans.length > 0 ? tspans.length : 1;
+            var currentFontSize = originalFontSize;
+
+            // Check if we scaled
+            var fontSizeMatch = result.match(/<tspan[^>]*font-size=["']([\d.]+)["']/i);
+            if (fontSizeMatch) {
+              currentFontSize = parseFloat(fontSizeMatch[1]);
+            }
+
+            var lineHeight = currentFontSize * 0.85; // Line spacing for Bangers font
+
+            // Check if using y= (absolute) or dy= (relative) positioning
+            var usesAbsoluteY = result.match(/<tspan[^>]*\by=["']/i);
+
+            if (usesAbsoluteY) {
+              // Fixed Frame with absolute y positioning
+              if (numLines === 1) {
+                // Single line: center vertically in the original multi-line space
+                // Original template had 2 lines with y=0 and y=~410, so center was ~205
+                // For single line, use y = originalLineHeight * 0.4 to visually center
+                var singleLineY = currentFontSize * 0.4;  // Slight offset for visual centering
+                result = result.replace(/<tspan([^>]*?)\by=["'][\d.\-]+["']/gi, function (_m, before) {
+                  return '<tspan' + before + 'y="' + singleLineY.toFixed(2) + '"';
+                });
+              } else if (numLines > 1) {
+                // Multi-line: set y values for vertical centering
+                var totalHeight = (numLines - 1) * lineHeight;
+                var firstY = -totalHeight / 2;
+
+                var lineIdx = 0;
+                result = result.replace(/<tspan([^>]*?)\by=["'][\d.\-]+["']/gi, function (_m, before) {
+                  var yVal = firstY + lineIdx * lineHeight;
+                  lineIdx++;
+                  return '<tspan' + before + 'y="' + yVal.toFixed(2) + '"';
+                });
+              }
+            } else {
+              // Fallback: dy positioning (shouldn't happen for Fixed Frame, but just in case)
+              if (numLines === 1) {
+                var singleDy = currentFontSize * 0.35;
+                result = result.replace(/<tspan([^>]*?)dy=["'][\d.\-]+["']/gi, function (_m, before) {
+                  return '<tspan' + before + 'dy="' + singleDy.toFixed(2) + '"';
+                });
+              } else if (numLines > 1) {
+                var totalHeightDy = (numLines - 1) * lineHeight;
+                var firstDy = -totalHeightDy / 2 + currentFontSize * 0.35;
+
+                var lineIdxDy = 0;
+                result = result.replace(/<tspan([^>]*?)dy=["'][\d.\-]+["']/gi, function (_m, before) {
+                  var dyVal = (lineIdxDy === 0) ? firstDy : lineHeight;
+                  lineIdxDy++;
+                  return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
+                });
+              }
+            }
+
+            // DO NOT modify: rects, viewBox, text transform/position
+            // The text stays where it is, only font size and dy values change
+
+            // IMPORTANT: Remove text-anchor="middle" if present - Fixed Frame uses left-aligned text
+            // The transform position is the LEFT edge of text, not center
+            result = result.replace(/(<text[^>]*)\s*text-anchor=["'][^"']*["']/gi, '$1');
+
+            // DEBUG: Log the final text element to see what's being produced
+            var finalTextMatch = result.match(/<text[^>]*>[\s\S]*?<\/text>/i);
+            if (finalTextMatch) {
+              console.log('Fixed Frame: Final text element:', finalTextMatch[0].substring(0, 500));
+            }
+
+            resolve(result);
+          } catch (e) {
+            console.warn('Fixed Frame autoFit measurement failed:', e);
+            resolve(svgString);
+          } finally {
+            document.body.removeChild(iframe);
+            URL.revokeObjectURL(url);
+          }
+        }
 
         // Wait for fonts before measuring
         if (iframe.contentDocument && iframe.contentDocument.fonts) {
@@ -1166,7 +1428,14 @@ const SvgRenderer = {
       if (count === textIndex) {
         var tag = svgString.substring(tagStart, tagEnd + 1);
         var regex = new RegExp('(' + attrName + '=["\'])([^"\']*?)(["\'])');
-        var newTag = tag.replace(regex, '$1' + newValue + '$3');
+        var newTag;
+        if (regex.test(tag)) {
+          // Attribute exists - replace it
+          newTag = tag.replace(regex, '$1' + newValue + '$3');
+        } else {
+          // Attribute doesn't exist - add it before the closing >
+          newTag = tag.replace(/>$/, ' ' + attrName + '="' + newValue + '">');
+        }
         return svgString.substring(0, tagStart) + newTag + svgString.substring(tagEnd + 1);
       }
 
@@ -1301,7 +1570,7 @@ const SvgRenderer = {
       document.body.appendChild(iframe);
 
       var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-        '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
+        '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' +
         '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:normal;}' +
         '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:normal;}' +
