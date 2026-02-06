@@ -148,7 +148,8 @@ const Gallery = {
 
       try {
         var colorized = SvgRenderer.colorize(base.svgString, randomColor);
-        var tilted = randomTilt !== 0 ? SvgRenderer.applyTilt(colorized, randomTilt) : colorized;
+        var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+        var tilted = randomTilt !== 0 ? SvgRenderer.applyTilt(cropped, randomTilt) : cropped;
         var textured = randomTexture ? await SvgRenderer.applyTexture(tilted, randomTexture) : tilted;
 
         // Validate we got a non-empty SVG
@@ -247,9 +248,10 @@ const Gallery = {
       for (var j = 0; j < colorsToApply.length; j++) {
         var color = colorsToApply[j];
         var colorized = SvgRenderer.colorize(base.svgString, color);
+        var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
         for (var k = 0; k < tiltsToApply.length; k++) {
           var tilt = tiltsToApply[k];
-          var tilted = tilt !== 0 ? SvgRenderer.applyTilt(colorized, tilt) : colorized;
+          var tilted = tilt !== 0 ? SvgRenderer.applyTilt(cropped, tilt) : cropped;
           for (var t = 0; t < texturesToApply.length; t++) {
             var textureId = texturesToApply[t];
             try {

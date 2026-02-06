@@ -1484,6 +1484,146 @@ const SvgRenderer = {
     };
   },
 
+  // Cache for detected artwork bounds (keyed by image data prefix)
+  _artworkBoundsCache: {},
+
+  /**
+   * Detect the actual artwork bounding box in a Category 2 template's background image.
+   * Decodes the embedded base64 image, draws to offscreen canvas, scans for non-white pixels.
+   * @param {string} svgString
+   * @returns {Promise<{cropX: number, cropY: number, cropW: number, cropH: number}|null>}
+   */
+  async _detectArtworkBounds(svgString) {
+    // Extract base64 image data
+    var imgMatch = svgString.match(/xlink:href=["'](data:image\/[^;]+;base64,([^"']+))["']/i);
+    if (!imgMatch) return null;
+
+    // Cache key: first 100 chars of base64 data (unique per template image)
+    var cacheKey = imgMatch[2].substring(0, 100);
+    if (this._artworkBoundsCache[cacheKey]) {
+      return this._artworkBoundsCache[cacheKey];
+    }
+
+    // Get image dimensions from SVG attributes
+    var imgWidthMatch = svgString.match(/<image[^>]*\swidth=["']([\d.]+)["']/i);
+    var imgHeightMatch = svgString.match(/<image[^>]*\sheight=["']([\d.]+)["']/i);
+    if (!imgWidthMatch || !imgHeightMatch) return null;
+    var svgImgW = parseFloat(imgWidthMatch[1]);
+    var svgImgH = parseFloat(imgHeightMatch[1]);
+
+    var self = this;
+    return new Promise(function(resolve) {
+      var img = new Image();
+      img.onload = function() {
+        try {
+          // Scale down for fast scanning
+          var scanSize = 400;
+          var canvas = document.createElement('canvas');
+          canvas.width = scanSize;
+          canvas.height = scanSize;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, scanSize, scanSize);
+
+          var imageData = ctx.getImageData(0, 0, scanSize, scanSize);
+          var pixels = imageData.data;
+
+          // Scan for non-white pixel bounds (white threshold: RGB all > 248)
+          var threshold = 248;
+          var minX = scanSize, minY = scanSize, maxX = 0, maxY = 0;
+
+          for (var y = 0; y < scanSize; y++) {
+            for (var x = 0; x < scanSize; x++) {
+              var idx = (y * scanSize + x) * 4;
+              var r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
+              if (r < threshold || g < threshold || b < threshold) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+              }
+            }
+          }
+
+          if (maxX <= minX || maxY <= minY) {
+            resolve(null);
+            return;
+          }
+
+          // Scale from scan coordinates back to SVG coordinates
+          var scaleX = svgImgW / scanSize;
+          var scaleY = svgImgH / scanSize;
+
+          // Add 18% padding around detected bounds to avoid clipping decorations
+          var padX = (maxX - minX) * 0.18;
+          var padY = (maxY - minY) * 0.18;
+
+          var bounds = {
+            cropX: Math.max(0, (minX - padX) * scaleX),
+            cropY: Math.max(0, (minY - padY) * scaleY),
+            cropW: Math.min(svgImgW, (maxX - minX + 2 * padX) * scaleX),
+            cropH: Math.min(svgImgH, (maxY - minY + 2 * padY) * scaleY)
+          };
+
+          console.log('ArtworkBounds: detected (' + bounds.cropX.toFixed(0) + ',' + bounds.cropY.toFixed(0) +
+            ') ' + bounds.cropW.toFixed(0) + 'x' + bounds.cropH.toFixed(0) +
+            ' (from ' + svgImgW + 'x' + svgImgH + ')');
+
+          self._artworkBoundsCache[cacheKey] = bounds;
+          resolve(bounds);
+        } catch (e) {
+          console.warn('ArtworkBounds detection failed:', e);
+          resolve(null);
+        }
+      };
+      img.onerror = function() {
+        resolve(null);
+      };
+      img.src = imgMatch[1];
+    });
+  },
+
+  /**
+   * Crop the viewBox of a Fixed Frame (Category 2) SVG to tightly fit the artwork.
+   * Uses canvas-based pixel detection to find actual artwork bounds.
+   * This should be called BEFORE applyTilt so the rotation is based on tighter bounds.
+   * @param {string} svgString
+   * @returns {Promise<string>}
+   */
+  async cropViewBoxFixedFrame(svgString) {
+    // Only apply to Category 2 templates (has <image> element)
+    if (!/<image[\s>]/i.test(svgString)) return svgString;
+
+    // Parse original viewBox
+    var vbMatch = svgString.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*["']/);
+    if (!vbMatch) return svgString;
+    var origW = parseFloat(vbMatch[3]);
+    var origH = parseFloat(vbMatch[4]);
+
+    // Try canvas-based artwork detection
+    var bounds = await this._detectArtworkBounds(svgString);
+
+    var cropX, cropY, cropW, cropH;
+    if (bounds) {
+      cropX = bounds.cropX;
+      cropY = bounds.cropY;
+      cropW = bounds.cropW;
+      cropH = bounds.cropH;
+    } else {
+      // Fallback: 10% crop from each edge
+      var cropPercent = 0.10;
+      cropX = origW * cropPercent;
+      cropY = origH * cropPercent;
+      cropW = origW * (1 - 2 * cropPercent);
+      cropH = origH * (1 - 2 * cropPercent);
+    }
+
+    console.log('CropViewBox: crop to (' + cropX.toFixed(0) + ',' + cropY.toFixed(0) + ',' + cropW.toFixed(0) + ',' + cropH.toFixed(0) + ')');
+
+    // Update viewBox
+    var newViewBox = cropX.toFixed(2) + ' ' + cropY.toFixed(2) + ' ' + cropW.toFixed(2) + ' ' + cropH.toFixed(2);
+    return svgString.replace(/viewBox=["'][^"']*["']/, 'viewBox="' + newViewBox + '"');
+  },
+
   /**
    * Apply tilt rotation inside the SVG itself.
    * Wraps all SVG children in a rotated <g> group and adjusts the viewBox
@@ -1514,6 +1654,11 @@ const SvgRenderer = {
     var sinA = Math.sin(rad);
     var newW = vbW * cosA + vbH * sinA;
     var newH = vbW * sinA + vbH * cosA;
+
+    // Add small margin (2%) to avoid clipping strokes/edges after rotation
+    var margin = Math.max(newW, newH) * 0.02;
+    newW += margin * 2;
+    newH += margin * 2;
 
     // New viewBox centered on the same center point
     var newVbX = cx - newW / 2;
@@ -1553,16 +1698,19 @@ const SvgRenderer = {
   createSvgImage(svgString) {
     var wrapper = document.createElement('div');
     wrapper.style.width = '100%';
+    wrapper.style.height = '100%';
+    wrapper.style.display = 'flex';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.justifyContent = 'center';
     wrapper.style.lineHeight = '0';
     wrapper.innerHTML = svgString;
 
-    // Make the inline SVG responsive
+    // Make the inline SVG responsive and contained within parent
     var svgEl = wrapper.querySelector('svg');
     if (svgEl) {
-      svgEl.style.width = '100%';
-      svgEl.style.height = 'auto';
       svgEl.removeAttribute('width');
       svgEl.removeAttribute('height');
+      // Let CSS handle sizing via max-width/max-height
     }
     return wrapper;
   },
