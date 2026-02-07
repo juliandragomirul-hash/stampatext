@@ -33,6 +33,22 @@ const Gallery = {
     '#C0C0C0', '#A9A9A9'
   ],
 
+  COLOR_NAMES: {
+    '#000000': 'Black', '#FF0000': 'Red', '#8B0000': 'Dark Red',
+    '#FF1493': 'Deep Pink', '#FF4500': 'Orange Red', '#FF8C00': 'Dark Orange',
+    '#FFD700': 'Gold', '#FFFF00': 'Yellow', '#BDB76B': 'Dark Khaki',
+    '#9400D3': 'Dark Violet', '#4B0082': 'Indigo', '#7CFC00': 'Lawn Green',
+    '#32CD32': 'Lime Green', '#00FF7F': 'Spring Green', '#008000': 'Green',
+    '#808000': 'Olive', '#556B2F': 'Dark Olive', '#00FFFF': 'Cyan',
+    '#00CED1': 'Dark Turquoise', '#4682B4': 'Steel Blue', '#1E90FF': 'Dodger Blue',
+    '#4169E1': 'Royal Blue', '#000080': 'Navy', '#8B4513': 'Saddle Brown',
+    '#C0C0C0': 'Silver', '#A9A9A9': 'Dark Gray'
+  },
+
+  getColorName(hex) {
+    return this.COLOR_NAMES[(hex || '').toUpperCase()] || hex;
+  },
+
   /**
    * Fetch all active templates with their text zones from Supabase.
    * @returns {Promise<Array>}
@@ -74,6 +90,21 @@ const Gallery = {
         const rawSvg = await SvgRenderer.fetchSvg(svgUrl);
         var cleanedSvg = SvgRenderer.cleanSvgString(rawSvg);
 
+        // Detect text case from original SVG
+        var displayText = userText;
+        var textMatch = cleanedSvg.match(/<text[^>]*>([\s\S]*?)<\/text>/i);
+        if (textMatch) {
+          var inner = textMatch[1].replace(/<[^>]*>/g, '');
+          inner = inner.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+          var letters = inner.replace(/[^a-zA-Z]/g, '');
+          if (letters.length > 0) {
+            var upper = letters.replace(/[^A-Z]/g, '').length;
+            var lower = letters.replace(/[^a-z]/g, '').length;
+            if (upper > 0 && lower === 0) displayText = userText.toUpperCase();
+            else if (lower > 0 && upper === 0) displayText = userText.toLowerCase();
+          }
+        }
+
         // Get editable text zones sorted by sort_order
         const editableZones = (tpl.text_zones || [])
           .filter(z => z.is_editable)
@@ -107,7 +138,8 @@ const Gallery = {
           colors: tpl.colors || [],
           width: tpl.width,
           height: tpl.height,
-          name: tpl.name
+          name: tpl.name,
+          displayText: displayText
         });
       } catch (err) {
         console.warn('Failed to process template ' + tpl.name + ':', err);
@@ -171,6 +203,7 @@ const Gallery = {
           width: base.width,
           height: base.height,
           name: base.name,
+          displayText: base.displayText,
           appliedColor: randomColor,
           appliedTilt: randomTilt,
           appliedTexture: randomTexture
@@ -187,6 +220,7 @@ const Gallery = {
           width: base.width,
           height: base.height,
           name: base.name,
+          displayText: base.displayText,
           appliedColor: randomColor,
           appliedTilt: 0,
           appliedTexture: null
@@ -273,6 +307,7 @@ const Gallery = {
                 width: base.width,
                 height: base.height,
                 name: base.name,
+          displayText: base.displayText,
                 appliedColor: color,
                 appliedTilt: tilt,
                 appliedTexture: textureId
@@ -288,6 +323,7 @@ const Gallery = {
                 width: base.width,
                 height: base.height,
                 name: base.name,
+          displayText: base.displayText,
                 appliedColor: color,
                 appliedTilt: tilt,
                 appliedTexture: null
@@ -380,12 +416,14 @@ const Gallery = {
         '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
         (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
 
+      var colorName = self.getColorName(r.appliedColor);
+      var description = '\u201C' + self.escapeHtml(r.displayText || self.currentText) +
+          '\u201D written on ' + colorName.toLowerCase() + ' ' + self.escapeHtml(r.name);
+
       var actionsDiv = document.createElement('a');
       actionsDiv.className = 'stamp-card-actions';
       actionsDiv.href = productUrl;
-      actionsDiv.innerHTML =
-          '<span class="stamp-card-name">' + self.escapeHtml(r.name) + '</span>' +
-          '<span class="btn-download-link">Download</span>';
+      actionsDiv.innerHTML = '<span class="stamp-card-name">' + description + '</span>';
 
       card.appendChild(previewDiv);
       card.appendChild(actionsDiv);

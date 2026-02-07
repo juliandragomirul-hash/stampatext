@@ -82,7 +82,10 @@ const SvgRenderer = {
       { from: "'Army Rust'", to: "'ArmyRust'", weight: '400' },
       // Bangers font (Google Fonts)
       { from: "'Bangers-Regular'", to: "'Bangers'", weight: '400' },
-      { from: "'Bangers'", to: "'Bangers'", weight: '400' }
+      { from: "'Bangers'", to: "'Bangers'", weight: '400' },
+      // Roboto Black font (custom, loaded from /fonts/)
+      { from: "'Roboto-Black'", to: "'RobotoBlack'", weight: '900' },
+      { from: "'RobotoBlack'", to: "'RobotoBlack'", weight: '900' }
     ];
     fontMappings.forEach(function(m) {
       // Replace font-family attribute - only add font-weight if not already present
@@ -346,6 +349,32 @@ const SvgRenderer = {
     // Replace exact hex matches in stroke attributes
     var strokeRe = new RegExp('(stroke=["\'])' + escapedDominant + '(["\'])', 'gi');
     result = result.replace(strokeRe, '$1' + newColor + '$2');
+
+    // Category 2: If SVG has <image>, add a filter to recolor the raster background
+    if (/<image[\s>]/i.test(result)) {
+      // Parse target color to RGB components (0-1 range)
+      var hex = newColor.replace('#', '');
+      var rr = parseInt(hex.substring(0, 2), 16) / 255;
+      var gg = parseInt(hex.substring(2, 4), 16) / 255;
+      var bb = parseInt(hex.substring(4, 6), 16) / 255;
+
+      // SVG filter: desaturate to grayscale, then tint with target color
+      // feColorMatrix row = [R_scale * lum_r, R_scale * lum_g, R_scale * lum_b, 0, 0]
+      // Using standard luminance weights (0.2126, 0.7152, 0.0722)
+      var filterDef = '<defs><filter id="recolor" color-interpolation-filters="sRGB">' +
+        '<feColorMatrix type="matrix" values="' +
+          (rr * 0.2126).toFixed(4) + ' ' + (rr * 0.7152).toFixed(4) + ' ' + (rr * 0.0722).toFixed(4) + ' 0 0 ' +
+          (gg * 0.2126).toFixed(4) + ' ' + (gg * 0.7152).toFixed(4) + ' ' + (gg * 0.0722).toFixed(4) + ' 0 0 ' +
+          (bb * 0.2126).toFixed(4) + ' ' + (bb * 0.7152).toFixed(4) + ' ' + (bb * 0.0722).toFixed(4) + ' 0 0 ' +
+          '0 0 0 1 0"/>' +
+        '</filter></defs>';
+
+      // Insert filter defs after <svg> opening tag
+      result = result.replace(/(<svg[^>]*>)/i, '$1' + filterDef);
+
+      // Apply filter to <image> element
+      result = result.replace(/(<image\s)/i, '$1filter="url(#recolor)" ');
+    }
 
     return result;
   },
@@ -727,8 +756,10 @@ const SvgRenderer = {
 
         // Match the case style of the original text
         var originalText = svgString.substring(tagEnd + 1, closeTag);
+        // Strip tags first (tspan attributes contain lowercase letters that break case detection)
+        var stripped = originalText.replace(/<[^>]*>/g, '');
         // Decode XML entities for comparison
-        var decoded = originalText.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+        var decoded = stripped.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
         var letters = decoded.replace(/[^a-zA-Z]/g, '');
         if (letters.length > 0) {
           var upperCount = letters.replace(/[^A-Z]/g, '').length;
@@ -1315,8 +1346,18 @@ const SvgRenderer = {
     console.log('Fixed Frame: Longest line:', longestLine, '(' + longestLine.length + ' chars)');
 
     // Calculate OPTIMAL font size to fill container
-    // Bangers font: tuned factors for optimal fill
-    var charWidthFactor = (numLines === 1) ? 0.38 : 0.38;
+    // Detect font from SVG to use appropriate charWidthFactor
+    var detectedFont = '';
+    var fontDetectMatch = svgString.match(/font-family=["']([^"']+)["']/i);
+    if (fontDetectMatch) detectedFont = fontDetectMatch[1].replace(/'/g, '').toLowerCase();
+
+    // charWidthFactor = avg character width / font size (tuned per font)
+    var charWidthFactor;
+    if (detectedFont.indexOf('roboto') !== -1) {
+      charWidthFactor = 0.55;  // Roboto Black is wider than Bangers
+    } else {
+      charWidthFactor = 0.38;  // Bangers (default)
+    }
     var horizontalPadding = 0.90;  // Use 90% of container width
     var verticalPadding = 0.85;    // Use 85% of container height
 
@@ -1384,8 +1425,7 @@ const SvgRenderer = {
 
     // EXPLICITLY set text transform to center on container
     // The container rect center = (containerX + containerWidth/2, containerY + containerHeight/2)
-    // Small adjustments: shift left by 30 units for better visual centering
-    var textCenterX = containerX + containerWidth / 2 - 30;
+    var textCenterX = containerX + containerWidth / 2;
     var textCenterY = containerY + containerHeight / 2;
 
     // Update the text transform matrix - keep rotation, set position to container center
@@ -1863,46 +1903,112 @@ const SvgRenderer = {
               ctx.fillRect(0, 0, fullW, fullH);
             }
 
-            var img = new Image();
-            img.onload = function () {
-              ctx.drawImage(img, 0, 0, fullW, fullH);
+            var svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            var svgObjUrl = URL.createObjectURL(svgBlob);
 
-              // For transparent PNG: convert white pixels to transparent
-              if (format === 'png') {
-                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                var d = imageData.data;
+            if (format === 'png') {
+              // Two-pass alpha recovery: render on white then black, reconstruct true alpha
+              var imgW = new Image();
+              var imgB = new Image();
+              var loaded = 0;
+
+              function onBothLoaded() {
+                // Render on white
+                var cW = document.createElement('canvas');
+                cW.width = fullW; cW.height = fullH;
+                var ctxW = cW.getContext('2d');
+                ctxW.fillStyle = '#FFFFFF';
+                ctxW.fillRect(0, 0, fullW, fullH);
+                ctxW.drawImage(imgW, 0, 0, fullW, fullH);
+                var dataW = ctxW.getImageData(0, 0, fullW, fullH).data;
+
+                // Render on black
+                var cB = document.createElement('canvas');
+                cB.width = fullW; cB.height = fullH;
+                var ctxB = cB.getContext('2d');
+                ctxB.fillStyle = '#000000';
+                ctxB.fillRect(0, 0, fullW, fullH);
+                ctxB.drawImage(imgB, 0, 0, fullW, fullH);
+                var dataB = ctxB.getImageData(0, 0, fullW, fullH).data;
+
+                // Reconstruct true alpha and color
+                var out = ctx.createImageData(fullW, fullH);
+                var d = out.data;
                 for (var p = 0; p < d.length; p += 4) {
-                  var r = d[p], g = d[p + 1], b = d[p + 2], a = d[p + 3];
-                  if (a === 0) continue;
-                  // Use min channel - only affects pixels where ALL channels are high (white-ish)
-                  var minCh = Math.min(r, g, b);
-                  if (minCh > 248) {
-                    // Pure white: fully transparent
-                    d[p + 3] = 0;
-                  } else if (minCh > 220) {
-                    // Near-white: graduated transparency for smooth anti-aliased edges
-                    var t = (minCh - 220) / (248 - 220);
-                    d[p + 3] = Math.round(a * (1 - t));
+                  var rw = dataW[p], gw = dataW[p+1], bw = dataW[p+2];
+                  var rb = dataB[p], gb = dataB[p+1], bb = dataB[p+2];
+                  // a = 1 - (white - black) / 255
+                  var a = Math.round((
+                    (255 - (rw - rb)) +
+                    (255 - (gw - gb)) +
+                    (255 - (bw - bb))
+                  ) / 3);
+                  if (a <= 0) {
+                    d[p] = d[p+1] = d[p+2] = d[p+3] = 0;
+                  } else {
+                    if (a > 255) a = 255;
+                    d[p]   = Math.min(255, Math.round(rb * 255 / a));
+                    d[p+1] = Math.min(255, Math.round(gb * 255 / a));
+                    d[p+2] = Math.min(255, Math.round(bb * 255 / a));
+                    d[p+3] = a;
                   }
                 }
-                ctx.putImageData(imageData, 0, 0);
+
+                // Clean up opaque white pixels (background, raster white areas)
+                // Only targets fully opaque pixels — semi-transparent shadows from
+                // two-pass recovery (alpha < 254) are left untouched
+                for (var p = 0; p < d.length; p += 4) {
+                  if (d[p+3] < 254) continue; // skip semi-transparent (shadows etc.)
+                  var minCh = Math.min(d[p], d[p+1], d[p+2]);
+                  if (minCh >= 253) {
+                    d[p+3] = 0; // pure white: fully transparent
+                  } else if (minCh >= 248) {
+                    // narrow anti-alias gradient for smooth edges
+                    var t = (minCh - 248) / (253 - 248);
+                    d[p+3] = Math.round(255 * (1 - t));
+                  }
+                }
+
+                ctx.putImageData(out, 0, 0);
+                URL.revokeObjectURL(svgObjUrl);
+
+                canvas.toBlob(function (resultBlob) {
+                  cleanup();
+                  if (resultBlob) resolve(resultBlob);
+                  else reject(new Error('Canvas toBlob failed'));
+                }, 'image/png');
               }
 
-              var mimeType = 'image/' + format;
-              var quality = format === 'jpeg' ? 0.92 : undefined;
-              canvas.toBlob(function (resultBlob) {
+              function onLoad() {
+                loaded++;
+                if (loaded === 2) onBothLoaded();
+              }
+              imgW.onload = onLoad;
+              imgB.onload = onLoad;
+              imgW.onerror = imgB.onerror = function () {
                 cleanup();
-                if (resultBlob) resolve(resultBlob);
-                else reject(new Error('Canvas toBlob failed'));
-              }, mimeType, quality);
-            };
-            img.onerror = function () {
-              cleanup();
-              reject(new Error('Failed to render SVG to image'));
-            };
-
-            var svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-            img.src = URL.createObjectURL(svgBlob);
+                reject(new Error('Failed to render SVG to image'));
+              };
+              imgW.src = svgObjUrl;
+              imgB.src = svgObjUrl;
+            } else {
+              // JPEG: single render on white
+              var img = new Image();
+              img.onload = function () {
+                ctx.drawImage(img, 0, 0, fullW, fullH);
+                URL.revokeObjectURL(svgObjUrl);
+                canvas.toBlob(function (resultBlob) {
+                  cleanup();
+                  if (resultBlob) resolve(resultBlob);
+                  else reject(new Error('Canvas toBlob failed'));
+                }, 'image/jpeg', 0.92);
+              };
+              img.onerror = function () {
+                cleanup();
+                reject(new Error('Failed to render SVG to image'));
+              };
+              img.src = svgObjUrl;
+            }
           } catch (e) {
             cleanup();
             reject(e);

@@ -134,11 +134,20 @@
   }
 
   // ---- Filters ----
+  function isColorDark(hex) {
+    var c = hex.replace('#', '');
+    var r = parseInt(c.substring(0, 2), 16);
+    var g = parseInt(c.substring(2, 4), 16);
+    var b = parseInt(c.substring(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 150;
+  }
+
   function buildColorPalette() {
     var palette = document.getElementById('color-palette');
     PALETTE_COLORS.forEach(function (color) {
       var swatch = document.createElement('div');
       swatch.className = 'color-swatch';
+      if (isColorDark(color)) swatch.classList.add('swatch-dark');
       swatch.style.backgroundColor = color;
       swatch.dataset.color = color;
       if (color === '#FFFFFF') {

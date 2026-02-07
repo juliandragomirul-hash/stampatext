@@ -24,7 +24,7 @@
 
   <!-- Product Details -->
   <section class="product-details">
-    <a href="/" class="product-back" id="product-back">&larr; Back to gallery</a>
+    <a href="/" class="product-back" id="product-back" onclick="if(history.length>1){event.preventDefault();history.back();}">&larr; Back to gallery</a>
 
     <div class="product-layout">
       <!-- Left: Large preview -->
@@ -326,11 +326,20 @@
 
       // ---- Helper functions ----
 
+      function isColorDark(hex) {
+        var c = hex.replace('#', '');
+        var r = parseInt(c.substring(0, 2), 16);
+        var g = parseInt(c.substring(2, 4), 16);
+        var b = parseInt(c.substring(4, 6), 16);
+        return (r * 0.299 + g * 0.587 + b * 0.114) < 150;
+      }
+
       function buildColorPalette() {
         var palette = document.getElementById('product-color-palette');
         PALETTE_COLORS.forEach(function(color) {
           var swatch = document.createElement('div');
           swatch.className = 'color-swatch';
+          if (isColorDark(color)) swatch.classList.add('swatch-dark');
           swatch.style.backgroundColor = color;
           swatch.dataset.color = color;
           if (color === '#FFFFFF') {
@@ -360,6 +369,11 @@
         try {
           var svg = SvgRenderer.colorize(baseSvg, currentColor);
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
+          // Capture pre-tilt viewBox width for scale compensation
+          var preTiltVbW = 0;
+          var preTiltMatch = svg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+[\d.\-]+\s*["']/);
+          if (preTiltMatch) preTiltVbW = parseFloat(preTiltMatch[1]);
+
           if (currentTilt !== 0) {
             svg = SvgRenderer.applyTilt(svg, currentTilt);
           }
@@ -371,6 +385,16 @@
 
           previewEl.innerHTML = '';
           var img = SvgRenderer.createSvgImage(svg);
+
+          // Compensate for viewBox expansion from tilt so preview stays same visual size
+          if (currentTilt !== 0 && preTiltVbW > 0) {
+            var postTiltMatch = svg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+[\d.\-]+\s*["']/);
+            if (postTiltMatch) {
+              var postTiltVbW = parseFloat(postTiltMatch[1]);
+              var scaleFactor = postTiltVbW / preTiltVbW;
+              img.querySelector('svg').style.transform = 'scale(' + scaleFactor.toFixed(4) + ')';
+            }
+          }
           previewEl.appendChild(img);
 
           updateDescription();
