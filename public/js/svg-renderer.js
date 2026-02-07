@@ -1726,16 +1726,101 @@ const SvgRenderer = {
    * @param {number} [scale=2]
    * @returns {Promise<Blob>}
    */
-  exportPng(svgString, width, height, scale) {
+  /**
+   * Remove white/near-white background rects from SVG for transparent export.
+   * Targets rects that span most of the viewBox and have white-ish fill.
+   */
+  stripSvgBackground(svgString) {
+    // Parse viewBox to know the SVG dimensions
+    var vbMatch = svgString.match(/viewBox=["']([^"']+)["']/);
+    var svgW = 1000, svgH = 1000;
+    if (vbMatch) {
+      var parts = vbMatch[1].trim().split(/[\s,]+/);
+      svgW = parseFloat(parts[2]) || 1000;
+      svgH = parseFloat(parts[3]) || 1000;
+    }
+
+    // White-ish colors to consider as background
+    var whiteFills = ['#ffffff', '#fff', 'white', '#fefefe', '#fdfdfd', '#fcfcfc', '#fbfbfb', '#fafafa', '#f9f9f9', '#f8f8f8'];
+
+    // Find all rect elements and remove ones that look like backgrounds
+    var result = svgString.replace(/<rect\b([^>]*)\/?>/gi, function(fullMatch, attrs) {
+      // Extract fill
+      var fillMatch = attrs.match(/fill=["']([^"']+)["']/i);
+      if (!fillMatch) return fullMatch; // no fill, keep it
+
+      var fill = fillMatch[1].trim().toLowerCase();
+      if (whiteFills.indexOf(fill) === -1) return fullMatch; // not white, keep it
+
+      // Extract dimensions
+      var w = parseFloat((attrs.match(/width=["']([^"']+)["']/i) || [])[1]) || 0;
+      var h = parseFloat((attrs.match(/height=["']([^"']+)["']/i) || [])[1]) || 0;
+
+      // If rect covers at least 80% of the viewBox in both dimensions, it's a background
+      if (w >= svgW * 0.8 && h >= svgH * 0.8) {
+        return ''; // strip it
+      }
+
+      return fullMatch; // keep smaller rects
+    });
+
+    // Also handle style="fill:white" or style="fill:#ffffff" on rects
+    result = result.replace(/<rect\b([^>]*style=["'][^"']*fill:\s*(white|#fff(?:fff)?)\b[^"']*["'][^>]*)\/?>/gi, function(fullMatch, attrs) {
+      var w = parseFloat((attrs.match(/width=["']([^"']+)["']/i) || [])[1]) || 0;
+      var h = parseFloat((attrs.match(/height=["']([^"']+)["']/i) || [])[1]) || 0;
+      if (w >= svgW * 0.8 && h >= svgH * 0.8) {
+        return '';
+      }
+      return fullMatch;
+    });
+
+    return result;
+  },
+
+  exportImage(svgString, maxSize, _unused, scale, format) {
     scale = scale || 2;
+    format = format || 'png';
+
+    // For transparent PNG: strip white background rects from SVG
+    if (format === 'png') {
+      svgString = SvgRenderer.stripSvgBackground(svgString);
+    }
+
+    // Auto-detect aspect ratio from SVG viewBox
+    var width = maxSize, height = maxSize;
+    var vbMatch = svgString.match(/viewBox=["']([^"']+)["']/);
+    if (vbMatch) {
+      var parts = vbMatch[1].trim().split(/[\s,]+/);
+      var vbW = parseFloat(parts[2]) || maxSize;
+      var vbH = parseFloat(parts[3]) || maxSize;
+      var aspect = vbW / vbH;
+      if (aspect >= 1) {
+        width = maxSize;
+        height = Math.round(maxSize / aspect);
+      } else {
+        height = maxSize;
+        width = Math.round(maxSize * aspect);
+      }
+    }
+
+    // Compute full pixel dimensions (base * scale)
+    var fullW = width * scale;
+    var fullH = height * scale;
+
+    // Strip explicit width/height from SVG and set to full pixel size
+    svgString = svgString.replace(/<svg([^>]*)>/, function(match, attrs) {
+      attrs = attrs.replace(/\s+width=["'][^"']*["']/gi, '');
+      attrs = attrs.replace(/\s+height=["'][^"']*["']/gi, '');
+      return '<svg' + attrs + ' width="' + fullW + '" height="' + fullH + '">';
+    });
+
     return new Promise(function (resolve, reject) {
-      // Create a hidden iframe that loads the SVG with Google Fonts
       var iframe = document.createElement('iframe');
       iframe.style.position = 'absolute';
       iframe.style.left = '-9999px';
       iframe.style.top = '-9999px';
-      iframe.style.width = width + 'px';
-      iframe.style.height = height + 'px';
+      iframe.style.width = fullW + 'px';
+      iframe.style.height = fullH + 'px';
       iframe.style.visibility = 'hidden';
       document.body.appendChild(iframe);
 
@@ -1745,7 +1830,7 @@ const SvgRenderer = {
         '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:normal;}' +
         '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:normal;}' +
         '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:normal;}' +
-        '*{margin:0;padding:0;}body{overflow:hidden;width:' + width + 'px;height:' + height + 'px;}' +
+        '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +
         '</head><body>' + svgString + '</body></html>';
 
@@ -1753,7 +1838,6 @@ const SvgRenderer = {
       var blobUrl = URL.createObjectURL(blob);
 
       iframe.onload = function () {
-        // Wait for fonts to load in the iframe context
         var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
 
         function doCapture() {
@@ -1765,26 +1849,52 @@ const SvgRenderer = {
               return;
             }
 
-            // Serialize the rendered SVG (with fonts now resolved)
             var serializer = new XMLSerializer();
             var svgData = serializer.serializeToString(svgEl);
 
-            // For PNG export, we need to inline the font.
-            // Use canvas with the SVG as data URL
             var canvas = document.createElement('canvas');
-            canvas.width = width * scale;
-            canvas.height = height * scale;
+            canvas.width = fullW;
+            canvas.height = fullH;
             var ctx = canvas.getContext('2d');
-            ctx.scale(scale, scale);
+
+            // For JPEG: fill white background (JPEG has no transparency)
+            if (format === 'jpeg') {
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, fullW, fullH);
+            }
 
             var img = new Image();
             img.onload = function () {
-              ctx.drawImage(img, 0, 0, width, height);
-              canvas.toBlob(function (pngBlob) {
+              ctx.drawImage(img, 0, 0, fullW, fullH);
+
+              // For transparent PNG: convert white pixels to transparent
+              if (format === 'png') {
+                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                var d = imageData.data;
+                for (var p = 0; p < d.length; p += 4) {
+                  var r = d[p], g = d[p + 1], b = d[p + 2], a = d[p + 3];
+                  if (a === 0) continue;
+                  // Use min channel - only affects pixels where ALL channels are high (white-ish)
+                  var minCh = Math.min(r, g, b);
+                  if (minCh > 248) {
+                    // Pure white: fully transparent
+                    d[p + 3] = 0;
+                  } else if (minCh > 220) {
+                    // Near-white: graduated transparency for smooth anti-aliased edges
+                    var t = (minCh - 220) / (248 - 220);
+                    d[p + 3] = Math.round(a * (1 - t));
+                  }
+                }
+                ctx.putImageData(imageData, 0, 0);
+              }
+
+              var mimeType = 'image/' + format;
+              var quality = format === 'jpeg' ? 0.92 : undefined;
+              canvas.toBlob(function (resultBlob) {
                 cleanup();
-                if (pngBlob) resolve(pngBlob);
+                if (resultBlob) resolve(resultBlob);
                 else reject(new Error('Canvas toBlob failed'));
-              }, 'image/png');
+              }, mimeType, quality);
             };
             img.onerror = function () {
               cleanup();
@@ -1804,10 +1914,8 @@ const SvgRenderer = {
           URL.revokeObjectURL(blobUrl);
         }
 
-        // Wait for fonts to load (with timeout fallback)
         if (iframe.contentDocument && iframe.contentDocument.fonts) {
           iframe.contentDocument.fonts.ready.then(function () {
-            // Small extra delay for rendering
             setTimeout(doCapture, 100);
           }).catch(function () {
             setTimeout(doCapture, 500);
@@ -1819,6 +1927,10 @@ const SvgRenderer = {
 
       iframe.src = blobUrl;
     });
+  },
+
+  exportPng(svgString, width, height, scale) {
+    return this.exportImage(svgString, width, height, scale || 2, 'png');
   },
 
   // ---- Texture support ----

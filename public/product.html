@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StampaText - Product Details</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions" id="header-actions">
+      <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <button class="btn btn-secondary btn-small" id="btn-login">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup">Sign Up</button>
+      <a href="/app" class="btn btn-primary btn-small" id="btn-go-app" style="display:none;">Go to App</a>
+    </div>
+  </header>
+
+  <!-- Product Details -->
+  <section class="product-details">
+    <a href="/" class="product-back" id="product-back">&larr; Back to gallery</a>
+
+    <div class="product-layout">
+      <!-- Left: Large preview -->
+      <div class="product-preview" id="product-preview">
+        <div class="stamp-loading">Loading preview...</div>
+      </div>
+
+      <!-- Right: Preferences sidebar -->
+      <div class="product-sidebar">
+        <h3 class="product-sidebar-title">Customize</h3>
+
+        <div class="filter-section">
+          <div class="filter-section-header">
+            <span class="filter-section-title">COLOR</span>
+          </div>
+          <div class="color-palette" id="product-color-palette"></div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-section-header">
+            <span class="filter-section-title">TILT</span>
+          </div>
+          <div class="product-toggle-group" id="product-tilt-toggle">
+            <button class="product-toggle-btn active" data-value="0">Straight</button>
+            <button class="product-toggle-btn" data-value="-20">20 degrees</button>
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-section-header">
+            <span class="filter-section-title">TEXTURE</span>
+          </div>
+          <div class="product-toggle-group" id="product-texture-toggle">
+            <button class="product-toggle-btn active" data-value="">No texture</button>
+            <button class="product-toggle-btn" data-value="grungy_texture">Grungy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Description below image -->
+    <div class="product-description" id="product-description">Loading...</div>
+
+    <!-- Download options button -->
+    <button class="btn btn-primary product-download-btn" id="btn-download-options">Download options</button>
+  </section>
+
+  <!-- Download Modal -->
+  <div class="modal-overlay" id="download-modal">
+    <div class="modal" style="max-width:480px;">
+      <button class="modal-close" id="download-modal-close">&times;</button>
+      <h3 class="modal-title">Download options</h3>
+
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">JPG (WHITE BACKGROUND)</span>
+        </div>
+        <div class="download-options">
+          <label class="download-option-card">
+            <input type="radio" name="download-choice" value="jpg-small">
+            <span class="download-option-label">Small</span>
+            <span class="download-option-size">up to 500 px</span>
+          </label>
+          <label class="download-option-card">
+            <input type="radio" name="download-choice" value="jpg-medium" checked>
+            <span class="download-option-label">Medium</span>
+            <span class="download-option-size">up to 1000 px</span>
+          </label>
+          <label class="download-option-card">
+            <input type="radio" name="download-choice" value="jpg-large">
+            <span class="download-option-label">Large</span>
+            <span class="download-option-size">up to 3000 px</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">TRANSPARENT PNG</span>
+        </div>
+        <div class="download-options">
+          <label class="download-option-card">
+            <input type="radio" name="download-choice" value="png-small">
+            <span class="download-option-label">Small</span>
+            <span class="download-option-size">up to 500 px</span>
+          </label>
+          <label class="download-option-card">
+            <input type="radio" name="download-choice" value="png-medium">
+            <span class="download-option-label">Medium</span>
+            <span class="download-option-size">up to 1000 px</span>
+          </label>
+          <label class="download-option-card">
+            <input type="radio" name="download-choice" value="png-large">
+            <span class="download-option-label">Large</span>
+            <span class="download-option-size">up to 3000 px</span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-download-confirm" style="width:100%;margin-top:1rem;">Download</button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/svg-renderer.js"></script>
+  <script>
+    (async function() {
+      // ---- Constants ----
+      var PALETTE_COLORS = [
+        '#000000', '#FF0000', '#8B0000', '#FF1493', '#FF4500',
+        '#FF8C00', '#FFD700', '#FFFF00', '#BDB76B', '#9400D3',
+        '#4B0082', '#7CFC00', '#32CD32', '#00FF7F', '#008000',
+        '#808000', '#556B2F', '#00FFFF', '#00CED1', '#4682B4',
+        '#1E90FF', '#4169E1', '#000080', '#8B4513',
+        '#C0C0C0', '#A9A9A9'
+      ];
+
+      var COLOR_NAMES = {
+        '#000000': 'Black', '#FF0000': 'Red', '#8B0000': 'Dark Red',
+        '#FF1493': 'Deep Pink', '#FF4500': 'Orange Red', '#FF8C00': 'Dark Orange',
+        '#FFD700': 'Gold', '#FFFF00': 'Yellow', '#BDB76B': 'Dark Khaki',
+        '#9400D3': 'Dark Violet', '#4B0082': 'Indigo', '#7CFC00': 'Lawn Green',
+        '#32CD32': 'Lime Green', '#00FF7F': 'Spring Green', '#008000': 'Green',
+        '#808000': 'Olive', '#556B2F': 'Dark Olive', '#00FFFF': 'Cyan',
+        '#00CED1': 'Dark Turquoise', '#4682B4': 'Steel Blue', '#1E90FF': 'Dodger Blue',
+        '#4169E1': 'Royal Blue', '#000080': 'Navy', '#8B4513': 'Saddle Brown',
+        '#C0C0C0': 'Silver', '#A9A9A9': 'Dark Gray'
+      };
+
+      var DOWNLOAD_SIZES = {
+        'jpg-small':  { maxSize: 500,  scale: 1, format: 'jpeg', ext: 'jpg' },
+        'jpg-medium': { maxSize: 1000, scale: 1, format: 'jpeg', ext: 'jpg' },
+        'jpg-large':  { maxSize: 1000, scale: 3, format: 'jpeg', ext: 'jpg' },
+        'png-small':  { maxSize: 500,  scale: 1, format: 'png',  ext: 'png' },
+        'png-medium': { maxSize: 1000, scale: 1, format: 'png',  ext: 'png' },
+        'png-large':  { maxSize: 1000, scale: 3, format: 'png',  ext: 'png' }
+      };
+
+      // ---- State ----
+      var baseSvg = null;
+      var currentSvg = null;
+      var templateName = '';
+      var userText = '';
+      var currentColor = '';
+      var currentTilt = 0;
+      var currentTexture = '';
+      var isProcessing = false;
+
+      // ---- Parse URL params ----
+      var params = new URLSearchParams(window.location.search);
+      var templateId = params.get('id');
+      userText = params.get('text') || '';
+      var colorParam = (params.get('color') || '').toUpperCase();
+      currentColor = colorParam ? '#' + colorParam : '';
+      currentTilt = parseInt(params.get('tilt'), 10) || 0;
+      currentTexture = params.get('texture') || '';
+
+      if (!templateId) {
+        document.getElementById('product-preview').innerHTML =
+          '<div class="stamp-empty">No template ID provided. <a href="/">Go back</a></div>';
+        return;
+      }
+
+      // Back link preserves text
+      document.getElementById('product-back').href = '/?text=' + encodeURIComponent(userText);
+
+      // ---- Fetch template ----
+      var { data: tpl, error } = await sb
+        .from('templates')
+        .select('*, text_zones(*)')
+        .eq('id', templateId)
+        .eq('is_active', true)
+        .single();
+
+      if (error || !tpl) {
+        document.getElementById('product-preview').innerHTML =
+          '<div class="stamp-empty">Could not load this template. <a href="/">Go back</a></div>';
+        return;
+      }
+
+      templateName = tpl.name;
+      document.title = 'StampaText - ' + templateName;
+
+      // ---- Fetch SVG from storage ----
+      var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
+      var svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
+      var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
+      var cleanedSvg = SvgRenderer.cleanSvgString(rawSvg);
+
+      // ---- Detect text case from original SVG ----
+      var displayText = userText;
+      (function() {
+        var textMatch = cleanedSvg.match(/<text[^>]*>([\s\S]*?)<\/text>/i);
+        if (textMatch) {
+          var inner = textMatch[1].replace(/<[^>]*>/g, '');
+          inner = inner.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+          var letters = inner.replace(/[^a-zA-Z]/g, '');
+          if (letters.length > 0) {
+            var upper = letters.replace(/[^A-Z]/g, '').length;
+            var lower = letters.replace(/[^a-z]/g, '').length;
+            if (upper > 0 && lower === 0) displayText = userText.toUpperCase();
+            else if (lower > 0 && upper === 0) displayText = userText.toLowerCase();
+          }
+        }
+      })();
+
+      // ---- Replace text + auto-fit ----
+      var editableZones = (tpl.text_zones || [])
+        .filter(function(z) { return z.is_editable; })
+        .sort(function(a, b) { return a.sort_order - b.sort_order; });
+
+      for (var i = 0; i < editableZones.length; i++) {
+        var zone = editableZones[i];
+        var idx = zone.svg_element_index || 0;
+        cleanedSvg = SvgRenderer.replaceTextInString(cleanedSvg, idx, userText);
+
+        if (zone.bounding_width) {
+          var originalScaleX = zone.transform_matrix
+            ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1
+            : 1;
+          cleanedSvg = await SvgRenderer.autoFitTextInString(
+            cleanedSvg, idx, zone.bounding_width,
+            zone.font_size, originalScaleX
+          );
+        }
+      }
+
+      baseSvg = cleanedSvg;
+
+      // If no color in URL, use first palette color
+      if (!currentColor || PALETTE_COLORS.indexOf(currentColor) === -1) {
+        currentColor = '#000000';
+      }
+
+      // ---- Build UI ----
+      buildColorPalette();
+      setToggleState('product-tilt-toggle', String(currentTilt));
+      setToggleState('product-texture-toggle', currentTexture);
+      await renderPreview();
+
+      // ---- Event listeners ----
+
+      // Color palette: single-select
+      document.getElementById('product-color-palette').addEventListener('click', function(e) {
+        var swatch = e.target.closest('.color-swatch');
+        if (!swatch) return;
+        this.querySelectorAll('.color-swatch').forEach(function(s) {
+          s.classList.remove('selected');
+        });
+        swatch.classList.add('selected');
+        currentColor = swatch.dataset.color;
+        renderPreview();
+      });
+
+      // Tilt toggle
+      document.getElementById('product-tilt-toggle').addEventListener('click', function(e) {
+        var btn = e.target.closest('.product-toggle-btn');
+        if (!btn) return;
+        this.querySelectorAll('.product-toggle-btn').forEach(function(b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        currentTilt = parseInt(btn.dataset.value, 10) || 0;
+        renderPreview();
+      });
+
+      // Texture toggle
+      document.getElementById('product-texture-toggle').addEventListener('click', function(e) {
+        var btn = e.target.closest('.product-toggle-btn');
+        if (!btn) return;
+        this.querySelectorAll('.product-toggle-btn').forEach(function(b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        currentTexture = btn.dataset.value || '';
+        renderPreview();
+      });
+
+      // Download modal open
+      document.getElementById('btn-download-options').addEventListener('click', function() {
+        document.getElementById('download-modal').classList.add('active');
+      });
+
+      // Download modal close
+      document.getElementById('download-modal-close').addEventListener('click', function() {
+        document.getElementById('download-modal').classList.remove('active');
+      });
+
+      // Click outside modal to close
+      document.getElementById('download-modal').addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('active');
+      });
+
+      // Download confirm
+      document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
+
+      // ---- Helper functions ----
+
+      function buildColorPalette() {
+        var palette = document.getElementById('product-color-palette');
+        PALETTE_COLORS.forEach(function(color) {
+          var swatch = document.createElement('div');
+          swatch.className = 'color-swatch';
+          swatch.style.backgroundColor = color;
+          swatch.dataset.color = color;
+          if (color === '#FFFFFF') {
+            swatch.style.border = '2px solid #d4d4d4';
+          }
+          if (color.toUpperCase() === currentColor.toUpperCase()) {
+            swatch.classList.add('selected');
+          }
+          palette.appendChild(swatch);
+        });
+      }
+
+      function setToggleState(containerId, value) {
+        var container = document.getElementById(containerId);
+        container.querySelectorAll('.product-toggle-btn').forEach(function(btn) {
+          btn.classList.toggle('active', btn.dataset.value === value);
+        });
+      }
+
+      async function renderPreview() {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        var previewEl = document.getElementById('product-preview');
+        previewEl.style.opacity = '0.5';
+
+        try {
+          var svg = SvgRenderer.colorize(baseSvg, currentColor);
+          svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
+          if (currentTilt !== 0) {
+            svg = SvgRenderer.applyTilt(svg, currentTilt);
+          }
+          if (currentTexture) {
+            svg = await SvgRenderer.applyTexture(svg, currentTexture);
+          }
+
+          currentSvg = svg;
+
+          previewEl.innerHTML = '';
+          var img = SvgRenderer.createSvgImage(svg);
+          previewEl.appendChild(img);
+
+          updateDescription();
+          updateUrl();
+        } catch (err) {
+          console.error('Preview render error:', err);
+        } finally {
+          previewEl.style.opacity = '1';
+          isProcessing = false;
+        }
+      }
+
+      function updateDescription() {
+        var colorName = getColorName(currentColor);
+        var desc = '\u201C' + displayText + '\u201D written on ' +
+          colorName.toLowerCase() + ' ' + templateName;
+        document.getElementById('product-description').textContent = desc;
+      }
+
+      function updateUrl() {
+        var newUrl = '/product.html?id=' + encodeURIComponent(templateId) +
+          '&text=' + encodeURIComponent(userText) +
+          '&color=' + encodeURIComponent(currentColor.replace('#', '')) +
+          '&tilt=' + encodeURIComponent(currentTilt) +
+          (currentTexture ? '&texture=' + encodeURIComponent(currentTexture) : '');
+        window.history.replaceState(null, '', newUrl);
+      }
+
+      function getColorName(hex) {
+        return COLOR_NAMES[(hex || '').toUpperCase()] || hex;
+      }
+
+      async function handleDownload() {
+        var selected = document.querySelector('input[name="download-choice"]:checked');
+        if (!selected) {
+          alert('Please select a download size.');
+          return;
+        }
+
+        var choice = selected.value;
+        var config = DOWNLOAD_SIZES[choice];
+        if (!config || !currentSvg) return;
+
+        var btn = document.getElementById('btn-download-confirm');
+        btn.disabled = true;
+        btn.textContent = 'Preparing...';
+
+        try {
+          var blob = await SvgRenderer.exportImage(
+            currentSvg, config.maxSize, null, config.scale, config.format
+          );
+          var filename = 'stampatext-' + Date.now() + '.' + config.ext;
+          SvgRenderer.downloadBlob(blob, filename);
+
+          document.getElementById('download-modal').classList.remove('active');
+        } catch (err) {
+          console.error('Download error:', err);
+          alert('Download failed: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Download';
+        }
+      }
+
+    })();
+  </script>
+
+</body>
+</html>

@@ -11,6 +11,9 @@
  * Each batch is rendered as its own section (title + grid) stacked below the previous ones.
  */
 const Gallery = {
+  // The user's current search text
+  currentText: '',
+
   // Base results: text replaced but NOT colorized
   baseResults: [],    // [{templateId, svgString, shape, objectType, colors, width, height, name}]
 
@@ -49,6 +52,7 @@ const Gallery = {
    * @param {string} userText
    */
   async processAll(userText) {
+    this.currentText = userText;
     this.baseResults = [];
     this.allResults = [];
     this.filteredResults = [];
@@ -370,15 +374,18 @@ const Gallery = {
         });
       })(r.svgString);
 
-      var actionsDiv = document.createElement('div');
+      var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
+        '&text=' + encodeURIComponent(self.currentText) +
+        '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
+        '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
+        (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
+
+      var actionsDiv = document.createElement('a');
       actionsDiv.className = 'stamp-card-actions';
+      actionsDiv.href = productUrl;
       actionsDiv.innerHTML =
           '<span class="stamp-card-name">' + self.escapeHtml(r.name) + '</span>' +
-          '<a class="btn-download-link" href="#" ' +
-            'data-template-id="' + r.templateId + '"' +
-            'data-applied-color="' + (r.appliedColor || '') + '">' +
-            'Download' +
-          '</a>';
+          '<span class="btn-download-link">Download</span>';
 
       card.appendChild(previewDiv);
       card.appendChild(actionsDiv);
