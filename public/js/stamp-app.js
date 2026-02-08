@@ -56,6 +56,30 @@
     // Build color palette
     buildColorPalette();
 
+    // Delegated zoom handler for stamp card previews (works after sessionStorage restore too)
+    document.getElementById('results-batches').addEventListener('click', function(e) {
+      var preview = e.target.closest('.stamp-card-preview');
+      if (!preview) return;
+      var svgEl = preview.querySelector('svg');
+      if (svgEl) {
+        Gallery.showZoomOverlay(svgEl.outerHTML);
+      }
+    });
+
+    // Restore search from URL param (for back navigation / shared links)
+    var urlParams = new URLSearchParams(window.location.search);
+    var textParam = urlParams.get('text');
+    if (textParam) {
+      document.getElementById('stamp-input').value = textParam;
+
+      if (window.__galleryVariantParams) {
+        // Deterministic restore from saved variant params
+        restoreFromParams(textParam, window.__galleryVariantParams);
+      } else {
+        handleStamp();
+      }
+    }
+
     // Select all toggles in preferences modal
     document.querySelectorAll('.filter-select-all').forEach(function (link) {
       link.addEventListener('click', function (e) {
@@ -111,10 +135,52 @@
     try {
       await Gallery.processAll(text);
       await Gallery.showInitialRandom(INITIAL_COUNT);
+
+      // Update URL so back navigation restores search
+      var newUrl = '/?text=' + encodeURIComponent(text);
+      if (window.location.search !== '?text=' + encodeURIComponent(text)) {
+        history.replaceState(null, '', newUrl);
+      }
     } catch (err) {
       console.error('Stamp error:', err);
       document.getElementById('results-batches').innerHTML =
         '<div class="stamp-empty">Something went wrong. Please try again.</div>';
+    } finally {
+      isProcessing = false;
+      btn.disabled = false;
+      btn.textContent = 'Stamp';
+    }
+  }
+
+  // ---- Restore from saved variant params ----
+  async function restoreFromParams(text, params) {
+    if (isProcessing) return;
+    isProcessing = true;
+    var btn = document.getElementById('stamp-btn');
+    btn.disabled = true;
+    btn.textContent = 'Restoring...';
+
+    document.getElementById('stamp-results').style.display = 'block';
+    document.getElementById('results-batches').innerHTML =
+      '<div class="stamp-loading">Restoring your gallery...</div>';
+
+    try {
+      await Gallery.restoreVariants(text, params);
+
+      var newUrl = '/?text=' + encodeURIComponent(text);
+      if (window.location.search !== '?text=' + encodeURIComponent(text)) {
+        history.replaceState(null, '', newUrl);
+      }
+    } catch (err) {
+      console.error('Restore error, falling back to fresh generation:', err);
+      // Fall back to fresh random generation
+      try {
+        await Gallery.processAll(text);
+        await Gallery.showInitialRandom(INITIAL_COUNT);
+      } catch (err2) {
+        document.getElementById('results-batches').innerHTML =
+          '<div class="stamp-empty">Something went wrong. Please try again.</div>';
+      }
     } finally {
       isProcessing = false;
       btn.disabled = false;

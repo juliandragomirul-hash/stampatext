@@ -111,6 +111,7 @@ const Gallery = {
           .sort((a, b) => a.sort_order - b.sort_order);
 
         // Replace text in each editable zone (string-based, preserves fonts)
+        var didAutoFit = false;
         for (const zone of editableZones) {
           const idx = zone.svg_element_index || 0;
           cleanedSvg = SvgRenderer.replaceTextInString(cleanedSvg, idx, userText);
@@ -127,7 +128,13 @@ const Gallery = {
               zone.font_size,
               originalScaleX
             );
+            didAutoFit = true;
           }
+        }
+
+        // Category 2 (Fixed Frame): always auto-fit using container rect from SVG
+        if (!didAutoFit && /<image[\s>]/i.test(cleanedSvg)) {
+          cleanedSvg = await SvgRenderer.autoFitTextInString(cleanedSvg, 0, 1, 128, 1);
         }
 
         this.baseResults.push({
@@ -403,13 +410,6 @@ const Gallery = {
       img.style.height = 'auto';
       previewDiv.appendChild(img);
 
-      // Zoom on click — show stamp at 2x size in overlay
-      (function (svgStr) {
-        previewDiv.addEventListener('click', function () {
-          Gallery.showZoomOverlay(svgStr);
-        });
-      })(r.svgString);
-
       var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
         '&text=' + encodeURIComponent(self.currentText) +
         '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
@@ -432,6 +432,24 @@ const Gallery = {
 
     section.appendChild(grid);
     container.appendChild(section);
+
+    // Save variant params to localStorage for back-navigation restore
+    // (HTML save may fail for large base64 SVGs exceeding 5MB localStorage limit)
+    try {
+      localStorage.setItem('stx-gallery-text', this.currentText);
+      // Save compact variant params (tiny, guaranteed to fit)
+      var variantParams = results.map(function(r) {
+        return {
+          t: r.templateId,
+          c: r.appliedColor || '',
+          i: r.appliedTilt || 0,
+          x: r.appliedTexture || ''
+        };
+      });
+      localStorage.setItem('stx-gallery-params', JSON.stringify(variantParams));
+    } catch (e) {
+      console.warn('[Gallery] localStorage save failed:', e.message);
+    }
 
     // Scroll to the new batch
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -542,6 +560,72 @@ const Gallery = {
       }
     }
     document.addEventListener('keydown', onKey);
+  },
+
+  /**
+   * Restore gallery from saved variant params (deterministic re-render).
+   * Fetches templates, processes text, then applies exact saved color/tilt/texture.
+   * @param {string} userText
+   * @param {Array} variantParams - [{t: templateId, c: color, i: tilt, x: texture}]
+   */
+  async restoreVariants(userText, variantParams) {
+    this.currentText = userText;
+
+    // Process all templates (fetch SVGs, replace text, auto-fit)
+    await this.processAll(userText);
+
+    // Build variants using saved params (deterministic — no randomness)
+    var batch = [];
+    var self = this;
+    for (var i = 0; i < variantParams.length; i++) {
+      var vp = variantParams[i];
+      var base = this.baseResults.find(function(r) { return String(r.templateId) === String(vp.t); });
+      if (!base) continue;
+
+      try {
+        var colorized = SvgRenderer.colorize(base.svgString, vp.c);
+        var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+        var tilted = vp.i !== 0 ? SvgRenderer.applyTilt(cropped, vp.i) : cropped;
+        var textured = vp.x ? await SvgRenderer.applyTexture(tilted, vp.x) : tilted;
+
+        if (!textured || textured.indexOf('<svg') === -1) textured = tilted;
+
+        batch.push({
+          templateId: base.templateId,
+          svgString: textured,
+          shape: base.shape,
+          objectType: base.objectType,
+          colors: base.colors,
+          width: base.width,
+          height: base.height,
+          name: base.name,
+          displayText: base.displayText,
+          appliedColor: vp.c,
+          appliedTilt: vp.i,
+          appliedTexture: vp.x || null
+        });
+      } catch (err) {
+        console.warn('Failed to restore variant:', err);
+      }
+    }
+
+    if (batch.length === 0) {
+      this.renderEmpty('Could not restore gallery. Please try again.');
+      return;
+    }
+
+    // Clear and render
+    var container = document.getElementById('results-batches');
+    container.innerHTML = '';
+    this.allResults = batch;
+    this.displayedCount = 0;
+
+    var title = 'Showing <strong>' + batch.length + '</strong> results for <strong>\u201C' +
+      this.escapeHtml(userText) + '\u201D</strong>.<br><span class="stamp-results-timestamp">Restored at ' +
+      this.formatTime() + '</span>';
+    this.appendBatchSection(title, batch);
+    this.updateBatchButtons('initial');
+    this.showResultsUI();
   },
 
   escapeHtml(str) {

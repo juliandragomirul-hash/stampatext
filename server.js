@@ -4,7 +4,13 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  lastModified: false,
+  setHeaders: function(res) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  }
+}));
 
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'index.html'));

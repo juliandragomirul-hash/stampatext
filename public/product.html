@@ -24,7 +24,7 @@
 
   <!-- Product Details -->
   <section class="product-details">
-    <a href="/" class="product-back" id="product-back" onclick="if(history.length>1){event.preventDefault();history.back();}">&larr; Back to gallery</a>
+    <a href="/" class="product-back" id="product-back">&larr; Back to gallery</a>
 
     <div class="product-layout">
       <!-- Left: Large preview -->
@@ -132,7 +132,7 @@
   <script src="/js/supabase.umd.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/supabase-client.js"></script>
-  <script src="/js/svg-renderer.js"></script>
+  <script src="/js/svg-renderer.js?v=10"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -239,6 +239,7 @@
         .filter(function(z) { return z.is_editable; })
         .sort(function(a, b) { return a.sort_order - b.sort_order; });
 
+      var didAutoFit = false;
       for (var i = 0; i < editableZones.length; i++) {
         var zone = editableZones[i];
         var idx = zone.svg_element_index || 0;
@@ -252,7 +253,13 @@
             cleanedSvg, idx, zone.bounding_width,
             zone.font_size, originalScaleX
           );
+          didAutoFit = true;
         }
+      }
+
+      // Category 2 (Fixed Frame): always auto-fit using container rect from SVG
+      if (!didAutoFit && /<image[\s>]/i.test(cleanedSvg)) {
+        cleanedSvg = await SvgRenderer.autoFitTextInString(cleanedSvg, 0, 1, 128, 1);
       }
 
       baseSvg = cleanedSvg;

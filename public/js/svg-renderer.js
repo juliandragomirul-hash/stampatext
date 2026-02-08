@@ -340,41 +340,45 @@ const SvgRenderer = {
     }
     if (!dominant) return svgString; // only black/white, nothing to colorize
 
-    // Replace all fill= and stroke= occurrences of the dominant color (case-insensitive)
-    var result = svgString;
-    var escapedDominant = dominant.replace('#', '\\#');
-    // Replace exact hex matches in fill attributes
-    var fillRe = new RegExp('(fill=["\'])' + escapedDominant + '(["\'])', 'gi');
-    result = result.replace(fillRe, '$1' + newColor + '$2');
-    // Replace exact hex matches in stroke attributes
-    var strokeRe = new RegExp('(stroke=["\'])' + escapedDominant + '(["\'])', 'gi');
-    result = result.replace(strokeRe, '$1' + newColor + '$2');
+    var isCategory2 = /<image[\s>]/i.test(svgString);
 
-    // Category 2: If SVG has <image>, add a filter to recolor the raster background
-    if (/<image[\s>]/i.test(result)) {
-      // Parse target color to RGB components (0-1 range)
-      var hex = newColor.replace('#', '');
-      var rr = parseInt(hex.substring(0, 2), 16) / 255;
-      var gg = parseInt(hex.substring(2, 4), 16) / 255;
-      var bb = parseInt(hex.substring(4, 6), 16) / 255;
+    if (isCategory2) {
+      // Category 2: two-pronged approach for exact color match:
+      // 1. Text: direct fill/stroke replacement (exact target color)
+      // 2. Image: feFlood + feComposite filter (flat silhouette in exact target color)
+      var result = svgString;
 
-      // SVG filter: desaturate to grayscale, then tint with target color
-      // feColorMatrix row = [R_scale * lum_r, R_scale * lum_g, R_scale * lum_b, 0, 0]
-      // Using standard luminance weights (0.2126, 0.7152, 0.0722)
-      var filterDef = '<defs><filter id="recolor" color-interpolation-filters="sRGB">' +
-        '<feColorMatrix type="matrix" values="' +
-          (rr * 0.2126).toFixed(4) + ' ' + (rr * 0.7152).toFixed(4) + ' ' + (rr * 0.0722).toFixed(4) + ' 0 0 ' +
-          (gg * 0.2126).toFixed(4) + ' ' + (gg * 0.7152).toFixed(4) + ' ' + (gg * 0.0722).toFixed(4) + ' 0 0 ' +
-          (bb * 0.2126).toFixed(4) + ' ' + (bb * 0.7152).toFixed(4) + ' ' + (bb * 0.0722).toFixed(4) + ' 0 0 ' +
-          '0 0 0 1 0"/>' +
+      // Replace fill/stroke on text elements (same as Category 1)
+      var escapedDom = dominant.replace('#', '\\#');
+      var fillRe2 = new RegExp('(fill=["\'])' + escapedDom + '(["\'])', 'gi');
+      result = result.replace(fillRe2, '$1' + newColor + '$2');
+      var strokeRe2 = new RegExp('(stroke=["\'])' + escapedDom + '(["\'])', 'gi');
+      result = result.replace(strokeRe2, '$1' + newColor + '$2');
+
+      // Add feFlood filter for the raster image — makes every non-transparent pixel
+      // the exact target color (flat silhouette), guaranteeing text/artwork match
+      var filterId = 'recolor-' + newColor.replace('#', '');
+      var filterDef = '<defs><filter id="' + filterId + '" color-interpolation-filters="sRGB">' +
+        '<feFlood flood-color="' + newColor + '" result="targetColor"/>' +
+        '<feComposite in="targetColor" in2="SourceAlpha" operator="in"/>' +
         '</filter></defs>';
 
-      // Insert filter defs after <svg> opening tag
+      // Insert filter def after <svg> tag
       result = result.replace(/(<svg[^>]*>)/i, '$1' + filterDef);
 
-      // Apply filter to <image> element
-      result = result.replace(/(<image\s)/i, '$1filter="url(#recolor)" ');
+      // Apply filter to the <image> element
+      result = result.replace(/(<image\b)([^>]*)(\/?>)/i, '$1$2 filter="url(#' + filterId + ')"$3');
+
+      return result;
     }
+
+    // Category 1: replace fill/stroke attributes directly (no raster image)
+    var result = svgString;
+    var escapedDominant = dominant.replace('#', '\\#');
+    var fillRe = new RegExp('(fill=["\'])' + escapedDominant + '(["\'])', 'gi');
+    result = result.replace(fillRe, '$1' + newColor + '$2');
+    var strokeRe = new RegExp('(stroke=["\'])' + escapedDominant + '(["\'])', 'gi');
+    result = result.replace(strokeRe, '$1' + newColor + '$2');
 
     return result;
   },
@@ -946,7 +950,6 @@ const SvgRenderer = {
    * @returns {Promise<string>} - modified SVG string
    */
   async autoFitTextInString(svgString, textIndex, maxWidth, originalFontSize, originalScaleX) {
-    if (!maxWidth || maxWidth <= 0) return svgString;
     originalScaleX = originalScaleX || 1;
 
     // ============================================================
@@ -958,9 +961,13 @@ const SvgRenderer = {
     var isFixedFrame = hasImage;
 
     if (isFixedFrame) {
+      // Category 2: always auto-fit using container rect from SVG (no bounding_width needed)
       console.log('Category 2 (Fixed Frame) template detected');
       return this._autoFitTextFixedFrame(svgString, textIndex, maxWidth, originalFontSize, originalScaleX);
     }
+
+    // Category 1 requires bounding_width from database
+    if (!maxWidth || maxWidth <= 0) return svgString;
 
     // Category 1: Dynamic Frame - TEXT-FIRST approach
     // Create an HTML wrapper with fonts to measure text accurately
@@ -1332,54 +1339,98 @@ const SvgRenderer = {
       }
     }
 
-    // Re-split text using Fixed Frame rules (max 13 chars/line, max 3 lines)
-    var lines = this.splitTextIntoLinesFixedFrame(currentText);
-    var numLines = lines.length;
-    var longestLine = '';
-    for (var i = 0; i < lines.length; i++) {
-      if (lines[i].length > longestLine.length) {
-        longestLine = lines[i];
-      }
+    // Extract horizontal scale from text transform matrix
+    var textTransformMatch = svgString.match(/<text[^>]*transform=["']matrix\(([^)]+)\)["']/i);
+    var textScaleX = 1;
+    if (textTransformMatch) {
+      var txParts = textTransformMatch[1].trim().split(/[\s,]+/);
+      if (txParts.length >= 1) textScaleX = parseFloat(txParts[0]) || 1;
     }
+    console.log('Fixed Frame: text scaleX =', textScaleX);
 
-    console.log('Fixed Frame: Text "' + currentText + '" split into', numLines, 'lines:', lines);
-    console.log('Fixed Frame: Longest line:', longestLine, '(' + longestLine.length + ' chars)');
-
-    // Calculate OPTIMAL font size to fill container
     // Detect font from SVG to use appropriate charWidthFactor
     var detectedFont = '';
-    var fontDetectMatch = svgString.match(/font-family=["']([^"']+)["']/i);
+    var fontDetectMatch = svgString.match(/font-family="([^"]*)"/i);
+    if (!fontDetectMatch) fontDetectMatch = svgString.match(/font-family='([^']*)'/i);
     if (fontDetectMatch) detectedFont = fontDetectMatch[1].replace(/'/g, '').toLowerCase();
 
-    // charWidthFactor = avg character width / font size (tuned per font)
     var charWidthFactor;
     if (detectedFont.indexOf('roboto') !== -1) {
-      charWidthFactor = 0.55;  // Roboto Black is wider than Bangers
+      charWidthFactor = 0.53;  // Roboto Black uppercase
+    } else if (detectedFont.indexOf('bebas') !== -1) {
+      charWidthFactor = 0.45;  // Bebas Neue (condensed)
     } else {
       charWidthFactor = 0.38;  // Bangers (default)
     }
-    var horizontalPadding = 0.90;  // Use 90% of container width
-    var verticalPadding = 0.85;    // Use 85% of container height
+    console.log('Fixed Frame: font="' + detectedFont + '", charWidthFactor=' + charWidthFactor);
 
-    // Calculate max font size based on WIDTH
-    var availableWidth = containerWidth * horizontalPadding;
-    var maxFontSizeByWidth = availableWidth / (longestLine.length * charWidthFactor);
-
-    // Calculate max font size based on HEIGHT
+    var horizontalPadding = 0.98;
+    var verticalPadding = 1.0;
+    var availableWidth = containerWidth * horizontalPadding / textScaleX;
     var availableHeight = containerHeight * verticalPadding;
-    var lineHeightFactor = (numLines === 1) ? 1.0 : 1.05;  // No extra spacing for single line
-    var totalHeightNeeded = numLines * lineHeightFactor;
-    var maxFontSizeByHeight = availableHeight / totalHeightNeeded;
+    var maxLinesLimit = 6;  // safety cap (algorithm picks optimal count)
 
-    // Use the smaller of the two
-    var optimalFontSize = Math.min(maxFontSizeByWidth, maxFontSizeByHeight);
+    // --- Optimal line splitting: try ALL valid word-boundary splits ---
+    var words = currentText.split(' ').filter(function(w) { return w.length > 0; });
 
-    // Cap at reasonable maximum (increased for single lines)
+    // lineHeightFactor per line count — tighter spacing for more lines
+    var LINE_HEIGHT_FACTORS = [0, 1.0, 1.05, 0.80, 0.72, 0.66, 0.62];
+
+    // Helper: calculate optimal font size for a line configuration
+    function calcFontSize(lines) {
+      var n = lines.length;
+      var longest = 0;
+      for (var i = 0; i < n; i++) {
+        if (lines[i].length > longest) longest = lines[i].length;
+      }
+      if (longest === 0) return 0;
+      var byWidth = availableWidth / (longest * charWidthFactor);
+      var lhf = n < LINE_HEIGHT_FACTORS.length ? LINE_HEIGHT_FACTORS[n] : 0.60;
+      var byHeight = availableHeight / (n * lhf);
+      return Math.min(byWidth, byHeight);
+    }
+
+    var bestLines = [currentText];
+    var bestFontSize = 0;
+
+    // Recursively try all ways to split words into exactly n lines at word boundaries
+    function trySplits(remainingWords, linesLeft, prefix) {
+      if (linesLeft === 1) {
+        var candidate = prefix.concat([remainingWords.join(' ')]);
+        var fs = calcFontSize(candidate);
+        if (fs > bestFontSize) {
+          bestFontSize = fs;
+          bestLines = candidate;
+        }
+        return;
+      }
+      // Try each possible split point for the first line
+      var maxFirst = remainingWords.length - (linesLeft - 1);  // leave at least 1 word per remaining line
+      for (var k = 1; k <= maxFirst; k++) {
+        var firstLine = remainingWords.slice(0, k).join(' ');
+        trySplits(remainingWords.slice(k), linesLeft - 1, prefix.concat([firstLine]));
+      }
+    }
+
+    var maxN = Math.min(maxLinesLimit, words.length);
+    for (var tryN = 1; tryN <= maxN; tryN++) {
+      trySplits(words, tryN, []);
+    }
+
+    var lines = bestLines;
+    var numLines = lines.length;
+    var longestLine = '';
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].length > longestLine.length) longestLine = lines[i];
+    }
+
+    var optimalFontSize = bestFontSize;
     var maxCap = (numLines === 1) ? 650 : 500;
     if (optimalFontSize > maxCap) optimalFontSize = maxCap;
 
-    console.log('Fixed Frame: Optimal font size:', optimalFontSize.toFixed(2),
-      '(by width:', maxFontSizeByWidth.toFixed(2), ', by height:', maxFontSizeByHeight.toFixed(2), ')');
+    var lineHeightFactor = numLines < LINE_HEIGHT_FACTORS.length ? LINE_HEIGHT_FACTORS[numLines] : 0.60;
+
+    console.log('Fixed Frame: Best=' + numLines + ' lines, fontSize=' + optimalFontSize.toFixed(2), lines);
 
     // Extract styling from original tspans
     var tspanStyle = '';
@@ -1390,7 +1441,12 @@ const SvgRenderer = {
       var fontFamilyMatch = originalAttrs.match(/font-family="([^"]*)"/);
       if (!fontFamilyMatch) fontFamilyMatch = originalAttrs.match(/font-family='([^']*)'/);
       var fontWeightMatch = originalAttrs.match(/font-weight=["'][^"']*["']/);
-      if (fillMatch) tspanStyle += ' ' + fillMatch[0];
+      if (fillMatch) {
+        tspanStyle += ' ' + fillMatch[0];
+        // Add matching stroke to thicken text (helps with horizontal scaling)
+        var fillVal = fillMatch[0].match(/fill=["']([^"']*)["']/);
+        if (fillVal) tspanStyle += ' stroke="' + fillVal[1] + '" stroke-width="2"';
+      }
       if (fontFamilyMatch) tspanStyle += ' font-family="' + fontFamilyMatch[1] + '"';
       if (fontWeightMatch) tspanStyle += ' ' + fontWeightMatch[0];
     }
@@ -1522,6 +1578,87 @@ const SvgRenderer = {
       scaleX: values[0], skewY: values[1], skewX: values[2],
       scaleY: values[3], translateX: values[4], translateY: values[5]
     };
+  },
+
+  // Cache for detected image dominant color (keyed by image data prefix)
+  _imageDominantColorCache: {},
+
+  /**
+   * Detect the dominant non-white, non-transparent color in a raster image.
+   * Samples center region of the image for speed.
+   * @param {string} svgString - SVG string containing base64 <image>
+   * @returns {Promise<string|null>} hex color like '#FF0000' or null
+   */
+  async _detectImageDominantColor(svgString) {
+    var imgMatch = svgString.match(/xlink:href=["'](data:image\/[^;]+;base64,([^"']+))["']/i);
+    if (!imgMatch) return null;
+
+    var cacheKey = imgMatch[2].substring(0, 100);
+    if (this._imageDominantColorCache[cacheKey]) {
+      return this._imageDominantColorCache[cacheKey];
+    }
+
+    var self = this;
+    var dataUri = imgMatch[1];
+    return new Promise(function(resolve) {
+      var img = new Image();
+      img.onload = function() {
+        try {
+          var scanSize = 200;
+          var canvas = document.createElement('canvas');
+          canvas.width = scanSize;
+          canvas.height = scanSize;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, scanSize, scanSize);
+
+          var pixels = ctx.getImageData(0, 0, scanSize, scanSize).data;
+          var colorCounts = {};
+
+          for (var i = 0; i < pixels.length; i += 4) {
+            var r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
+            // Skip transparent and near-white pixels
+            if (a < 128) continue;
+            if (r > 240 && g > 240 && b > 240) continue;
+            // Skip near-black pixels
+            if (r < 15 && g < 15 && b < 15) continue;
+            // Quantize to reduce noise (round to nearest 8)
+            var qr = (r >> 3) << 3;
+            var qg = (g >> 3) << 3;
+            var qb = (b >> 3) << 3;
+            var key = qr + ',' + qg + ',' + qb;
+            colorCounts[key] = (colorCounts[key] || 0) + 1;
+          }
+
+          // Find most common color
+          var bestKey = null, bestCount = 0;
+          for (var k in colorCounts) {
+            if (colorCounts[k] > bestCount) {
+              bestCount = colorCounts[k];
+              bestKey = k;
+            }
+          }
+
+          if (bestKey) {
+            var parts = bestKey.split(',');
+            var hex = '#' +
+              parseInt(parts[0]).toString(16).padStart(2, '0') +
+              parseInt(parts[1]).toString(16).padStart(2, '0') +
+              parseInt(parts[2]).toString(16).padStart(2, '0');
+            hex = hex.toUpperCase();
+            console.log('Image dominant color detected:', hex, '(count=' + bestCount + ')');
+            self._imageDominantColorCache[cacheKey] = hex;
+            resolve(hex);
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          console.warn('Image color detection failed:', e);
+          resolve(null);
+        }
+      };
+      img.onerror = function() { resolve(null); };
+      img.src = dataUri;
+    });
   },
 
   // Cache for detected artwork bounds (keyed by image data prefix)
