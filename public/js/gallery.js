@@ -406,8 +406,6 @@ const Gallery = {
       var previewDiv = document.createElement('div');
       previewDiv.className = 'stamp-card-preview';
       var img = SvgRenderer.createSvgImage(r.svgString);
-      img.style.width = '100%';
-      img.style.height = 'auto';
       previewDiv.appendChild(img);
 
       var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +

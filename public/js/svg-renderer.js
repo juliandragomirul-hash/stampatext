@@ -7,6 +7,64 @@
  */
 const SvgRenderer = {
 
+  // Font data cache for embedding in exported SVGs (base64 @font-face rules)
+  _fontDataCache: {},
+
+  // Map of font names to local font files and their format
+  _fontMap: {
+    'Bangers':    { url: '/fonts/Bangers-Regular.ttf',   format: 'truetype' },
+    'Gunplay':    { url: '/fonts/gunplay-regular.otf',    format: 'opentype' },
+    'BebasNeue':  { url: '/fonts/BebasNeue-Regular.ttf',  format: 'truetype' },
+    'ArmyRust':   { url: '/fonts/army-rust.ttf',          format: 'truetype' },
+    'RobotoBlack': { url: '/fonts/Roboto-Black.ttf',      format: 'truetype' }
+  },
+
+  /**
+   * Fetch a font file and return it as a base64 @font-face CSS rule.
+   * Results are cached to avoid re-fetching.
+   * @param {string} fontName
+   * @returns {Promise<string|null>} CSS @font-face rule or null
+   */
+  async _getFontRule(fontName) {
+    if (this._fontDataCache[fontName]) return this._fontDataCache[fontName];
+    var fontInfo = this._fontMap[fontName];
+    if (!fontInfo) return null;
+    try {
+      var resp = await fetch(fontInfo.url);
+      var buf = await resp.arrayBuffer();
+      var bytes = new Uint8Array(buf);
+      var binary = '';
+      for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      var base64 = btoa(binary);
+      var rule = '@font-face{font-family:"' + fontName + '";src:url(data:font/' +
+        fontInfo.format + ';base64,' + base64 + ');}';
+      this._fontDataCache[fontName] = rule;
+      return rule;
+    } catch (e) {
+      console.warn('Failed to fetch font:', fontName, e);
+      return null;
+    }
+  },
+
+  /**
+   * Embed @font-face rules (with base64 data) into an SVG string.
+   * This makes the SVG self-contained for canvas rendering.
+   * @param {string} svgString
+   * @returns {Promise<string>}
+   */
+  async _embedFontsInSvg(svgString) {
+    var rules = [];
+    for (var fontName in this._fontMap) {
+      if (svgString.indexOf(fontName) !== -1) {
+        var rule = await this._getFontRule(fontName);
+        if (rule) rules.push(rule);
+      }
+    }
+    if (rules.length === 0) return svgString;
+    var styleTag = '<defs><style>' + rules.join('') + '</style></defs>';
+    return svgString.replace(/(<svg[^>]*>)/, '$1' + styleTag);
+  },
+
   /**
    * Fetch SVG string from a URL (Supabase Storage public URL).
    * @param {string} svgUrl
@@ -406,7 +464,7 @@ const SvgRenderer = {
    * Fixed Frame constraints (Category 2 templates with background images)
    */
   FIXED_FRAME_MAX_LINES: 3,
-  FIXED_FRAME_MAX_CHARS_PER_LINE: 13,
+  FIXED_FRAME_MAX_CHARS_PER_LINE: 7,
 
   /**
    * Get max characters per line based on total text length.
@@ -415,9 +473,9 @@ const SvgRenderer = {
    * @returns {number}
    */
   _getMaxCharsPerLine(len) {
-    // 1-60 chars: 12 chars per line
+    // 1-60 chars: 7 chars per line
     // 61+ chars: 22 chars per line
-    return len <= 60 ? 12 : 22;
+    return len <= 60 ? 7 : 22;
   },
 
   /**
@@ -1149,13 +1207,21 @@ const SvgRenderer = {
             var newRectX = viewBoxCenterX - newRectWidth / 2;
             var newRectY = viewBoxCenterY - newRectHeight / 2;
 
-            console.log('STEP 5: Resizing rects. newRectX:', newRectX, 'newRectY:', newRectY, 'newRectWidth:', newRectWidth, 'newRectHeight:', newRectHeight);
+            // First pass: find the largest rect width (outer frame) to classify rects
+            var rectWidths = [];
+            (result.match(/<rect[^>]*>/gi) || []).forEach(function(rectTag) {
+              if (rectTag.match(/fill=["']#FFFFFF["']/i) || rectTag.match(/fill=["']white["']/i)) return;
+              var wm = rectTag.match(/\swidth=["']([\d.]+)["']/);
+              if (wm) rectWidths.push(parseFloat(wm[1]));
+            });
+            rectWidths.sort(function(a, b) { return b - a; });
+            var outerRectOrigW = rectWidths[0] || vbW;
+            var mainRectThreshold = outerRectOrigW * 0.7;
+            var decorScale = newRectWidth / outerRectOrigW;
+            var innerPaddingX = 11;
+            var innerPaddingY = 10;
 
-            // Count how many rects are in the SVG
-            var allRects = result.match(/<rect[^>]*>/gi) || [];
-            console.log('Total rects found in SVG:', allRects.length);
-
-            // Update all non-background rects to new dimensions
+            // Second pass: resize rects
             result = result.replace(/<rect([^>]*?)(\/?)>/gi, function (m, attrs, selfClose) {
               // Skip background rects (white fill at origin or very large)
               if (attrs.match(/fill=["']#FFFFFF["']/i) || attrs.match(/fill=["']white["']/i)) {
@@ -1167,41 +1233,45 @@ const SvgRenderer = {
                 }
               }
 
-              // Check if this rect has x, y, width, height (use \s to avoid matching stroke-width)
               var hasX = attrs.match(/\bx=["']/);
               var hasY = attrs.match(/\by=["']/);
               var hasW = attrs.match(/\swidth=["']/);
               var hasH = attrs.match(/\sheight=["']/);
               if (!hasW || !hasH) return m;
 
-              // Get original width to determine if this is inner or outer rect
               var origW = parseFloat(attrs.match(/\swidth=["']([\d.]+)["']/)[1]);
-
-              // Inner rects have smaller dimensions - preserve the offset ratio
-              var innerPaddingX = 11; // typical offset between outer and inner rect
-              var innerPaddingY = 10;
-
-              // Determine if this is likely the outer or inner rect based on size
-              var isInnerRect = origW < 1230; // inner rect is ~1222, outer is ~1244
-
+              var origH = parseFloat(attrs.match(/\sheight=["']([\d.]+)["']/)[1]);
               var na = attrs;
-              if (isInnerRect) {
-                // Inner rect: slightly smaller, offset from outer (preserve leading space with $1)
-                na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + (newRectWidth - innerPaddingX * 2).toFixed(2) + '"');
-                na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + (newRectHeight - innerPaddingY * 2).toFixed(2) + '"');
-                if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + (newRectX + innerPaddingX).toFixed(2) + '"');
-                if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + (newRectY + innerPaddingY).toFixed(2) + '"');
-              } else {
-                // Outer rect: wrap text with padding (preserve leading space with $1)
-                na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + newRectWidth.toFixed(2) + '"');
-                na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
-                if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
-                if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
-              }
 
-              // DEBUG: Log the modified rect to see what's happening
-              console.log('Modified rect - isInner:', isInnerRect, 'origW:', origW, 'newW:', isInnerRect ? (newRectWidth - innerPaddingX * 2) : newRectWidth);
-              console.log('Full rect:', '<rect' + na + (selfClose || '') + '>');
+              if (origW >= mainRectThreshold) {
+                // Main frame rect: resize to wrap text
+                var isInnerRect = origW < outerRectOrigW * 0.99;
+                if (isInnerRect) {
+                  na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + (newRectWidth - innerPaddingX * 2).toFixed(2) + '"');
+                  na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + (newRectHeight - innerPaddingY * 2).toFixed(2) + '"');
+                  if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + (newRectX + innerPaddingX).toFixed(2) + '"');
+                  if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + (newRectY + innerPaddingY).toFixed(2) + '"');
+                } else {
+                  na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + newRectWidth.toFixed(2) + '"');
+                  na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
+                  if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
+                  if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
+                }
+              } else {
+                // Decorative rect (bars, accents): scale proportionally
+                var origRectX = hasX ? parseFloat(attrs.match(/\bx=["']([\d.\-]+)["']/)[1]) : 0;
+                var origRectY = hasY ? parseFloat(attrs.match(/\by=["']([\d.\-]+)["']/)[1]) : 0;
+                var origCX = vbX + vbW / 2;
+                var origCY = vbY + vbH / 2;
+                var dNewW = origW * decorScale;
+                var dNewH = origH * decorScale;
+                var dNewX = viewBoxCenterX + (origRectX - origCX) * decorScale;
+                var dNewY = viewBoxCenterY + (origRectY - origCY) * decorScale;
+                na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + dNewW.toFixed(2) + '"');
+                na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + dNewH.toFixed(2) + '"');
+                if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + dNewX.toFixed(2) + '"');
+                if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + dNewY.toFixed(2) + '"');
+              }
 
               return '<rect' + na + (selfClose || '') + '>';
             });
@@ -1241,10 +1311,14 @@ const SvgRenderer = {
 
               // If we found content bounds, use them
               if (contentBounds.minX !== Infinity) {
-                // SIMPLE APPROACH: Just add equal padding around the rect bounds
-                // The text is already centered within the rects (text-anchor="middle")
-                // So centering the rects = centering the whole design
-                var strokePadding = 35;
+                // Find max stroke-width from visible rects for accurate padding
+                var maxStrokeWidth = 0;
+                rectMatches.forEach(function(rectTag) {
+                  if (rectTag.match(/fill=["']#FFFFFF["']/i) || rectTag.match(/fill=["']white["']/i)) return;
+                  var swMatch = rectTag.match(/stroke-width=["']([\d.]+)["']/);
+                  if (swMatch) maxStrokeWidth = Math.max(maxStrokeWidth, parseFloat(swMatch[1]));
+                });
+                var strokePadding = maxStrokeWidth / 2 + 15;
 
                 var fitVbX = contentBounds.minX - strokePadding;
                 var fitVbY = contentBounds.minY - strokePadding;
@@ -1374,7 +1448,7 @@ const SvgRenderer = {
     var words = currentText.split(' ').filter(function(w) { return w.length > 0; });
 
     // lineHeightFactor per line count — tighter spacing for more lines
-    var LINE_HEIGHT_FACTORS = [0, 1.0, 1.05, 0.80, 0.72, 0.66, 0.62];
+    var LINE_HEIGHT_FACTORS = [0, 1.0, 1.05, 0.95, 0.72, 0.66, 0.62];
 
     // Helper: calculate optimal font size for a line configuration
     function calcFontSize(lines) {
@@ -1479,27 +1553,24 @@ const SvgRenderer = {
       result = result.replace(/(<text[^>]*)text-anchor=["'][^"']*["']/i, '$1text-anchor="middle"');
     }
 
-    // EXPLICITLY set text transform to center on container
-    // The container rect center = (containerX + containerWidth/2, containerY + containerHeight/2)
-    var textCenterX = containerX + containerWidth / 2;
-    var textCenterY = containerY + containerHeight / 2;
-
-    // Update the text transform matrix - keep rotation, set position to container center
+    // Override the text transform position to center text within the container rect.
+    // Original template text positions may be at arbitrary locations (e.g. left-aligned),
+    // so we force centering on the container rect's center point.
+    var textCenterX = containerX + containerWidth * 0.46;
+    var textCenterY = containerY + containerHeight * 0.47;
     result = result.replace(
       /(<text[^>]*transform=["'])matrix\(([^)]+)\)(["'])/i,
       function(match, before, matrixContent, after) {
         var parts = matrixContent.trim().split(/[\s,]+/);
         if (parts.length >= 6) {
-          // Keep rotation (a, b, c, d), update position (e, f) to container center
           var newMatrix = parts[0] + ' ' + parts[1] + ' ' + parts[2] + ' ' + parts[3] + ' ' + textCenterX.toFixed(2) + ' ' + textCenterY.toFixed(2);
-          console.log('Fixed Frame: Set text position to center:', textCenterX.toFixed(2), textCenterY.toFixed(2));
           return before + 'matrix(' + newMatrix + ')' + after;
         }
         return match;
       }
     );
 
-    console.log('Fixed Frame: Generated', numLines, 'lines at font size', optimalFontSize.toFixed(2));
+    console.log('Fixed Frame: Generated', numLines, 'lines at font size', optimalFontSize.toFixed(2), '| text center:', textCenterX.toFixed(2), textCenterY.toFixed(2));
 
     return result;
   },
@@ -1730,9 +1801,9 @@ const SvgRenderer = {
           var scaleX = svgImgW / scanSize;
           var scaleY = svgImgH / scanSize;
 
-          // Add 18% padding around detected bounds to avoid clipping decorations
-          var padX = (maxX - minX) * 0.18;
-          var padY = (maxY - minY) * 0.18;
+          // Negative padding — crop slightly into bounds to maximize display size
+          var padX = (maxX - minX) * -0.03;
+          var padY = (maxY - minY) * -0.03;
 
           var bounds = {
             cropX: Math.max(0, (minX - padX) * scaleX),
@@ -1832,10 +1903,10 @@ const SvgRenderer = {
     var newW = vbW * cosA + vbH * sinA;
     var newH = vbW * sinA + vbH * cosA;
 
-    // Add small margin (2%) to avoid clipping strokes/edges after rotation
-    var margin = Math.max(newW, newH) * 0.02;
-    newW += margin * 2;
-    newH += margin * 2;
+    // Shrink post-rotation viewBox by 20% to make tilted stamps appear larger
+    // (minor corner clipping on empty areas is acceptable)
+    newW *= 0.80;
+    newH *= 0.80;
 
     // New viewBox centered on the same center point
     var newVbX = cx - newW / 2;
@@ -2004,9 +2075,11 @@ const SvgRenderer = {
       var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
         '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' +
+        '@font-face{font-family:"Bangers";src:url("/fonts/Bangers-Regular.ttf") format("truetype");font-weight:normal;}' +
         '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:normal;}' +
         '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:normal;}' +
         '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:normal;}' +
+        '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
         '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +
         '</head><body>' + svgString + '</body></html>';
@@ -2017,7 +2090,7 @@ const SvgRenderer = {
       iframe.onload = function () {
         var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
 
-        function doCapture() {
+        async function doCapture() {
           try {
             var svgEl = iframeDoc.querySelector('svg');
             if (!svgEl) {
@@ -2028,6 +2101,9 @@ const SvgRenderer = {
 
             var serializer = new XMLSerializer();
             var svgData = serializer.serializeToString(svgEl);
+
+            // Embed fonts as base64 @font-face so the standalone SVG blob renders them
+            svgData = await SvgRenderer._embedFontsInSvg(svgData);
 
             var canvas = document.createElement('canvas');
             canvas.width = fullW;
