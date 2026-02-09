@@ -71,7 +71,8 @@ const SvgRenderer = {
    * @returns {Promise<string>}
    */
   async fetchSvg(svgUrl) {
-    const res = await fetch(svgUrl);
+    var bustUrl = svgUrl + (svgUrl.indexOf('?') === -1 ? '?' : '&') + '_cb=' + Date.now();
+    const res = await fetch(bustUrl);
     if (!res.ok) throw new Error('Failed to fetch SVG: ' + res.status);
     return await res.text();
   },
@@ -486,6 +487,47 @@ const SvgRenderer = {
     // Perceived brightness (ITU-R BT.601)
     var luminance = 0.299 * r + 0.587 * g + 0.114 * b;
     return luminance > 160 ? '#000000' : '#FFFFFF';
+  },
+
+  /**
+   * Generate white border shapes (circles or diamonds) along all 4 edges of a rect.
+   * Used for "winding" (scalloped) and "zig-zag" (saw-tooth) border effects.
+   */
+  _generateBorderShapes: function(x, y, w, h, shapeType, radius) {
+    var shapes = '';
+    var spacing = radius * 2.5;
+
+    // Horizontal edges (top + bottom)
+    var numH = Math.max(1, Math.round(w / spacing));
+    var hSpacing = w / numH;
+    for (var i = 0; i <= numH; i++) {
+      var cx = x + i * hSpacing;
+      shapes += this._borderShape(shapeType, cx, y, radius);
+      shapes += this._borderShape(shapeType, cx, y + h, radius);
+    }
+
+    // Vertical edges (left + right), skip corners (already covered by horizontal)
+    var numV = Math.max(1, Math.round(h / spacing));
+    var vSpacing = h / numV;
+    for (var i = 1; i < numV; i++) {
+      var cy = y + i * vSpacing;
+      shapes += this._borderShape(shapeType, x, cy, radius);
+      shapes += this._borderShape(shapeType, x + w, cy, radius);
+    }
+
+    return shapes;
+  },
+
+  _borderShape: function(type, cx, cy, r) {
+    if (type === 'circle') {
+      return '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + r + '" fill="#FFFFFF"/>';
+    }
+    // diamond: 4 points of a 45° rotated square
+    var top = (cy - r).toFixed(2);
+    var bot = (cy + r).toFixed(2);
+    var lft = (cx - r).toFixed(2);
+    var rgt = (cx + r).toFixed(2);
+    return '<polygon points="' + cx.toFixed(2) + ',' + top + ' ' + rgt + ',' + cy.toFixed(2) + ' ' + cx.toFixed(2) + ',' + bot + ' ' + lft + ',' + cy.toFixed(2) + '" fill="#FFFFFF"/>';
   },
 
   getDominantColor(svgString) {
@@ -1262,6 +1304,7 @@ const SvgRenderer = {
             var decorScale = newRectWidth / outerRectOrigW;
             var innerPaddingX = 11;
             var innerPaddingY = 10;
+            var borderShapeData = null;
 
             // Second pass: resize rects
             result = result.replace(/<rect([^>]*?)(\/?)>/gi, function (m, attrs, selfClose) {
@@ -1298,6 +1341,20 @@ const SvgRenderer = {
                   na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
                   if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
                   if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
+                  // Capture border shape data from outer rect
+                  var borderAttr = attrs.match(/data-border=["']([^"']+)["']/);
+                  if (borderAttr) {
+                    var swMatch = attrs.match(/stroke-width=["']([\d.]+)["']/);
+                    var halfStroke = swMatch ? parseFloat(swMatch[1]) / 2 : 0;
+                    borderShapeData = {
+                      type: borderAttr[1],
+                      x: newRectX - halfStroke,
+                      y: newRectY - halfStroke,
+                      w: newRectWidth + halfStroke * 2,
+                      h: newRectHeight + halfStroke * 2
+                    };
+                    na = na.replace(/\s*data-border=["'][^"']+["']/, '');
+                  }
                 }
               } else {
                 // Decorative rect (bars, accents): scale proportionally
@@ -1317,6 +1374,19 @@ const SvgRenderer = {
 
               return '<rect' + na + (selfClose || '') + '>';
             });
+
+            // ---- BORDER SHAPES (winding/zigzag) ----
+            if (borderShapeData) {
+              var bParts = borderShapeData.type.split('-');
+              var bShape = bParts[0];
+              var bRadius = parseFloat(bParts[1]) || 15;
+              var shapesHtml = SvgRenderer._generateBorderShapes(
+                borderShapeData.x, borderShapeData.y,
+                borderShapeData.w, borderShapeData.h,
+                bShape, bRadius
+              );
+              result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
+            }
 
             // ---- FIT VIEWBOX TO CONTENT ----
             // These templates may use <path> elements for stamp frames (not <rect>).
@@ -1381,7 +1451,7 @@ const SvgRenderer = {
             resolve(svgString);
           }
         } catch (e) {
-          console.warn('autoFitText measurement failed:', e);
+          console.error('autoFitText measurement failed:', e, e.stack);
           resolve(svgString);
         } finally {
           document.body.removeChild(iframe);

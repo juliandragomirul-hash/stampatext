@@ -49,6 +49,33 @@ const Gallery = {
     return this.COLOR_NAMES[(hex || '').toUpperCase()] || hex;
   },
 
+  buildDescription(text, colorName, templateName) {
+    var n = (templateName || '').toLowerCase();
+    // Border style (adjective before "stamp")
+    var border = '';
+    if (n.indexOf('strong winding') !== -1) border = 'deep scalloped';
+    else if (n.indexOf('slight winding') !== -1) border = 'scalloped';
+    else if (n.indexOf('strong zigzag') !== -1) border = 'deep zigzag';
+    else if (n.indexOf('slight zigzag') !== -1) border = 'zigzag';
+    // Fill (adjective before "stamp")
+    var fill = '';
+    if (n.indexOf('empty') !== -1) fill = 'outlined';
+    // Corners ("with" clause)
+    var corners = '';
+    if (n.indexOf('strong round') !== -1) corners = 'rounded corners';
+    else if (n.indexOf('slight round') !== -1) corners = 'soft corners';
+    // Frame ("with" clause)
+    var frame = '';
+    if (n.indexOf('double') !== -1) frame = 'double border';
+    // Build: "TEXT" written on [color] [border?] [fill?] stamp [with corners? and frame?]
+    var adjectives = [border, fill].filter(Boolean).join(' ');
+    var stampPhrase = (adjectives ? adjectives + ' ' : '') + 'stamp';
+    var withParts = [corners, frame].filter(Boolean);
+    var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
+    return '\u201C' + this.escapeHtml(text) + '\u201D written on ' +
+      colorName.toLowerCase() + ' ' + stampPhrase + withClause;
+  },
+
   /**
    * Fetch all active templates with their text zones from Supabase.
    * @returns {Promise<Array>}
@@ -415,8 +442,7 @@ const Gallery = {
         (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
 
       var colorName = self.getColorName(r.appliedColor);
-      var description = '\u201C' + self.escapeHtml(r.displayText || self.currentText) +
-          '\u201D written on ' + colorName.toLowerCase() + ' ' + self.escapeHtml(r.name);
+      var description = self.buildDescription(r.displayText || self.currentText, colorName, r.name);
 
       var actionsDiv = document.createElement('a');
       actionsDiv.className = 'stamp-card-actions';
