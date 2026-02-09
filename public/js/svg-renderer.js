@@ -438,6 +438,34 @@ const SvgRenderer = {
     var strokeRe = new RegExp('(stroke=["\'])' + escapedDominant + '(["\'])', 'gi');
     result = result.replace(strokeRe, '$1' + newColor + '$2');
 
+    // "Full" template detection: text color differs from dominant (text is white/black
+    // while frame/background uses the dominant color). Adjust text contrast automatically.
+    var textMatch = svgString.match(/<text[^>]*fill=["']([^"']+)["']/i);
+    var origTextColor = textMatch ? textMatch[1].toUpperCase() : null;
+    if (origTextColor && origTextColor !== dominant.toUpperCase() &&
+        (origTextColor === '#FFFFFF' || origTextColor === '#000000')) {
+      var contrastColor = this._getContrastTextColor(newColor);
+      // Replace fill/stroke only inside <text> and <tspan> elements
+      result = result.replace(/<text([^>]*)>/gi, function(match, attrs) {
+        return '<text' + attrs.replace(/fill=["'][^"']*["']/i, 'fill="' + contrastColor + '"')
+                              .replace(/stroke=["'][^"']*["']/i, 'stroke="' + contrastColor + '"') + '>';
+      });
+      result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
+        if (attrs.match(/fill=/i)) {
+          return '<tspan' + attrs.replace(/fill=["'][^"']*["']/i, 'fill="' + contrastColor + '"')
+                                  .replace(/stroke=["'][^"']*["']/i, 'stroke="' + contrastColor + '"') + '>';
+        }
+        return match;
+      });
+      // Also update inner decorative rects (fill="none" with white/black stroke)
+      result = result.replace(/<rect([^>]*fill=["']none["'][^>]*)>/gi, function(match, attrs) {
+        if (/stroke=["']#(?:FFFFFF|000000)["']/i.test(attrs)) {
+          return '<rect' + attrs.replace(/stroke=["']#(?:FFFFFF|000000)["']/i, 'stroke="' + contrastColor + '"') + '>';
+        }
+        return match;
+      });
+    }
+
     return result;
   },
 
@@ -446,6 +474,20 @@ const SvgRenderer = {
    * @param {string} svgString
    * @returns {string|null} hex color or null
    */
+  /**
+   * Return white or black text color for best contrast against a background color.
+   * Uses relative luminance: dark backgrounds → white text, light backgrounds → black text.
+   */
+  _getContrastTextColor(hexColor) {
+    var hex = hexColor.replace('#', '');
+    var r = parseInt(hex.substring(0, 2), 16);
+    var g = parseInt(hex.substring(2, 4), 16);
+    var b = parseInt(hex.substring(4, 6), 16);
+    // Perceived brightness (ITU-R BT.601)
+    var luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    return luminance > 160 ? '#000000' : '#FFFFFF';
+  },
+
   getDominantColor(svgString) {
     var detected = this.detectColors(svgString);
     for (var i = 0; i < detected.length; i++) {
@@ -473,9 +515,9 @@ const SvgRenderer = {
    * @returns {number}
    */
   _getMaxCharsPerLine(len) {
-    // 1-60 chars: 7 chars per line
-    // 61+ chars: 22 chars per line
-    return len <= 60 ? 7 : 22;
+    // 1-60 chars: 12 chars per line
+    // 61+ chars: 20 chars per line
+    return len <= 60 ? 12 : 20;
   },
 
   /**
@@ -1903,10 +1945,16 @@ const SvgRenderer = {
     var newW = vbW * cosA + vbH * sinA;
     var newH = vbW * sinA + vbH * cosA;
 
-    // Shrink post-rotation viewBox by 20% to make tilted stamps appear larger
-    // (minor corner clipping on empty areas is acceptable)
-    newW *= 0.80;
-    newH *= 0.80;
+    // Shrink post-rotation viewBox to make tilted stamps appear larger.
+    // Only for Category 2 (background image): clipping background edges is acceptable.
+    // Category 1 (frame-based): no shrink — frame borders are the content, can't clip them.
+    var isFixedFrame = svgString.indexOf('<image') !== -1;
+    if (isFixedFrame) {
+      var aspect = Math.max(vbW, vbH) / Math.min(vbW, vbH);
+      var shrink = Math.min(1.0, 0.80 + (aspect - 1) * 0.13);
+      newW *= shrink;
+      newH *= shrink;
+    }
 
     // New viewBox centered on the same center point
     var newVbX = cx - newW / 2;
