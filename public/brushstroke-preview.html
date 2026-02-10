@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html><head><title>Brushstroke Border Preview</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 2rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 1000px; margin: 0 auto; }
+  .card { background: white; border-radius: 8px; padding: 1.5rem; text-align: center; }
+  .card h3 { margin: 0 0 0.5rem; }
+  .card p { color: #666; font-size: 0.85rem; margin: 0 0 1rem; }
+  svg { max-width: 100%; }
+  h1 { text-align: center; margin-bottom: 0.5rem; }
+  h2 { text-align: center; color: #666; font-weight: normal; font-size: 1rem; margin-bottom: 2rem; }
+</style></head>
+<body>
+<h1>Brush-Painted Border — Insufficient Paint</h1>
+<h2>Continuous brush line with varying paint density — no holes, just fading/streaking</h2>
+<div class="grid">
+
+<!-- 1: Smooth opacity variation -->
+<div class="card">
+  <h3>Fading Paint</h3>
+  <p>Smooth opacity modulation — paint thins and thickens</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp1" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="4" seed="3" result="noise"/>
+      <feColorMatrix type="luminanceToAlpha" in="noise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="linear" slope="3" intercept="-0.6"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="#BE1E2D"/>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="40" filter="url(#bp1)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="white">HELLO</text>
+  </svg>
+</div>
+
+<!-- 2: More variation, drier -->
+<div class="card">
+  <h3>Drier Paint</h3>
+  <p>Stronger variation — more areas where paint runs thin</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp2" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="4" seed="7" result="noise"/>
+      <feColorMatrix type="luminanceToAlpha" in="noise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="linear" slope="4" intercept="-1.0"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="#BE1E2D"/>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="40" filter="url(#bp2)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="white">HELLO</text>
+  </svg>
+</div>
+
+<!-- 3: Blurred noise for splotchy paint density -->
+<div class="card">
+  <h3>Splotchy Brush</h3>
+  <p>Blurred noise — large splotchy areas of thick and thin paint</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp3" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="3" seed="11" result="noise"/>
+      <feGaussianBlur in="noise" stdDeviation="3" result="blurNoise"/>
+      <feColorMatrix type="luminanceToAlpha" in="blurNoise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="linear" slope="4" intercept="-1.0"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="#BE1E2D"/>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="45" filter="url(#bp3)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="white">HELLO</text>
+  </svg>
+</div>
+
+<!-- 4: Fine streaky texture -->
+<div class="card">
+  <h3>Streaky Brush</h3>
+  <p>Higher freq noise — fine streaky texture in the paint</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp4" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="5" seed="13" result="noise"/>
+      <feColorMatrix type="luminanceToAlpha" in="noise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="linear" slope="3.5" intercept="-0.8"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="#BE1E2D"/>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="40" filter="url(#bp4)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="white">HELLO</text>
+  </svg>
+</div>
+
+<!-- 5: Gamma curve — biased toward more paint -->
+<div class="card">
+  <h3>Mostly Painted</h3>
+  <p>Gamma curve — mostly solid, occasional thin spots</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp5" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="4" seed="17" result="noise"/>
+      <feColorMatrix type="luminanceToAlpha" in="noise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="gamma" amplitude="1" exponent="0.4" offset="-0.1"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="#BE1E2D"/>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="40" filter="url(#bp5)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="white">HELLO</text>
+  </svg>
+</div>
+
+<!-- 6: Gamma curve — biased toward less paint -->
+<div class="card">
+  <h3>Running Out</h3>
+  <p>Gamma curve — biased dry, most areas have thin paint</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp6" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="4" seed="19" result="noise"/>
+      <feColorMatrix type="luminanceToAlpha" in="noise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="gamma" amplitude="1" exponent="2.5" offset="-0.05"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="#BE1E2D"/>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="40" filter="url(#bp6)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="white">HELLO</text>
+  </svg>
+</div>
+
+<!-- 7: Outlined version (no fill) -->
+<div class="card">
+  <h3>Outline — Fading</h3>
+  <p>No fill — just the brush-painted border with fading paint</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp7" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="4" seed="23" result="noise"/>
+      <feColorMatrix type="luminanceToAlpha" in="noise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="linear" slope="3.5" intercept="-0.7"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="45" filter="url(#bp7)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="#BE1E2D">HELLO</text>
+  </svg>
+</div>
+
+<!-- 8: Outlined heavy streaky -->
+<div class="card">
+  <h3>Outline — Streaky</h3>
+  <p>No fill — fine streaky texture, insufficient paint</p>
+  <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg">
+    <defs><filter id="bp8" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="5" seed="29" result="noise"/>
+      <feColorMatrix type="luminanceToAlpha" in="noise" result="noiseA"/>
+      <feComponentTransfer in="noiseA" result="mask">
+        <feFuncA type="linear" slope="4" intercept="-1.0"/>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="mask" operator="in"/>
+    </filter></defs>
+    <rect x="50" y="30" width="400" height="220" fill="none" stroke="#BE1E2D" stroke-width="45" filter="url(#bp8)"/>
+    <text x="250" y="165" text-anchor="middle" font-family="Arial Black" font-size="70" fill="#BE1E2D">HELLO</text>
+  </svg>
+</div>
+
+</div>
+</body></html>

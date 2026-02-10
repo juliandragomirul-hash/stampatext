@@ -53,8 +53,14 @@ const Gallery = {
     var n = (templateName || '').toLowerCase();
     // Border style (adjective before "stamp")
     var border = '';
-    if (n.indexOf('strong winding') !== -1) border = 'deep scalloped';
-    else if (n.indexOf('slight winding') !== -1) border = 'scalloped';
+    if (n.indexOf('brushstroke') !== -1) border = 'brushstroke';
+    else if (n.indexOf('stitch line') !== -1) border = 'stitch line';
+    else if (n.indexOf('stitch square') !== -1) border = 'stitch square';
+    else if (n.indexOf('stitch circle') !== -1) border = 'stitch dot';
+    else if (n.indexOf('ripped paper') !== -1) border = 'torn edge';
+    else if (n.indexOf('strong 2 postal') !== -1) border = 'spaced perforated';
+    else if (n.indexOf('strong postal') !== -1) border = 'deep perforated';
+    else if (n.indexOf('slight postal') !== -1) border = 'perforated';
     else if (n.indexOf('strong zigzag') !== -1) border = 'deep zigzag';
     else if (n.indexOf('slight zigzag') !== -1) border = 'zigzag';
     // Fill (adjective before "stamp")

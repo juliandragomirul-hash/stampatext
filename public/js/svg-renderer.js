@@ -493,9 +493,9 @@ const SvgRenderer = {
    * Generate white border shapes (circles or diamonds) along all 4 edges of a rect.
    * Used for "winding" (scalloped) and "zig-zag" (saw-tooth) border effects.
    */
-  _generateBorderShapes: function(x, y, w, h, shapeType, radius) {
+  _generateBorderShapes: function(x, y, w, h, shapeType, radius, spacingMult) {
     var shapes = '';
-    var spacing = radius * 2.5;
+    var spacing = radius * (spacingMult || 2.5);
 
     // Horizontal edges (top + bottom)
     var numH = Math.max(1, Math.round(w / spacing));
@@ -528,6 +528,64 @@ const SvgRenderer = {
     var lft = (cx - r).toFixed(2);
     var rgt = (cx + r).toFixed(2);
     return '<polygon points="' + cx.toFixed(2) + ',' + top + ' ' + rgt + ',' + cy.toFixed(2) + ' ' + cx.toFixed(2) + ',' + bot + ' ' + lft + ',' + cy.toFixed(2) + '" fill="#FFFFFF"/>';
+  },
+
+  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color) {
+    var shapes = '';
+    var half = size / 2;
+    var dashLen = (shapeType === 'line') ? size * 2 : size;
+    var step = spacing + dashLen;
+
+    function addShape(cx, cy, angle) {
+      if (shapeType === 'circle') {
+        shapes += '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + half + '" fill="' + color + '"/>';
+      } else if (shapeType === 'square') {
+        shapes += '<rect x="' + (cx - half).toFixed(2) + '" y="' + (cy - half).toFixed(2) + '" width="' + size + '" height="' + size + '" fill="' + color + '"/>';
+      } else { // line
+        if (angle === 0) {
+          shapes += '<rect x="' + (cx - dashLen / 2).toFixed(2) + '" y="' + (cy - half).toFixed(2) + '" width="' + dashLen + '" height="' + size + '" fill="' + color + '"/>';
+        } else {
+          shapes += '<rect x="' + (cx - half).toFixed(2) + '" y="' + (cy - dashLen / 2).toFixed(2) + '" width="' + size + '" height="' + dashLen + '" fill="' + color + '"/>';
+        }
+      }
+    }
+
+    // Corners
+    if (shapeType === 'line') {
+      var arm = dashLen * 0.6;
+      // Top-left
+      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+      // Top-right
+      shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+      shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+      // Bottom-left
+      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+      // Bottom-right
+      shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+      shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+    } else {
+      addShape(x, y, 0);
+      addShape(x + w, y, 0);
+      addShape(x, y + h, 0);
+      addShape(x + w, y + h, 0);
+    }
+
+    // Top edge
+    var numH = Math.max(1, Math.round(w / step));
+    var hStep = w / numH;
+    for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
+    // Bottom edge
+    for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
+    // Left edge
+    var numV = Math.max(1, Math.round(h / step));
+    var vStep = h / numV;
+    for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
+    // Right edge
+    for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
+
+    return shapes;
   },
 
   getDominantColor(svgString) {
@@ -1305,6 +1363,8 @@ const SvgRenderer = {
             var innerPaddingX = 11;
             var innerPaddingY = 10;
             var borderShapeData = null;
+            var borderFilterData = null;
+            var stitchData = null;
 
             // Second pass: resize rects
             result = result.replace(/<rect([^>]*?)(\/?)>/gi, function (m, attrs, selfClose) {
@@ -1332,10 +1392,20 @@ const SvgRenderer = {
                 // Main frame rect: resize to wrap text
                 var isInnerRect = origW < outerRectOrigW * 0.99;
                 if (isInnerRect) {
-                  na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + (newRectWidth - innerPaddingX * 2).toFixed(2) + '"');
-                  na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + (newRectHeight - innerPaddingY * 2).toFixed(2) + '"');
-                  if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + (newRectX + innerPaddingX).toFixed(2) + '"');
-                  if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + (newRectY + innerPaddingY).toFixed(2) + '"');
+                  // Extra inset when filter border active (ripped paper displaces edges)
+                  var filterExtra = borderFilterData ? parseFloat(borderFilterData.split('-')[1]) || 0 : 0;
+                  // Extra inset when border shapes intrude past stroke edge
+                  var shapeExtra = 0;
+                  if (borderShapeData) {
+                    var bRad = parseFloat(borderShapeData.type.split('-')[1]) || 0;
+                    shapeExtra = Math.max(0, bRad - 15);
+                  }
+                  var iPadX = innerPaddingX + filterExtra + shapeExtra;
+                  var iPadY = innerPaddingY + filterExtra + shapeExtra;
+                  na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + (newRectWidth - iPadX * 2).toFixed(2) + '"');
+                  na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + (newRectHeight - iPadY * 2).toFixed(2) + '"');
+                  if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + (newRectX + iPadX).toFixed(2) + '"');
+                  if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + (newRectY + iPadY).toFixed(2) + '"');
                 } else {
                   na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + newRectWidth.toFixed(2) + '"');
                   na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
@@ -1354,6 +1424,31 @@ const SvgRenderer = {
                       h: newRectHeight + halfStroke * 2
                     };
                     na = na.replace(/\s*data-border=["'][^"']+["']/, '');
+                  }
+                  // Capture filter data from outer rect
+                  var filterAttr = attrs.match(/data-filter=["']([^"']+)["']/);
+                  if (filterAttr) {
+                    borderFilterData = filterAttr[1];
+                    na = na.replace(/\s*data-filter=["'][^"']+["']/, '');
+                  }
+                  // Capture stitch data from outer rect
+                  var stitchAttr = attrs.match(/data-stitch=["']([^"']+)["']/);
+                  if (stitchAttr) {
+                    // Extract color from fill or stroke
+                    var stitchColorMatch = attrs.match(/(?:fill|stroke)=["'](#[0-9A-Fa-f]{6})["']/);
+                    stitchData = {
+                      type: stitchAttr[1],
+                      x: newRectX,
+                      y: newRectY,
+                      w: newRectWidth,
+                      h: newRectHeight,
+                      color: stitchColorMatch ? stitchColorMatch[1] : '#000000'
+                    };
+                    na = na.replace(/\s*data-stitch=["'][^"']+["']/, '');
+                    // Remove stroke — stitch shapes ARE the border
+                    na = na.replace(/\s*stroke=["'][^"']*["']/, '');
+                    na = na.replace(/\s*stroke-width=["'][^"']*["']/, '');
+                    na = na.replace(/\s*stroke-miterlimit=["'][^"']*["']/, '');
                   }
                 }
               } else {
@@ -1380,12 +1475,78 @@ const SvgRenderer = {
               var bParts = borderShapeData.type.split('-');
               var bShape = bParts[0];
               var bRadius = parseFloat(bParts[1]) || 15;
+              var bSpacingMult = bParts[2] ? parseFloat(bParts[2]) : 2.5;
               var shapesHtml = SvgRenderer._generateBorderShapes(
                 borderShapeData.x, borderShapeData.y,
                 borderShapeData.w, borderShapeData.h,
-                bShape, bRadius
+                bShape, bRadius, bSpacingMult
               );
               result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
+            }
+
+            // ---- STITCH BORDER (line/square/circle shapes) ----
+            if (stitchData) {
+              var sType = stitchData.type;
+              var sSize = 20;
+              var sSpacing = (sType === 'line') ? 20 : 10; // normal for line, tight for circle/square
+              // Offset shapes outward so they're clearly outside the fill
+              var sOffset = sSize * 0.75;
+              var stitchHtml = SvgRenderer._generateStitchShapes(
+                stitchData.x - sOffset, stitchData.y - sOffset,
+                stitchData.w + sOffset * 2, stitchData.h + sOffset * 2,
+                sType, sSize, sSpacing, stitchData.color
+              );
+              result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
+            }
+
+            // ---- BORDER FILTER (ripped paper etc.) ----
+            if (borderFilterData) {
+              var fParts = borderFilterData.split('-');
+              var fType = fParts[0];
+              var fScale = parseFloat(fParts[1]) || 20;
+              if (fType === 'ripped') {
+                var fId = 'border-rip-' + Date.now() + '-' + Math.round(Math.random() * 9999);
+                var freq = fScale <= 10 ? '0.04' : fScale <= 20 ? '0.035' : '0.025';
+                var octaves = fScale <= 20 ? 4 : 3;
+                var fMargin = Math.ceil(fScale / 3);
+                var filterDef = '<defs><filter id="' + fId + '" x="-' + fMargin + '%" y="-' + fMargin + '%" width="' + (100 + fMargin * 2) + '%" height="' + (100 + fMargin * 2) + '%">' +
+                  '<feTurbulence type="fractalNoise" baseFrequency="' + freq + ' ' + freq + '" numOctaves="' + octaves + '" seed="1"/>' +
+                  '<feDisplacementMap in="SourceGraphic" scale="' + fScale + '" xChannelSelector="R" yChannelSelector="R"/>' +
+                  '</filter></defs>';
+                result = result.replace(/(<svg[^>]*>)/i, '$1' + filterDef);
+                // Apply filter to the outer rect (first non-white rect with matching dimensions)
+                var filterRectRe = new RegExp('(<rect[^>]*width="' + newRectWidth.toFixed(2) + '"[^>]*)(\/?>)');
+                result = result.replace(filterRectRe, '$1 filter="url(#' + fId + ')"$2');
+              }
+            }
+
+            // ---- BRUSH BORDER SCALING ----
+            var brushMatch = result.match(/data-brush-border=["']([^"']+)["']/);
+            if (brushMatch) {
+              var bbParts = brushMatch[1].split(',');
+              var origBX = parseFloat(bbParts[0]);
+              var origBY = parseFloat(bbParts[1]);
+              var origBW = parseFloat(bbParts[2]);
+              var origBH = parseFloat(bbParts[3]);
+              var origBCX = origBX + origBW / 2;
+              var origBCY = origBY + origBH / 2;
+              var overScale = 1.0;
+              var bsx = (newRectWidth / origBW) * overScale;
+              var bsy = (newRectHeight / origBH) * overScale;
+              var newBCX = newRectX + newRectWidth / 2;
+              var newBCY = newRectY + newRectHeight / 2;
+              var brushTransform = 'translate(' + newBCX.toFixed(2) + ',' + newBCY.toFixed(2) + ') scale(' + bsx.toFixed(4) + ',' + bsy.toFixed(4) + ') translate(' + (-origBCX).toFixed(2) + ',' + (-origBCY).toFixed(2) + ')';
+              result = result.replace(/(<g[^>]*data-brush-border=["'][^"']*["'])([^>]*>)/, '$1 transform="' + brushTransform + '"$2');
+
+              // Rotated copy for vertical edges
+              var brushMatchV = result.match(/data-brush-border-v=["']([^"']+)["']/);
+              if (brushMatchV) {
+                // Swap W↔H to account for 90° rotation
+                var rotSx = (newRectWidth / origBH) * overScale;
+                var rotSy = (newRectHeight / origBW) * overScale;
+                var rotTransform = 'translate(' + newBCX.toFixed(2) + ',' + newBCY.toFixed(2) + ') scale(' + rotSx.toFixed(4) + ',' + rotSy.toFixed(4) + ') rotate(90) translate(' + (-origBCX).toFixed(2) + ',' + (-origBCY).toFixed(2) + ')';
+                result = result.replace(/(<g[^>]*data-brush-border-v=["'][^"']*["'])([^>]*>)/, '$1 transform="' + rotTransform + '"$2');
+              }
             }
 
             // ---- FIT VIEWBOX TO CONTENT ----
@@ -1431,6 +1592,10 @@ const SvgRenderer = {
                   if (swMatch) maxStrokeWidth = Math.max(maxStrokeWidth, parseFloat(swMatch[1]));
                 });
                 var strokePadding = maxStrokeWidth / 2 + 15;
+                // Brush border paths extend further — need extra padding
+                if (brushMatch) strokePadding = Math.max(strokePadding, 60);
+                // Stitch shapes extend beyond rect edge (offset + size/2)
+                if (stitchData) strokePadding = Math.max(strokePadding, 40);
 
                 var fitVbX = contentBounds.minX - strokePadding;
                 var fitVbY = contentBounds.minY - strokePadding;

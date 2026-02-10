@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html><head><title>Stitch Border Preview — Shape-Based</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 2rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2rem; max-width: 1200px; margin: 0 auto; }
+  .card { background: white; border-radius: 8px; padding: 1.5rem; text-align: center; }
+  .card h3 { margin: 0 0 0.3rem; }
+  .card p { color: #666; font-size: 0.8rem; margin: 0 0 1rem; }
+  svg { max-width: 100%; }
+  h1 { text-align: center; margin-bottom: 0.3rem; }
+  h2 { text-align: center; color: #666; font-weight: normal; font-size: 1rem; margin-bottom: 2rem; }
+  .section { margin-bottom: 1rem; }
+  .section h2 { text-align: left; color: #333; font-weight: bold; font-size: 1.1rem; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+</style>
+<script>
+// Generate shapes along a rect perimeter — clean corners
+function stitchShapes(type, x, y, w, h, size, spacing, color) {
+  var shapes = '';
+  var half = size / 2;
+  var dashLen = (type === 'line') ? size * 2 : size; // line dashes are 2x longer
+
+  function addShape(cx, cy, angle) {
+    if (type === 'circle') {
+      shapes += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + half + '" fill="' + color + '"/>';
+    } else if (type === 'square') {
+      shapes += '<rect x="' + (cx - half).toFixed(1) + '" y="' + (cy - half).toFixed(1) + '" width="' + size + '" height="' + size + '" fill="' + color + '"/>';
+    } else { // line
+      if (angle === 0) { // horizontal
+        shapes += '<rect x="' + (cx - dashLen/2).toFixed(1) + '" y="' + (cy - half).toFixed(1) + '" width="' + dashLen + '" height="' + size + '" fill="' + color + '"/>';
+      } else { // vertical
+        shapes += '<rect x="' + (cx - half).toFixed(1) + '" y="' + (cy - dashLen/2).toFixed(1) + '" width="' + size + '" height="' + dashLen + '" fill="' + color + '"/>';
+      }
+    }
+  }
+
+  // Step = center-to-center distance
+  var step = spacing + dashLen;
+
+  // 4 corners
+  if (type === 'line') {
+    // L-shaped brackets: horizontal arm + vertical arm at each corner
+    var arm = dashLen * 0.6; // arm length
+    // Top-left: right + down
+    shapes += '<rect x="' + (x - half).toFixed(1) + '" y="' + (y - half).toFixed(1) + '" width="' + (arm + half).toFixed(1) + '" height="' + size + '" fill="' + color + '"/>';
+    shapes += '<rect x="' + (x - half).toFixed(1) + '" y="' + (y - half).toFixed(1) + '" width="' + size + '" height="' + (arm + half).toFixed(1) + '" fill="' + color + '"/>';
+    // Top-right: left + down
+    shapes += '<rect x="' + (x + w - arm).toFixed(1) + '" y="' + (y - half).toFixed(1) + '" width="' + (arm + half).toFixed(1) + '" height="' + size + '" fill="' + color + '"/>';
+    shapes += '<rect x="' + (x + w - half).toFixed(1) + '" y="' + (y - half).toFixed(1) + '" width="' + size + '" height="' + (arm + half).toFixed(1) + '" fill="' + color + '"/>';
+    // Bottom-left: right + up
+    shapes += '<rect x="' + (x - half).toFixed(1) + '" y="' + (y + h - half).toFixed(1) + '" width="' + (arm + half).toFixed(1) + '" height="' + size + '" fill="' + color + '"/>';
+    shapes += '<rect x="' + (x - half).toFixed(1) + '" y="' + (y + h - arm).toFixed(1) + '" width="' + size + '" height="' + (arm + half).toFixed(1) + '" fill="' + color + '"/>';
+    // Bottom-right: left + up
+    shapes += '<rect x="' + (x + w - arm).toFixed(1) + '" y="' + (y + h - half).toFixed(1) + '" width="' + (arm + half).toFixed(1) + '" height="' + size + '" fill="' + color + '"/>';
+    shapes += '<rect x="' + (x + w - half).toFixed(1) + '" y="' + (y + h - arm).toFixed(1) + '" width="' + size + '" height="' + (arm + half).toFixed(1) + '" fill="' + color + '"/>';
+  } else {
+    addShape(x, y, 0);
+    addShape(x + w, y, 0);
+    addShape(x, y + h, 0);
+    addShape(x + w, y + h, 0);
+  }
+
+  // Top edge
+  var numH = Math.max(1, Math.round(w / step));
+  var hStep = w / numH;
+  for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
+
+  // Bottom edge
+  for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
+
+  // Left edge
+  var numV = Math.max(1, Math.round(h / step));
+  var vStep = h / numV;
+  for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
+
+  // Right edge
+  for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
+
+  return shapes;
+}
+
+function makeSvg(type, x, y, w, h, size, spacing, color, textColor, fill) {
+  var vbPad = size;
+  var vb = (x - vbPad) + ' ' + (y - vbPad) + ' ' + (w + vbPad*2) + ' ' + (h + vbPad*2);
+  var s = '<svg viewBox="' + vb + '" xmlns="http://www.w3.org/2000/svg">';
+  if (fill) s += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + color + '"/>';
+  s += stitchShapes(type, x, y, w, h, size, spacing, color);
+  var tx = x + w/2, ty = y + h * 0.62;
+  s += '<text x="' + tx + '" y="' + ty + '" text-anchor="middle" font-family="Arial Black" font-size="70" fill="' + textColor + '">HELLO</text>';
+  s += '</svg>';
+  return s;
+}
+
+function renderAll() {
+  // Outlined
+  document.getElementById('line-out').innerHTML = makeSvg('line', 50, 30, 400, 220, 20, 20, '#BE1E2D', '#BE1E2D', false);
+  document.getElementById('square-out').innerHTML = makeSvg('square', 50, 30, 400, 220, 20, 20, '#BE1E2D', '#BE1E2D', false);
+  document.getElementById('circle-out').innerHTML = makeSvg('circle', 50, 30, 400, 220, 20, 20, '#BE1E2D', '#BE1E2D', false);
+
+  // Filled
+  document.getElementById('line-fill').innerHTML = makeSvg('line', 50, 30, 400, 220, 20, 20, '#BE1E2D', '#FFFFFF', true);
+  document.getElementById('square-fill').innerHTML = makeSvg('square', 50, 30, 400, 220, 20, 20, '#BE1E2D', '#FFFFFF', true);
+  document.getElementById('circle-fill').innerHTML = makeSvg('circle', 50, 30, 400, 220, 20, 20, '#BE1E2D', '#FFFFFF', true);
+
+  // Spacing — Line
+  document.getElementById('line-tight').innerHTML = makeSvg('line', 50, 30, 400, 220, 20, 10, '#1E6DBE', '#1E6DBE', false);
+  document.getElementById('line-normal').innerHTML = makeSvg('line', 50, 30, 400, 220, 20, 20, '#1E6DBE', '#1E6DBE', false);
+  document.getElementById('line-wide').innerHTML = makeSvg('line', 50, 30, 400, 220, 20, 35, '#1E6DBE', '#1E6DBE', false);
+
+  // Spacing — Circle
+  document.getElementById('circle-tight').innerHTML = makeSvg('circle', 50, 30, 400, 220, 20, 10, '#2D8E1E', '#2D8E1E', false);
+  document.getElementById('circle-normal').innerHTML = makeSvg('circle', 50, 30, 400, 220, 20, 20, '#2D8E1E', '#2D8E1E', false);
+  document.getElementById('circle-wide').innerHTML = makeSvg('circle', 50, 30, 400, 220, 20, 35, '#2D8E1E', '#2D8E1E', false);
+
+  // Spacing — Square
+  document.getElementById('sq-tight').innerHTML = makeSvg('square', 50, 30, 400, 220, 20, 10, '#FF8C00', '#FF8C00', false);
+  document.getElementById('sq-normal').innerHTML = makeSvg('square', 50, 30, 400, 220, 20, 20, '#FF8C00', '#FF8C00', false);
+  document.getElementById('sq-wide').innerHTML = makeSvg('square', 50, 30, 400, 220, 20, 35, '#FF8C00', '#FF8C00', false);
+
+  // Size variations — Circle
+  document.getElementById('circle-small').innerHTML = makeSvg('circle', 50, 30, 400, 220, 12, 15, '#8E1E8E', '#8E1E8E', false);
+  document.getElementById('circle-medium').innerHTML = makeSvg('circle', 50, 30, 400, 220, 20, 20, '#8E1E8E', '#8E1E8E', false);
+  document.getElementById('circle-large').innerHTML = makeSvg('circle', 50, 30, 400, 220, 30, 25, '#8E1E8E', '#8E1E8E', false);
+}
+</script>
+</head>
+<body onload="renderAll()">
+<h1>Stitch Border Preview — Shape-Based</h1>
+<h2>Individual shapes placed along edges — clean corners, no dasharray artifacts</h2>
+
+<div class="section"><h2>Outlined (Empty)</h2></div>
+<div class="grid">
+  <div class="card"><h3>Line — Outlined</h3><p>Rectangular dashes along edges</p><div id="line-out"></div></div>
+  <div class="card"><h3>Square — Outlined</h3><p>Square dots along edges</p><div id="square-out"></div></div>
+  <div class="card"><h3>Circle — Outlined</h3><p>Round dots along edges</p><div id="circle-out"></div></div>
+</div>
+
+<div class="section"><h2>Filled (Full)</h2></div>
+<div class="grid">
+  <div class="card"><h3>Line — Filled</h3><p>Solid fill + line dashes at edge</p><div id="line-fill"></div></div>
+  <div class="card"><h3>Square — Filled</h3><p>Solid fill + square dots at edge</p><div id="square-fill"></div></div>
+  <div class="card"><h3>Circle — Filled</h3><p>Solid fill + round dots at edge</p><div id="circle-fill"></div></div>
+</div>
+
+<div class="section"><h2>Spacing Variations — Line</h2></div>
+<div class="grid">
+  <div class="card"><h3>Tight</h3><p>spacing=10</p><div id="line-tight"></div></div>
+  <div class="card"><h3>Normal</h3><p>spacing=20</p><div id="line-normal"></div></div>
+  <div class="card"><h3>Wide</h3><p>spacing=35</p><div id="line-wide"></div></div>
+</div>
+
+<div class="section"><h2>Spacing Variations — Circle</h2></div>
+<div class="grid">
+  <div class="card"><h3>Tight</h3><p>spacing=10</p><div id="circle-tight"></div></div>
+  <div class="card"><h3>Normal</h3><p>spacing=20</p><div id="circle-normal"></div></div>
+  <div class="card"><h3>Wide</h3><p>spacing=35</p><div id="circle-wide"></div></div>
+</div>
+
+<div class="section"><h2>Spacing Variations — Square</h2></div>
+<div class="grid">
+  <div class="card"><h3>Tight</h3><p>spacing=10</p><div id="sq-tight"></div></div>
+  <div class="card"><h3>Normal</h3><p>spacing=20</p><div id="sq-normal"></div></div>
+  <div class="card"><h3>Wide</h3><p>spacing=35</p><div id="sq-wide"></div></div>
+</div>
+
+<div class="section"><h2>Size Variations — Circle</h2></div>
+<div class="grid">
+  <div class="card"><h3>Small (12px)</h3><p>size=12, spacing=15</p><div id="circle-small"></div></div>
+  <div class="card"><h3>Medium (20px)</h3><p>size=20, spacing=20</p><div id="circle-medium"></div></div>
+  <div class="card"><h3>Large (30px)</h3><p>size=30, spacing=25</p><div id="circle-large"></div></div>
+</div>
+
+</body></html>
