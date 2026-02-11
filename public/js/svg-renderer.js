@@ -12,11 +12,19 @@ const SvgRenderer = {
 
   // Map of font names to local font files and their format
   _fontMap: {
-    'Bangers':    { url: '/fonts/Bangers-Regular.ttf',   format: 'truetype' },
-    'Gunplay':    { url: '/fonts/gunplay-regular.otf',    format: 'opentype' },
-    'BebasNeue':  { url: '/fonts/BebasNeue-Regular.ttf',  format: 'truetype' },
-    'ArmyRust':   { url: '/fonts/army-rust.ttf',          format: 'truetype' },
-    'RobotoBlack': { url: '/fonts/Roboto-Black.ttf',      format: 'truetype' }
+    'Oswald':       { url: '/fonts/Oswald-Medium.ttf',        format: 'truetype' },
+    'AntonSC':      { url: '/fonts/AntonSC-Regular.ttf',      format: 'truetype' },
+    'HussarBold':   { url: '/fonts/HussarBd.otf',             format: 'opentype' },
+    'RobotoBlack':  { url: '/fonts/Roboto-Black.ttf',         format: 'truetype' },
+    'AbrilFatface': { url: '/fonts/AbrilFatface-Regular.ttf',  format: 'truetype' },
+    'AlfaSlabOne':  { url: '/fonts/AlfaSlabOne-Regular.ttf',  format: 'truetype' },
+    'Bangers':      { url: '/fonts/Bangers-Regular.ttf',      format: 'truetype' },
+    'SpecialElite': { url: '/fonts/SpecialElite.ttf',         format: 'truetype' },
+    'ArmyRust':     { url: '/fonts/army-rust.ttf',            format: 'truetype' },
+    'Gunplay':      { url: '/fonts/gunplay-regular.otf',      format: 'opentype' },
+
+    'Agbalumo':     { url: '/fonts/Agbalumo-Regular.ttf',     format: 'truetype' },
+    'BebasNeue':    { url: '/fonts/BebasNeue-Regular.ttf',    format: 'truetype' }
   },
 
   /**
@@ -142,9 +150,33 @@ const SvgRenderer = {
       // Bangers font (Google Fonts)
       { from: "'Bangers-Regular'", to: "'Bangers'", weight: '400' },
       { from: "'Bangers'", to: "'Bangers'", weight: '400' },
-      // Roboto Black font (custom, loaded from /fonts/)
+      // Roboto Black font
       { from: "'Roboto-Black'", to: "'RobotoBlack'", weight: '900' },
-      { from: "'RobotoBlack'", to: "'RobotoBlack'", weight: '900' }
+      { from: "'RobotoBlack'", to: "'RobotoBlack'", weight: '900' },
+      // Anton SC
+      { from: "'AntonSC-Regular'", to: "'AntonSC'", weight: '400' },
+      { from: "'Anton SC'", to: "'AntonSC'", weight: '400' },
+      { from: "'AntonSC'", to: "'AntonSC'", weight: '400' },
+      // Hussar Bold
+      { from: "'HussarBd'", to: "'HussarBold'", weight: '700' },
+      { from: "'Hussar Bold'", to: "'HussarBold'", weight: '700' },
+      { from: "'HussarBold'", to: "'HussarBold'", weight: '700' },
+      // Abril Fatface
+      { from: "'AbrilFatface-Regular'", to: "'AbrilFatface'", weight: '400' },
+      { from: "'Abril Fatface'", to: "'AbrilFatface'", weight: '400' },
+      { from: "'AbrilFatface'", to: "'AbrilFatface'", weight: '400' },
+      // Alfa Slab One
+      { from: "'AlfaSlabOne-Regular'", to: "'AlfaSlabOne'", weight: '400' },
+      { from: "'Alfa Slab One'", to: "'AlfaSlabOne'", weight: '400' },
+      { from: "'AlfaSlabOne'", to: "'AlfaSlabOne'", weight: '400' },
+      // Special Elite
+      { from: "'SpecialElite-Regular'", to: "'SpecialElite'", weight: '400' },
+      { from: "'Special Elite'", to: "'SpecialElite'", weight: '400' },
+      { from: "'SpecialElite'", to: "'SpecialElite'", weight: '400' },
+
+      // Agbalumo
+      { from: "'Agbalumo-Regular'", to: "'Agbalumo'", weight: '400' },
+      { from: "'Agbalumo'", to: "'Agbalumo'", weight: '400' }
     ];
     fontMappings.forEach(function(m) {
       // Replace font-family attribute - only add font-weight if not already present
@@ -528,6 +560,45 @@ const SvgRenderer = {
     var lft = (cx - r).toFixed(2);
     var rgt = (cx + r).toFixed(2);
     return '<polygon points="' + cx.toFixed(2) + ',' + top + ' ' + rgt + ',' + cy.toFixed(2) + ' ' + cx.toFixed(2) + ',' + bot + ' ' + lft + ',' + cy.toFixed(2) + '" fill="#FFFFFF"/>';
+  },
+
+  /**
+   * Generate a wavy border path as a single closed SVG <path>.
+   * Uses odd arc counts for smooth corners (~5° tangent change vs ~100° with even).
+   * @param {string} variant - "gentle" (d=7) or "strong" (d=12)
+   * @param {boolean} filled - if true, path has fill (for full-frame templates)
+   */
+  _generateWavyBorder: function(x, y, w, h, color, strokeW, variant, filled) {
+    var F = function(n) { return n.toFixed(2); };
+    var scWidth = 35;
+    var depth = (variant === 'strong') ? 12 : 7;
+    strokeW = 20;  // fixed — wave shape tuned for sw=20
+
+    var numH = Math.max(3, Math.round(w / scWidth));
+    if (numH % 2 === 0) numH++;   // force ODD for smooth corners
+    var segW = w / numH;
+    var numV = Math.max(3, Math.round(h / segW));
+    if (numV % 2 === 0) numV++;   // force ODD
+    var segH = h / numV;
+    var vD = depth * segH / segW;
+
+    var d = 'M ' + F(x) + ',' + F(y);
+    // Top (L→R)
+    for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + i * segW;
+      d += ' C '+F(sx+segW*0.3)+','+F(y-fl*depth)+' '+F(sx+segW*0.7)+','+F(y-fl*depth)+' '+F(sx+segW)+','+F(y); }
+    // Right (T→B)
+    for (var i = 0; i < numV; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sy = y + i * segH;
+      d += ' C '+F(x+w+fl*vD)+','+F(sy+segH*0.3)+' '+F(x+w+fl*vD)+','+F(sy+segH*0.7)+' '+F(x+w)+','+F(sy+segH); }
+    // Bottom (R→L)
+    for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + w - i * segW;
+      d += ' C '+F(sx-segW*0.3)+','+F(y+h+fl*depth)+' '+F(sx-segW*0.7)+','+F(y+h+fl*depth)+' '+F(sx-segW)+','+F(y+h); }
+    // Left (B→T)
+    for (var i = 0; i < numV; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sy = y + h - i * segH;
+      d += ' C '+F(x-fl*vD)+','+F(sy-segH*0.3)+' '+F(x-fl*vD)+','+F(sy-segH*0.7)+' '+F(x)+','+F(sy-segH); }
+    d += ' Z';
+
+    var fillAttr = filled ? color : 'none';
+    return '<path d="' + d + '" fill="' + fillAttr + '" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round"/>';
   },
 
   _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color) {
@@ -1174,9 +1245,19 @@ const SvgRenderer = {
     var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
       '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
       '<style>' +
-      '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:normal;}' +
-      '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:normal;}' +
-      '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:normal;}' +
+      '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
+      '@font-face{font-family:"AntonSC";src:url("/fonts/AntonSC-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"HussarBold";src:url("/fonts/HussarBd.otf") format("opentype");font-weight:700;}' +
+      '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"AbrilFatface";src:url("/fonts/AbrilFatface-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"AlfaSlabOne";src:url("/fonts/AlfaSlabOne-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"Bangers";src:url("/fonts/Bangers-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"SpecialElite";src:url("/fonts/SpecialElite.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:400;}' +
+
+      '@font-face{font-family:"Agbalumo";src:url("/fonts/Agbalumo-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:400;}' +
       '*{margin:0;padding:0;}' +
       '</style>' +
       '</head><body>' + svgString + '</body></html>';
@@ -1311,7 +1392,7 @@ const SvgRenderer = {
             if (tspans.length > 1) {
               // Calculate tspan dy values for vertical centering around the text position
               var totalSpan = (numLines - 1) * lineHeight;
-              var firstDy = -totalSpan / 2 + newFontSize * 0.40;
+              var firstDy = -totalSpan / 2 + newFontSize * 0.39;
 
               var lineIdx = 0;
               result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
@@ -1334,7 +1415,7 @@ const SvgRenderer = {
               var mMatch = curTransform.match(/matrix\(\s*([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)\s*\)/);
               if (mMatch) {
                 // For single-line, add baseline offset; for multi-line, tspan dy handles it
-                var baselineOffset = (tspans.length <= 1) ? newFontSize * 0.40 : 0;
+                var baselineOffset = (tspans.length <= 1) ? newFontSize * 0.39 : 0;
                 var newTx = viewBoxCenterX;
                 var newTy = viewBoxCenterY + baselineOffset;
                 var newMat = 'matrix(' + mMatch[1] + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + mMatch[4] + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
@@ -1365,6 +1446,7 @@ const SvgRenderer = {
             var borderShapeData = null;
             var borderFilterData = null;
             var stitchData = null;
+            var wavyData = null;
 
             // Second pass: resize rects
             result = result.replace(/<rect([^>]*?)(\/?)>/gi, function (m, attrs, selfClose) {
@@ -1450,6 +1532,28 @@ const SvgRenderer = {
                     na = na.replace(/\s*stroke-width=["'][^"']*["']/, '');
                     na = na.replace(/\s*stroke-miterlimit=["'][^"']*["']/, '');
                   }
+                  // Capture wavy data from outer rect
+                  var wavyAttr = attrs.match(/data-wavy=["']([^"']+)["']/);
+                  if (wavyAttr) {
+                    var wavyColorMatch = attrs.match(/(?:fill|stroke)=["'](#[0-9A-Fa-f]{6})["']/);
+                    var wavySwMatch = attrs.match(/stroke-width=["']([\d.]+)["']/);
+                    var wavyFilled = !!attrs.match(/fill=["']#[0-9A-Fa-f]{6}["']/);
+                    wavyData = {
+                      variant: wavyAttr[1],
+                      x: newRectX,
+                      y: newRectY,
+                      w: newRectWidth,
+                      h: newRectHeight,
+                      color: wavyColorMatch ? wavyColorMatch[1] : '#000000',
+                      strokeW: wavySwMatch ? parseFloat(wavySwMatch[1]) : 20,
+                      filled: wavyFilled
+                    };
+                    na = na.replace(/\s*data-wavy=["'][^"']+["']/, '');
+                    // Hide the rect — wavy path replaces it entirely (handles fill + stroke)
+                    na = na.replace(/stroke=["'][^"']*["']/, 'stroke="none"');
+                    na = na.replace(/stroke-width=["'][^"']*["']/, 'stroke-width="0"');
+                    na = na.replace(/fill=["'][^"']*["']/, 'fill="none"');
+                  }
                 }
               } else {
                 // Decorative rect (bars, accents): scale proportionally
@@ -1497,6 +1601,15 @@ const SvgRenderer = {
                 sType, sSize, sSpacing, stitchData.color
               );
               result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
+            }
+
+            // ---- WAVY BORDER ----
+            if (wavyData) {
+              var wavyHtml = SvgRenderer._generateWavyBorder(
+                wavyData.x, wavyData.y, wavyData.w, wavyData.h,
+                wavyData.color, wavyData.strokeW, wavyData.variant, wavyData.filled
+              );
+              result = result.replace(/<text/, wavyHtml + '<text');
             }
 
             // ---- BORDER FILTER (ripped paper etc.) ----
@@ -1596,6 +1709,8 @@ const SvgRenderer = {
                 if (brushMatch) strokePadding = Math.max(strokePadding, 60);
                 // Stitch shapes extend beyond rect edge (offset + size/2)
                 if (stitchData) strokePadding = Math.max(strokePadding, 40);
+                // Wavy border arcs extend beyond rect edge (depth + strokeW/2)
+                if (wavyData) strokePadding = Math.max(strokePadding, 35);
 
                 var fitVbX = contentBounds.minX - strokePadding;
                 var fitVbY = contentBounds.minY - strokePadding;
@@ -2358,11 +2473,19 @@ const SvgRenderer = {
       var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
         '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' +
-        '@font-face{font-family:"Bangers";src:url("/fonts/Bangers-Regular.ttf") format("truetype");font-weight:normal;}' +
-        '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:normal;}' +
-        '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:normal;}' +
-        '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:normal;}' +
+        '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
+        '@font-face{font-family:"AntonSC";src:url("/fonts/AntonSC-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"HussarBold";src:url("/fonts/HussarBd.otf") format("opentype");font-weight:700;}' +
         '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"AbrilFatface";src:url("/fonts/AbrilFatface-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"AlfaSlabOne";src:url("/fonts/AlfaSlabOne-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"Bangers";src:url("/fonts/Bangers-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"SpecialElite";src:url("/fonts/SpecialElite.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:400;}' +
+  
+        '@font-face{font-family:"Agbalumo";src:url("/fonts/Agbalumo-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:400;}' +
         '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +
         '</head><body>' + svgString + '</body></html>';

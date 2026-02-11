@@ -53,7 +53,9 @@ const Gallery = {
     var n = (templateName || '').toLowerCase();
     // Border style (adjective before "stamp")
     var border = '';
-    if (n.indexOf('brushstroke') !== -1) border = 'brushstroke';
+    if (n.indexOf('strong wavy') !== -1) border = 'deep wavy';
+    else if (n.indexOf('gentle wavy') !== -1) border = 'wavy';
+    else if (n.indexOf('brushstroke') !== -1) border = 'brushstroke';
     else if (n.indexOf('stitch line') !== -1) border = 'stitch line';
     else if (n.indexOf('stitch square') !== -1) border = 'stitch square';
     else if (n.indexOf('stitch circle') !== -1) border = 'stitch dot';

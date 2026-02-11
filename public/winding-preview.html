@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html><head><title>Wavy Border — Seamless (v3)</title>
+<html><head><title>Wavy Border — Gentle vs Strong (v5)</title>
 <style>
   body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 2rem; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; max-width: 1100px; margin: 0 auto; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 900px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 900px; margin: 0 auto; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; max-width: 1100px; margin: 0 auto; }
   .card { background: white; border-radius: 8px; padding: 1.5rem; text-align: center; }
   .card h3 { margin: 0 0 0.3rem; }
   .card p { color: #666; font-size: 0.8rem; margin: 0 0 1rem; }
   .card.hl { outline: 3px solid #2196F3; }
-  .card.old { opacity: 0.7; }
+  .card.ref { outline: 3px solid #4CAF50; }
   svg { max-width: 100%; }
   h1 { text-align: center; margin-bottom: 0.3rem; }
   h2.sub { text-align: center; color: #666; font-weight: normal; font-size: 1rem; margin-bottom: 2rem; }
@@ -18,354 +18,97 @@
 <script>
 var F = function(n) { return n.toFixed(1); };
 
-/* ═══════════════════════════════════════════════════════════
-   OLD: 4 separate paths + corner circles
-   ═══════════════════════════════════════════════════════════ */
-
-function wavyEdgeH(x, y, w, numSegs, depth, color, strokeW, startFlip) {
-  var segW = w / numSegs;
-  var d = 'M ' + F(x) + ',' + F(y);
-  for (var i = 0; i < numSegs; i++) {
-    var flip = startFlip * ((i % 2 === 0) ? 1 : -1);
-    var sx = x + i * segW;
-    d += ' C ' + F(sx + segW * 0.3) + ',' + F(y - flip * depth) +
-         ' ' + F(sx + segW * 0.7) + ',' + F(y - flip * depth) +
-         ' ' + F(sx + segW) + ',' + F(y);
-  }
-  return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linecap="round"/>';
-}
-
-function wavyEdgeV(x, y, h, numSegs, depth, color, strokeW, startFlip) {
-  var segH = h / numSegs;
-  var d = 'M ' + F(x) + ',' + F(y);
-  for (var i = 0; i < numSegs; i++) {
-    var flip = startFlip * ((i % 2 === 0) ? 1 : -1);
-    var sy = y + i * segH;
-    d += ' C ' + F(x + flip * depth) + ',' + F(sy + segH * 0.3) +
-         ' ' + F(x + flip * depth) + ',' + F(sy + segH * 0.7) +
-         ' ' + F(x) + ',' + F(sy + segH);
-  }
-  return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linecap="round"/>';
-}
-
-function wavyBorderOld(x, y, w, h, scWidth, depth, color, strokeW) {
-  var numH = Math.max(2, Math.round(w / scWidth));
-  if (numH % 2 !== 0) numH++;
+function wavyBorder(x, y, w, h, scWidth, depth, color, strokeW) {
+  var numH = Math.max(3, Math.round(w / scWidth));
+  if (numH % 2 === 0) numH++;   // force ODD
   var segW = w / numH;
-  var numV = Math.max(2, Math.round(h / segW));
-  if (numV % 2 !== 0) numV++;
-  var vDepth = depth * (h / numV) / segW;
-  var s = '';
-  s += wavyEdgeH(x, y, w, numH, depth, color, strokeW, 1);
-  s += wavyEdgeH(x, y + h, w, numH, depth, color, strokeW, -1);
-  s += wavyEdgeV(x, y, h, numV, vDepth, color, strokeW, -1);
-  s += wavyEdgeV(x + w, y, h, numV, vDepth, color, strokeW, 1);
-  var cr = strokeW * 0.6;
-  s += '<circle cx="'+x+'" cy="'+y+'" r="'+F(cr)+'" fill="'+color+'"/>';
-  s += '<circle cx="'+(x+w)+'" cy="'+y+'" r="'+F(cr)+'" fill="'+color+'"/>';
-  s += '<circle cx="'+(x+w)+'" cy="'+(y+h)+'" r="'+F(cr)+'" fill="'+color+'"/>';
-  s += '<circle cx="'+x+'" cy="'+(y+h)+'" r="'+F(cr)+'" fill="'+color+'"/>';
-  return s;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   A: Single path + corner arcs + tangent-fixed endpoints
-   (First/last arcs on each edge have flat entry/exit)
-   ═══════════════════════════════════════════════════════════ */
-
-function wavyBorderA(x, y, w, h, scWidth, depth, color, strokeW, cr) {
-  if (cr === undefined) cr = strokeW;
-  var effW = w - 2 * cr, effH = h - 2 * cr;
-  var numH = Math.max(2, Math.round(effW / scWidth));
-  if (numH % 2 !== 0) numH++;
-  var segW = effW / numH;
-  var numV = Math.max(2, Math.round(effH / segW));
-  if (numV % 2 !== 0) numV++;
-  var segH = effH / numV;
-  var vD = depth * segH / segW;
-  var d = 'M ' + F(x + cr) + ',' + F(y);
-
-  // Top (L→R)
-  for (var i = 0; i < numH; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sx = x + cr + i * segW;
-    var c1y = y - fl * depth, c2y = y - fl * depth;
-    if (i === 0) c1y = y;
-    if (i === numH - 1) c2y = y;
-    d += ' C '+F(sx+segW*0.3)+','+F(c1y)+' '+F(sx+segW*0.7)+','+F(c2y)+' '+F(sx+segW)+','+F(y);
-  }
-  d += ' A '+F(cr)+' '+F(cr)+' 0 0 1 '+F(x+w)+','+F(y+cr);
-
-  // Right (T→B)
-  for (var i = 0; i < numV; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sy = y + cr + i * segH;
-    var c1x = x+w+fl*vD, c2x = x+w+fl*vD;
-    if (i === 0) c1x = x+w;
-    if (i === numV-1) c2x = x+w;
-    d += ' C '+F(c1x)+','+F(sy+segH*0.3)+' '+F(c2x)+','+F(sy+segH*0.7)+' '+F(x+w)+','+F(sy+segH);
-  }
-  d += ' A '+F(cr)+' '+F(cr)+' 0 0 1 '+F(x+w-cr)+','+F(y+h);
-
-  // Bottom (R→L)
-  for (var i = 0; i < numH; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sx = x+w-cr-i*segW;
-    var c1y = y+h+fl*depth, c2y = y+h+fl*depth;
-    if (i === 0) c1y = y+h;
-    if (i === numH-1) c2y = y+h;
-    d += ' C '+F(sx-segW*0.3)+','+F(c1y)+' '+F(sx-segW*0.7)+','+F(c2y)+' '+F(sx-segW)+','+F(y+h);
-  }
-  d += ' A '+F(cr)+' '+F(cr)+' 0 0 1 '+F(x)+','+F(y+h-cr);
-
-  // Left (B→T)
-  for (var i = 0; i < numV; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sy = y+h-cr-i*segH;
-    var c1x = x-fl*vD, c2x = x-fl*vD;
-    if (i === 0) c1x = x;
-    if (i === numV-1) c2x = x;
-    d += ' C '+F(c1x)+','+F(sy-segH*0.3)+' '+F(c2x)+','+F(sy-segH*0.7)+' '+F(x)+','+F(sy-segH);
-  }
-  d += ' A '+F(cr)+' '+F(cr)+' 0 0 1 '+F(x+cr)+','+F(y)+' Z';
-
-  return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="'+strokeW+'"/>';
-}
-
-/* ═══════════════════════════════════════════════════════════
-   B: Single closed path — uniform arcs everywhere,
-      stroke-linejoin="round" handles corners automatically.
-      ALL arcs identical, no special endpoint treatment.
-   ═══════════════════════════════════════════════════════════ */
-
-function wavyBorderB(x, y, w, h, scWidth, depth, color, strokeW) {
-  var numH = Math.max(2, Math.round(w / scWidth));
-  if (numH % 2 !== 0) numH++;
-  var segW = w / numH;
-  var numV = Math.max(2, Math.round(h / segW));
-  if (numV % 2 !== 0) numV++;
+  var numV = Math.max(3, Math.round(h / segW));
+  if (numV % 2 === 0) numV++;   // force ODD
   var segH = h / numV;
   var vD = depth * segH / segW;
-
-  var d = 'M ' + F(x) + ',' + F(y);
-
-  // Top (L→R), first arc UP
-  for (var i = 0; i < numH; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sx = x + i * segW;
-    d += ' C '+F(sx+segW*0.3)+','+F(y-fl*depth)+' '+F(sx+segW*0.7)+','+F(y-fl*depth)+' '+F(sx+segW)+','+F(y);
-  }
-  // Right (T→B), first arc RIGHT
-  for (var i = 0; i < numV; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sy = y + i * segH;
-    d += ' C '+F(x+w+fl*vD)+','+F(sy+segH*0.3)+' '+F(x+w+fl*vD)+','+F(sy+segH*0.7)+' '+F(x+w)+','+F(sy+segH);
-  }
-  // Bottom (R→L), first arc DOWN
-  for (var i = 0; i < numH; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sx = x + w - i * segW;
-    d += ' C '+F(sx-segW*0.3)+','+F(y+h+fl*depth)+' '+F(sx-segW*0.7)+','+F(y+h+fl*depth)+' '+F(sx-segW)+','+F(y+h);
-  }
-  // Left (B→T), first arc LEFT
-  for (var i = 0; i < numV; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sy = y + h - i * segH;
-    d += ' C '+F(x-fl*vD)+','+F(sy-segH*0.3)+' '+F(x-fl*vD)+','+F(sy-segH*0.7)+' '+F(x)+','+F(sy-segH);
-  }
-  d += ' Z';
-
+  var d = 'M '+F(x)+','+F(y);
+  for (var i=0;i<numH;i++){var fl=(i%2===0)?1:-1;var sx=x+i*segW;
+    d+=' C '+F(sx+segW*.3)+','+F(y-fl*depth)+' '+F(sx+segW*.7)+','+F(y-fl*depth)+' '+F(sx+segW)+','+F(y);}
+  for (var i=0;i<numV;i++){var fl=(i%2===0)?1:-1;var sy=y+i*segH;
+    d+=' C '+F(x+w+fl*vD)+','+F(sy+segH*.3)+' '+F(x+w+fl*vD)+','+F(sy+segH*.7)+' '+F(x+w)+','+F(sy+segH);}
+  for (var i=0;i<numH;i++){var fl=(i%2===0)?1:-1;var sx=x+w-i*segW;
+    d+=' C '+F(sx-segW*.3)+','+F(y+h+fl*depth)+' '+F(sx-segW*.7)+','+F(y+h+fl*depth)+' '+F(sx-segW)+','+F(y+h);}
+  for (var i=0;i<numV;i++){var fl=(i%2===0)?1:-1;var sy=y+h-i*segH;
+    d+=' C '+F(x-fl*vD)+','+F(sy-segH*.3)+' '+F(x-fl*vD)+','+F(sy-segH*.7)+' '+F(x)+','+F(sy-segH);}
+  d+=' Z';
   return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="'+strokeW+'" stroke-linejoin="round"/>';
 }
 
-/* ═══════════════════════════════════════════════════════════
-   C: Single closed path — uniform arcs + bezier corner
-      transitions with G1 tangent continuity.
-      Corner bezier matches incoming/outgoing tangent vectors.
-   ═══════════════════════════════════════════════════════════ */
-
-function wavyBorderC(x, y, w, h, scWidth, depth, color, strokeW) {
-  var numH = Math.max(2, Math.round(w / scWidth));
-  if (numH % 2 !== 0) numH++;
-  var segW = w / numH;
-  var numV = Math.max(2, Math.round(h / segW));
-  if (numV % 2 !== 0) numV++;
-  var segH = h / numV;
-  var vD = depth * segH / segW;
-
-  // Tangent at end of last arc of each edge (endpoint - cp2)
-  // Top last arc: flip depends on (numH-1)%2
-  var topLastFlip = ((numH - 1) % 2 === 0) ? 1 : -1;
-  var rightLastFlip = ((numV - 1) % 2 === 0) ? 1 : -1;
-
-  // Corner bezier scaling — controls how "round" the corner is
-  var k = 0.7; // higher = rounder corner
-
-  var d = 'M ' + F(x) + ',' + F(y);
-
-  // ── TOP (L→R) ──
-  for (var i = 0; i < numH; i++) {
-    var fl = (i % 2 === 0) ? 1 : -1;
-    var sx = x + i * segW;
-    d += ' C '+F(sx+segW*0.3)+','+F(y-fl*depth)+' '+F(sx+segW*0.7)+','+F(y-fl*depth)+' '+F(sx+segW)+','+F(y);
-  }
-  // Now at (x+w, y). Tangent OUT: (0.3*segW, topLastFlip*depth) normalized direction
-  // Next edge starts at (x+w, y) going down. Tangent IN: (rightFirstFlip*vD, 0.3*segH)
-  // Corner bezier: smoothly transition
-  {
-    var tOutX = 0.3 * segW, tOutY = topLastFlip * depth;
-    var tInX = vD, tInY = 0.3 * segH;  // first right arc goes RIGHT (flip=1)
-    var tOutLen = Math.sqrt(tOutX*tOutX + tOutY*tOutY);
-    var tInLen = Math.sqrt(tInX*tInX + tInY*tInY);
-    var cornerLen = Math.min(segW, segH) * k;
-    d += ' C '+F(x+w + cornerLen*tOutX/tOutLen)+','+F(y + cornerLen*tOutY/tOutLen)+
-         ' '+F(x+w + cornerLen*tInX/tInLen)+','+F(y + cornerLen*tInY/tInLen)+
-         // This bezier needs to end where the right edge begins its first arc...
-         // but that's (x+w, y) again — we need a gap. Let me rethink this.
-         ' '+F(x+w)+','+F(y);
-  }
-
-  // Hmm, the corner bezier approach needs the edges to leave gaps for the corner transitions.
-  // This makes it equivalent to approach A but with bezier corners instead of arc corners.
-  // Let me use a different strategy: offset the edges and insert bezier corners.
-
-  // Actually, let me just not use approach C — it's too complex for the preview.
-  // I'll remove it below and only show A and B.
-  d += ' Z';
-  return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="'+strokeW+'"/>';
-}
-
-/* ═══════════════════════════════════════════════════════════
-   SVG builders
-   ═══════════════════════════════════════════════════════════ */
-
-function makeSvg(builder, scWidth, depth, color, textColor, fill, strokeW, cr) {
-  var x = 50, y = 30, w = 400, h = 220;
-  var pad = Math.max(depth, strokeW) + strokeW + 5;
-  var vb = (x-pad)+' '+(y-pad)+' '+(w+pad*2)+' '+(h+pad*2);
-  var s = '<svg viewBox="'+vb+'" xmlns="http://www.w3.org/2000/svg">';
-
-  if (fill) {
-    if (builder === 'old') {
-      s += '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="'+color+'"/>';
-      s += wavyBorderOld(x, y, w, h, scWidth, depth, color, strokeW);
-    } else if (builder === 'A') {
-      s += wavyBorderA(x, y, w, h, scWidth, depth, color, strokeW, cr).replace('fill="none"', 'fill="'+color+'"');
-    } else {
-      s += wavyBorderB(x, y, w, h, scWidth, depth, color, strokeW).replace('fill="none"', 'fill="'+color+'"');
-    }
-  } else {
-    if (builder === 'old') s += wavyBorderOld(x, y, w, h, scWidth, depth, color, strokeW);
-    else if (builder === 'A') s += wavyBorderA(x, y, w, h, scWidth, depth, color, strokeW, cr);
-    else s += wavyBorderB(x, y, w, h, scWidth, depth, color, strokeW);
-  }
-
-  var tx = x + w/2, ty = y + h * 0.62;
-  s += '<text x="'+tx+'" y="'+ty+'" text-anchor="middle" font-family="Arial Black" font-size="70" fill="'+textColor+'">HELLO</text>';
-  s += '</svg>';
+function makeSvg(sc, dep, color, textColor, fill, sw) {
+  var x=50,y=30,w=400,h=220;
+  var pad=Math.max(dep,sw)+sw+5;
+  var vb=(x-pad)+' '+(y-pad)+' '+(w+pad*2)+' '+(h+pad*2);
+  var s='<svg viewBox="'+vb+'" xmlns="http://www.w3.org/2000/svg">';
+  var border=wavyBorder(x,y,w,h,sc,dep,color,sw);
+  if(fill) border=border.replace('fill="none"','fill="'+color+'"');
+  s+=border;
+  s+='<text x="'+(x+w/2)+'" y="'+(y+h*.62)+'" text-anchor="middle" font-family="Arial Black" font-size="70" fill="'+textColor+'">HELLO</text>';
+  s+='</svg>';
   return s;
 }
 
-/* Corner zoom helper */
-function makeZoom(builder, scWidth, depth, color, strokeW, corner, cr) {
-  var x = 50, y = 30, w = 400, h = 220;
-  var pad = Math.max(depth, strokeW) + strokeW + 5;
-  var zs = 90;
-  var zx, zy;
-  if (corner === 'tl') { zx = x - pad; zy = y - pad; }
-  else if (corner === 'tr') { zx = x + w - zs + pad; zy = y - pad; }
-  else if (corner === 'bl') { zx = x - pad; zy = y + h - zs + pad; }
-  else { zx = x + w - zs + pad; zy = y + h - zs + pad; }
+function renderAll(){
+  /* ── Gentle candidates — same segment width, less depth ── */
+  document.getElementById('g-a').innerHTML=makeSvg(35, 5, '#BE1E2D','#BE1E2D',false,20);
+  document.getElementById('g-b').innerHTML=makeSvg(35, 7, '#BE1E2D','#BE1E2D',false,20);
+  document.getElementById('g-c').innerHTML=makeSvg(35, 9, '#BE1E2D','#BE1E2D',false,20);
 
-  var s = '<svg viewBox="'+zx+' '+zy+' '+(zs+pad)+' '+(zs+pad)+'" xmlns="http://www.w3.org/2000/svg">';
-  s += '<rect x="'+zx+'" y="'+zy+'" width="'+(zs+pad)+'" height="'+(zs+pad)+'" fill="#fafafa"/>';
-  if (builder === 'old') s += wavyBorderOld(x, y, w, h, scWidth, depth, color, strokeW);
-  else if (builder === 'A') s += wavyBorderA(x, y, w, h, scWidth, depth, color, strokeW, cr);
-  else s += wavyBorderB(x, y, w, h, scWidth, depth, color, strokeW);
-  s += '</svg>';
-  return s;
-}
+  /* ── Strong (locked) ── */
+  document.getElementById('strong').innerHTML=makeSvg(35, 12, '#BE1E2D','#BE1E2D',false,20);
 
-function renderAll() {
-  /* ── Comparison: Old vs A vs B — Gentle ── */
-  document.getElementById('g-old').innerHTML = makeSvg('old', 35, 12, '#BE1E2D', '#BE1E2D', false, 20);
-  document.getElementById('g-a').innerHTML   = makeSvg('A',   35, 12, '#BE1E2D', '#BE1E2D', false, 20);
-  document.getElementById('g-b').innerHTML   = makeSvg('B',   35, 12, '#BE1E2D', '#BE1E2D', false, 20);
+  /* ── Gentle candidates — smaller segments, less depth ── */
+  document.getElementById('g-d').innerHTML=makeSvg(25, 5, '#BE1E2D','#BE1E2D',false,20);
+  document.getElementById('g-e').innerHTML=makeSvg(25, 7, '#BE1E2D','#BE1E2D',false,20);
+  document.getElementById('g-f').innerHTML=makeSvg(30, 6, '#BE1E2D','#BE1E2D',false,20);
 
-  /* ── Comparison: Old vs A vs B — Strong ── */
-  document.getElementById('s-old').innerHTML = makeSvg('old', 55, 22, '#BE1E2D', '#BE1E2D', false, 20);
-  document.getElementById('s-a').innerHTML   = makeSvg('A',   55, 22, '#BE1E2D', '#BE1E2D', false, 20);
-  document.getElementById('s-b').innerHTML   = makeSvg('B',   55, 22, '#BE1E2D', '#BE1E2D', false, 20);
-
-  /* ── Corner zoom: Old vs A vs B ── */
-  document.getElementById('z-old').innerHTML = makeZoom('old', 35, 12, '#BE1E2D', 20, 'tl');
-  document.getElementById('z-a').innerHTML   = makeZoom('A',   35, 12, '#BE1E2D', 20, 'tl');
-  document.getElementById('z-b').innerHTML   = makeZoom('B',   35, 12, '#BE1E2D', 20, 'tl');
-
-  document.getElementById('zs-old').innerHTML = makeZoom('old', 55, 22, '#BE1E2D', 20, 'tr');
-  document.getElementById('zs-a').innerHTML   = makeZoom('A',   55, 22, '#BE1E2D', 20, 'tr');
-  document.getElementById('zs-b').innerHTML   = makeZoom('B',   55, 22, '#BE1E2D', 20, 'tr');
+  /* ── Side by side: best gentle candidates vs strong ── */
+  document.getElementById('vs-g1').innerHTML=makeSvg(35, 7, '#000','#000',false,20);
+  document.getElementById('vs-s').innerHTML=makeSvg(35, 12, '#000','#000',false,20);
 
   /* ── Filled ── */
-  document.getElementById('f-old').innerHTML = makeSvg('old', 35, 12, '#BE1E2D', '#FFF', true, 20);
-  document.getElementById('f-a').innerHTML   = makeSvg('A',   35, 12, '#BE1E2D', '#FFF', true, 20);
-  document.getElementById('f-b').innerHTML   = makeSvg('B',   35, 12, '#BE1E2D', '#FFF', true, 20);
-
-  /* ── Final picks ── */
-  document.getElementById('p-ge').innerHTML = makeSvg('B', 35, 12, '#000', '#000', false, 20);
-  document.getElementById('p-se').innerHTML = makeSvg('B', 55, 22, '#000', '#000', false, 20);
-  document.getElementById('p-gf').innerHTML = makeSvg('B', 35, 12, '#000', '#FFF', true, 20);
-  document.getElementById('p-sf').innerHTML = makeSvg('B', 55, 22, '#000', '#FFF', true, 20);
+  document.getElementById('f-g1').innerHTML=makeSvg(35, 7, '#BE1E2D','#FFF',true,20);
+  document.getElementById('f-s').innerHTML=makeSvg(35, 12, '#BE1E2D','#FFF',true,20);
 }
 </script>
 </head>
 <body onload="renderAll()">
-<h1>Wavy Border — Seamless Comparison (v3)</h1>
-<h2 class="sub">Three approaches compared: Old (4 paths + circles) · A (corner arcs + flat endpoints) · B (uniform arcs + linejoin round)</h2>
+<h1>Wavy Border — Gentle vs Strong (v5)</h1>
+<h2 class="sub">Strong is locked (sc=35, d=12). Pick a Gentle variant below.</h2>
 
-<div class="section"><h2>Gentle Wavy (sc=35, d=12) — Old vs A vs B</h2></div>
-<div class="grid">
-  <div class="card old"><h3>OLD</h3><p>4 separate paths + circle patches</p><div id="g-old"></div></div>
-  <div class="card"><h3>A: Corner Arcs</h3><p>Single path, quarter-circle arcs, flat endpoints</p><div id="g-a"></div></div>
-  <div class="card hl"><h3>B: Uniform + Linejoin</h3><p>Single path, all arcs identical, linejoin round</p><div id="g-b"></div></div>
+<div class="section"><h2>Gentle Candidates — Same segment width (sc=35), reduced depth</h2></div>
+<div class="grid-3">
+  <div class="card"><h3>A: d=5</h3><p>Very subtle ripple</p><div id="g-a"></div></div>
+  <div class="card hl"><h3>B: d=7</h3><p>Clear but gentle wave</p><div id="g-b"></div></div>
+  <div class="card"><h3>C: d=9</h3><p>Noticeable wave</p><div id="g-c"></div></div>
 </div>
 
-<div class="section"><h2>Strong Wavy (sc=55, d=22) — Old vs A vs B</h2></div>
-<div class="grid">
-  <div class="card old"><h3>OLD</h3><p>Gaps very visible with larger waves</p><div id="s-old"></div></div>
-  <div class="card"><h3>A: Corner Arcs</h3><p>Clean but first/last arcs are flatter</p><div id="s-a"></div></div>
-  <div class="card hl"><h3>B: Uniform + Linejoin</h3><p>All arcs same amplitude everywhere</p><div id="s-b"></div></div>
+<div class="section"><h2>Strong (locked) — sc=35, d=12</h2></div>
+<div class="grid" style="max-width:450px;">
+  <div class="card ref"><h3>STRONG</h3><p>sc=35, d=12 — approved</p><div id="strong"></div></div>
 </div>
 
-<div class="section"><h2>Corner Zoom — Gentle (top-left)</h2></div>
-<div class="grid">
-  <div class="card old"><h3>OLD</h3><p>Visible seam + circle patch</p><div id="z-old"></div></div>
-  <div class="card"><h3>A</h3><p>Smooth arc, but flat wave entry</p><div id="z-a"></div></div>
-  <div class="card hl"><h3>B</h3><p>Natural round join, uniform wave</p><div id="z-b"></div></div>
+<div class="section"><h2>Gentle Candidates — Smaller segments (more arcs per edge)</h2></div>
+<div class="grid-3">
+  <div class="card"><h3>D: sc=25, d=5</h3><p>Many tiny waves</p><div id="g-d"></div></div>
+  <div class="card"><h3>E: sc=25, d=7</h3><p>Many small waves</p><div id="g-e"></div></div>
+  <div class="card"><h3>F: sc=30, d=6</h3><p>Medium count, subtle</p><div id="g-f"></div></div>
 </div>
 
-<div class="section"><h2>Corner Zoom — Strong (top-right)</h2></div>
+<div class="section"><h2>Side by Side — Gentle (B: sc=35, d=7) vs Strong (sc=35, d=12)</h2></div>
 <div class="grid">
-  <div class="card old"><h3>OLD</h3><p>Gap and tangent mismatch</p><div id="zs-old"></div></div>
-  <div class="card"><h3>A</h3><p>Clean arc transition</p><div id="zs-a"></div></div>
-  <div class="card hl"><h3>B</h3><p>Linejoin handles the turn</p><div id="zs-b"></div></div>
+  <div class="card hl"><h3>Gentle</h3><p>sc=35, d=7</p><div id="vs-g1"></div></div>
+  <div class="card ref"><h3>Strong</h3><p>sc=35, d=12</p><div id="vs-s"></div></div>
 </div>
 
-<div class="section"><h2>Filled Gentle — Old vs A vs B</h2></div>
+<div class="section"><h2>Filled</h2></div>
 <div class="grid">
-  <div class="card old"><h3>OLD (filled)</h3><p>Rect + separate wavy paths</p><div id="f-old"></div></div>
-  <div class="card"><h3>A (filled)</h3><p>Closed path with fill</p><div id="f-a"></div></div>
-  <div class="card hl"><h3>B (filled)</h3><p>Closed path with fill, uniform</p><div id="f-b"></div></div>
-</div>
-
-<div class="section"><h2>Final Picks (approach B) — Black</h2></div>
-<div class="grid">
-  <div class="card"><h3>Gentle (empty)</h3><p>sc=35, d=12</p><div id="p-ge"></div></div>
-  <div class="card"><h3>Strong (empty)</h3><p>sc=55, d=22</p><div id="p-se"></div></div>
-  <div class="card"><h3>Gentle (filled)</h3><p>sc=35, d=12</p><div id="p-gf"></div></div>
-</div>
-<div class="grid" style="max-width: 370px; margin-top: 1.5rem;">
-  <div class="card"><h3>Strong (filled)</h3><p>sc=55, d=22</p><div id="p-sf"></div></div>
+  <div class="card"><h3>Gentle filled</h3><p>sc=35, d=7</p><div id="f-g1"></div></div>
+  <div class="card"><h3>Strong filled</h3><p>sc=35, d=12</p><div id="f-s"></div></div>
 </div>
 
 </body></html>
