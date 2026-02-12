@@ -361,6 +361,34 @@
         '</div>';
       }).join('');
 
+      // Bulk activate/deactivate handlers
+      var activateAllBtn = document.getElementById('btn-activate-all');
+      var deactivateAllBtn = document.getElementById('btn-deactivate-all');
+      if (activateAllBtn) {
+        activateAllBtn.onclick = async function () {
+          if (!confirm('Activate ALL ' + templates.length + ' templates?')) return;
+          this.disabled = true;
+          this.textContent = 'Activating...';
+          var ids = templates.map(function (t) { return t.id; });
+          var res = await sb.from('templates').update({ is_active: true }).in('id', ids);
+          if (res.error) alert('Failed: ' + res.error.message);
+          loadTemplateList();
+        };
+      }
+      if (deactivateAllBtn) {
+        deactivateAllBtn.onclick = async function () {
+          if (!confirm('Deactivate ALL ' + templates.length + ' templates?')) return;
+          this.disabled = true;
+          this.textContent = 'Deactivating...';
+          var ids = templates.map(function (t) { return t.id; });
+          var res = await sb.from('templates').update({ is_active: false }).in('id', ids);
+          if (res.error) alert('Failed: ' + res.error.message);
+          loadTemplateList();
+        };
+      }
+
+
+
       // Toggle active handlers
       listDiv.querySelectorAll('.btn-toggle-active').forEach(function (btn) {
         btn.addEventListener('click', async function () {
@@ -394,20 +422,41 @@
 
           // Create tooltip
           previewTooltip = document.createElement('div');
-          previewTooltip.style.cssText = 'position:absolute;z-index:9999;background:#fff;border:1px solid #d4d4d4;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:8px;width:280px;pointer-events:none;';
+          previewTooltip.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #d4d4d4;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:8px;width:300px;pointer-events:none;';
           document.body.appendChild(previewTooltip);
 
-          // Position near the element
+          // Position to the right of the element name
           var rect = this.getBoundingClientRect();
-          previewTooltip.style.left = rect.left + 'px';
-          previewTooltip.style.top = (rect.bottom + 8) + 'px';
+          var tooltipLeft = rect.right + 12;
+          var tooltipTop = rect.top - 40;
+          // If too far right, show below instead
+          if (tooltipLeft + 310 > window.innerWidth) {
+            tooltipLeft = rect.left;
+            tooltipTop = rect.bottom + 8;
+          }
+          // Keep within viewport vertically
+          if (tooltipTop < 8) tooltipTop = 8;
+          previewTooltip.style.left = tooltipLeft + 'px';
+          previewTooltip.style.top = tooltipTop + 'px';
 
           try {
             var svgString = await SvgRenderer.fetchSvg(svgUrl);
             var cleaned = SvgRenderer.cleanSvgString(svgString);
+
+            // Run through autoFit to generate border effects (wavy, stitch, etc.)
+            var bwMatch = cleaned.match(/<rect[^>]*width=["']([\d.]+)["']/);
+            var bw = bwMatch ? parseFloat(bwMatch[1]) : 1000;
+            var fsMatch = cleaned.match(/font-size=["']([\d.]+)["']/);
+            var fs = fsMatch ? parseFloat(fsMatch[1]) : 128;
+            try {
+              cleaned = await SvgRenderer.autoFitTextInString(cleaned, 0, bw, fs, 1);
+            } catch (fitErr) { /* fallback to raw SVG */ }
+
             if (previewTooltip && previewTooltip.parentNode) {
               var img = SvgRenderer.createSvgImage(cleaned);
-              img.style.width = '100%';
+              img.style.width = '260px';
+              img.style.maxHeight = '200px';
+              img.style.overflow = 'hidden';
               previewTooltip.appendChild(img);
             }
           } catch (err) {
@@ -548,11 +597,24 @@
           var publicUrl = sb.storage.from('templates').getPublicUrl(tpl.svg_path).data.publicUrl;
           var svgString = await SvgRenderer.fetchSvg(publicUrl);
           var cleaned = SvgRenderer.cleanSvgString(svgString);
+
+          // Run through autoFit to generate border effects
+          var bwMatch = cleaned.match(/<rect[^>]*width=["']([\d.]+)["']/);
+          var bw = bwMatch ? parseFloat(bwMatch[1]) : 1000;
+          var fsMatch = cleaned.match(/font-size=["']([\d.]+)["']/);
+          var fs = fsMatch ? parseFloat(fsMatch[1]) : 128;
+          try {
+            cleaned = await SvgRenderer.autoFitTextInString(cleaned, 0, bw, fs, 1);
+          } catch (fitErr) { /* fallback to raw SVG */ }
+
           previewDiv.innerHTML = '';
+          var imgWrap = document.createElement('div');
+          imgWrap.style.cssText = 'max-width:400px;max-height:180px;margin:0 auto;overflow:hidden;';
           var img = SvgRenderer.createSvgImage(cleaned);
           img.style.width = '100%';
-          img.style.maxHeight = '300px';
-          previewDiv.appendChild(img);
+          img.style.height = 'auto';
+          imgWrap.appendChild(img);
+          previewDiv.appendChild(imgWrap);
 
           // Show auto-detected colors in edit view
           var detectedColors = SvgRenderer.detectColors(cleaned);

@@ -196,9 +196,9 @@
       var FONT_CONFIG = {
         'Oswald':       { scale: 1.00, baselineShift: 0.02 },
         'AntonSC':      { scale: 0.97, baselineShift: 0.06 },
-        'HussarBold':   { scale: 0.72, baselineShift: 0.14 },
-        'RobotoBlack':  { scale: 0.84, baselineShift: 0.06 },
-        'AbrilFatface': { scale: 0.83, baselineShift: 0.06 },
+        'HussarBold':   { scale: 0.72, baselineShift: 0.14, wordSpacing: 0.20 },
+        'RobotoBlack':  { scale: 0.84, baselineShift: 0.06, wordSpacing: 0.20 },
+        'AbrilFatface': { scale: 0.83, baselineShift: 0.06, wordSpacing: 0.20 },
         'AlfaSlabOne':  { scale: 0.68, baselineShift: 0.15, letterSpacing: 0.04 },
         'Bangers':      { scale: 1.10, letterSpacing: 0.06, baselineShift: -0.04, horizontalShift: -0.06 },
         'SpecialElite': { scale: 0.92, baselineShift: -0.01 },
@@ -249,6 +249,22 @@
           } else {
             // Remove any previously added letter-spacing
             result = result.replace(/(<text[^>]*?) letter-spacing=["'][^"']*["']/i, '$1');
+          }
+
+          // Word spacing (fraction of font-size → SVG user units)
+          var ws = config.wordSpacing || 0;
+          if (ws > 0) {
+            var wsPx = (scaledFontSize * ws).toFixed(2);
+            if (/<text[^>]*word-spacing=/i.test(result)) {
+              result = result.replace(/(<text[^>]*?)word-spacing=["'][^"']*["']/i,
+                '$1word-spacing="' + wsPx + '"');
+            } else {
+              result = result.replace(/<text([^>]*?)>/i,
+                '<text$1 word-spacing="' + wsPx + '">');
+            }
+          } else {
+            // Remove any previously added word-spacing
+            result = result.replace(/(<text[^>]*?) word-spacing=["'][^"']*["']/i, '$1');
           }
 
           // Positioning: adjust transform tx/ty (works for all templates)

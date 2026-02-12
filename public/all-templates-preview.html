@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>All Templates Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
+  h1 { text-align: center; margin-bottom: 5px; }
+  .subtitle { text-align: center; color: #666; margin-bottom: 20px; font-size: 14px; }
+  .controls { text-align: center; margin-bottom: 20px; }
+  .controls button {
+    padding: 6px 14px; margin: 0 4px; border: 1px solid #999; border-radius: 4px;
+    background: #fff; cursor: pointer; font-size: 13px;
+  }
+  .controls button.active { background: #333; color: #fff; border-color: #333; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: #fff;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, opacity 0.15s;
+    position: relative;
+  }
+  .card:hover { border-color: #888; }
+  .card.marked { border-color: #dc2626; opacity: 0.4; }
+  .card.marked::after {
+    content: 'REDUNDANT';
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #dc2626; color: #fff; padding: 4px 12px; border-radius: 4px;
+    font-weight: bold; font-size: 13px; pointer-events: none;
+  }
+  .card .name {
+    font-size: 12px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card .id-label {
+    font-size: 10px;
+    color: #aaa;
+    margin-bottom: 4px;
+  }
+  .card .preview {
+    width: 100%;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .card .preview img {
+    max-width: 100%;
+    max-height: 160px;
+  }
+  .card .status {
+    font-size: 10px;
+    margin-top: 4px;
+    color: #888;
+  }
+  .card .status.active { color: #16a34a; }
+  .card .status.inactive { color: #dc2626; }
+  .loading { text-align: center; padding: 40px; color: #888; font-size: 18px; }
+  .summary {
+    text-align: center; margin: 20px 0; padding: 12px;
+    background: #fff; border-radius: 8px; font-size: 14px;
+  }
+  .summary .count { font-weight: bold; color: #333; }
+  .summary .marked-count { font-weight: bold; color: #dc2626; }
+  #marked-list {
+    margin-top: 10px; font-size: 12px; color: #666;
+    max-height: 200px; overflow-y: auto; text-align: left;
+    display: none; padding: 10px; background: #fafafa; border-radius: 4px;
+  }
+  #marked-list.visible { display: block; }
+</style>
+</head>
+<body>
+<h1>All Templates Preview</h1>
+<p class="subtitle">Click a template to mark it as redundant. Click again to unmark.</p>
+
+<div class="controls">
+  <input type="text" id="search-box" placeholder="Search by name..." oninput="searchCards(this.value)" style="padding:5px 10px;border:1px solid #999;border-radius:4px;font-size:13px;width:200px;">
+  <span style="margin-left:8px;"></span>
+  <button id="btn-all" class="active" onclick="filterCards('all')">All</button>
+  <button id="btn-active" onclick="filterCards('active')">Active Only</button>
+  <button id="btn-inactive" onclick="filterCards('inactive')">Inactive Only</button>
+  <button id="btn-marked" onclick="filterCards('marked')">Marked Only</button>
+  <span style="margin-left:16px;"></span>
+  <button id="btn-toggle-list" onclick="toggleMarkedList()">Show Marked List</button>
+  <button id="btn-clear" onclick="clearMarked()">Clear All Marks</button>
+  <span style="margin-left:16px;"></span>
+  <button id="btn-double-frame" onclick="toggleDoubleFrame()" style="border-color:#4f46e5;color:#4f46e5;">+ Double Frame</button>
+  <button id="btn-rename-strip" onclick="stripButtonPrefix()" style="border-color:#d97706;color:#d97706;">Strip "Button" prefix</button>
+</div>
+
+<div class="summary">
+  Total: <span class="count" id="total-count">--</span> |
+  Active: <span class="count" id="active-count">--</span> |
+  Inactive: <span class="count" id="inactive-count">--</span> |
+  Marked redundant: <span class="marked-count" id="marked-count">0</span>
+</div>
+<div id="marked-list"></div>
+
+<div class="loading" id="loading">Loading templates...</div>
+<div class="grid" id="grid" style="display:none;"></div>
+
+<script src="/js/supabase.umd.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/supabase-client.js"></script>
+<script src="/js/svg-renderer.js"></script>
+<script>
+(async function() {
+  var grid = document.getElementById('grid');
+  var loading = document.getElementById('loading');
+  var markedSet = new Set();
+  var svgCache = {};       // id -> cleaned SVG string (after autoFit)
+  var borderTypeCache = {}; // id -> { wavy, border, stitch, brush, filter }
+  var doubleFrameOn = false;
+
+  // Fetch ALL templates (active + inactive) with text zones
+  var result = await sb
+    .from('templates')
+    .select('*, text_zones(*)')
+    .order('name', { ascending: true });
+
+  if (result.error) {
+    loading.textContent = 'Error: ' + result.error.message;
+    return;
+  }
+
+  var templates = result.data || [];
+  var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
+
+  var singles = templates.filter(function(t) { return !/double frame/i.test(t.name); });
+  var doubles = templates.filter(function(t) { return /double frame/i.test(t.name); });
+  document.getElementById('total-count').textContent = templates.length;
+  document.getElementById('active-count').textContent = singles.length + ' singles, ' + doubles.length + ' doubles';
+  document.getElementById('inactive-count').textContent = templates.filter(function(t) { return !t.is_active; }).length;
+
+  loading.style.display = 'none';
+  grid.style.display = 'grid';
+
+  // Render all templates
+  for (var i = 0; i < templates.length; i++) {
+    var tpl = templates[i];
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.id = tpl.id;
+    card.dataset.name = tpl.name;
+    card.dataset.active = tpl.is_active ? 'true' : 'false';
+    var isDouble = /double frame/i.test(tpl.name);
+    card.dataset.frame = isDouble ? 'double' : 'single';
+    if (isDouble) card.style.display = 'none'; // hide DB doubles by default
+
+    card.innerHTML =
+      '<div class="id-label">#' + (i + 1) + '</div>' +
+      '<div class="name" title="' + escapeHtml(tpl.name) + '">' + escapeHtml(tpl.name) + '</div>' +
+      '<div class="preview"><span style="color:#ccc;">Loading...</span></div>' +
+      '<div class="status ' + (tpl.is_active ? 'active' : 'inactive') + '">' +
+        (tpl.is_active ? 'Active' : 'Inactive') +
+      '</div>';
+
+    card.addEventListener('click', function() {
+      var id = this.dataset.id;
+      if (markedSet.has(id)) {
+        markedSet.delete(id);
+        this.classList.remove('marked');
+      } else {
+        markedSet.add(id);
+        this.classList.add('marked');
+      }
+      updateMarkedCount();
+    });
+
+    grid.appendChild(card);
+
+    // Load preview async (don't await — let them load in parallel)
+    loadPreview(card, tpl, storageBaseUrl);
+  }
+
+  async function loadPreview(card, tpl, baseUrl) {
+    var previewDiv = card.querySelector('.preview');
+    if (!tpl.svg_path) {
+      previewDiv.innerHTML = '<span style="color:#ccc;">No SVG</span>';
+      return;
+    }
+    try {
+      var svgUrl = baseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
+      var svgString = await SvgRenderer.fetchSvg(svgUrl);
+      var cleaned = SvgRenderer.cleanSvgString(svgString);
+
+      // Detect border type BEFORE autoFit strips data attributes
+      borderTypeCache[tpl.id] = detectBorderType(cleaned);
+      var _bi = borderTypeCache[tpl.id];
+      var _type = _bi.wavy || _bi.border || (_bi.brush ? 'brush' : null) || _bi.stitch || _bi.filter || 'plain';
+      console.log('[DF] ' + tpl.name + ' → ' + _type, _bi);
+
+      // Auto-fit using text zone data (same as gallery)
+      var zones = tpl.text_zones || [];
+      var didAutoFit = false;
+      for (var idx = 0; idx < zones.length; idx++) {
+        var zone = zones[idx];
+        if (zone.bounding_width) {
+          var origScaleX = zone.transform_matrix
+            ? parseFloat((zone.transform_matrix.match(/matrix\(\s*([\d.]+)/) || [])[1]) || 1
+            : 1;
+          cleaned = await SvgRenderer.autoFitTextInString(
+            cleaned, idx, zone.bounding_width, zone.font_size, origScaleX
+          );
+          didAutoFit = true;
+        }
+      }
+      // Category 2 fallback
+      if (!didAutoFit && /<image[\s>]/i.test(cleaned)) {
+        cleaned = await SvgRenderer.autoFitTextInString(cleaned, 0, 1, 128, 1);
+      }
+
+      // Cache the cleaned SVG for double frame toggle
+      svgCache[tpl.id] = cleaned;
+
+      var display = doubleFrameOn ? addDoubleFrame(cleaned, borderTypeCache[tpl.id]) : cleaned;
+      previewDiv.innerHTML = '';
+      var img = SvgRenderer.createSvgImage(display);
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '160px';
+      previewDiv.appendChild(img);
+    } catch (err) {
+      previewDiv.innerHTML = '<span style="color:#cc0000;font-size:11px;">Error</span>';
+      console.error('Preview failed for', tpl.name, err);
+    }
+  }
+
+  // --- Detect border type from raw SVG (before autoFit strips data attributes) ---
+  // Also caches original fill/stroke since autoFit wipes them for wavy/stitch
+  function detectBorderType(svgStr) {
+    // Find outer rect for original color extraction
+    var rects = [];
+    var re = /<rect([^>]*)\/?>/gi;
+    var m;
+    while ((m = re.exec(svgStr)) !== null) {
+      var attrs = m[1];
+      if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) continue;
+      var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+      if (!wM) continue;
+      rects.push({ attrs: attrs, w: parseFloat(wM[1]) });
+    }
+    rects.sort(function(a, b) { return b.w - a.w; });
+
+    var origFill = null, origStroke = null, origStrokeWidth = null;
+    if (rects.length > 0) {
+      var outerAttrs = rects[0].attrs;
+      var fM = outerAttrs.match(/\bfill=["']([^"']+)["']/);
+      var sM = outerAttrs.match(/\bstroke=["']([^"']+)["']/);
+      var swM = outerAttrs.match(/stroke-width=["']([\d.]+)["']/);
+      origFill = fM ? fM[1] : null;
+      origStroke = sM ? sM[1] : null;
+      origStrokeWidth = swM ? parseFloat(swM[1]) : null;
+    }
+
+    var wavyM = svgStr.match(/data-wavy=["']([^"']+)["']/);
+    var borderM = svgStr.match(/data-border=["']([^"']+)["']/);
+    var stitchM = svgStr.match(/data-stitch=["']([^"']+)["']/);
+    var brushM = svgStr.match(/data-brush-border=["']([^"']+)["']/);
+    var filterM = svgStr.match(/data-filter=["']([^"']+)["']/);
+
+    // For brush borders, cache the original coords and the <use> content inside the group
+    var brushCoords = null;
+    var brushContent = null;
+    if (brushM) {
+      brushCoords = brushM[1].split(',').map(Number); // [x, y, w, h]
+      var bgM = svgStr.match(/<g[^>]*data-brush-border=["'][^"']*["'][^>]*>([\s\S]*?)<\/g>/);
+      if (bgM) brushContent = bgM[1].trim(); // e.g. '<use href="#bbp"/>'
+    }
+
+    return {
+      wavy: wavyM ? wavyM[1] : null,
+      border: borderM ? borderM[1] : null,
+      stitch: stitchM ? stitchM[1] : null,
+      brush: !!brushM,
+      brushCoords: brushCoords,
+      brushContent: brushContent,
+      filter: filterM ? filterM[1] : null,
+      origFill: origFill,
+      origStroke: origStroke,
+      origStrokeWidth: origStrokeWidth
+    };
+  }
+
+  // --- Programmatic double frame injection ---
+  function addDoubleFrame(svgStr, borderInfo) {
+    // Skip Cat 2 (has <image>) — double frame only makes sense for Cat 1 (rect-based)
+    // But if borderInfo already confirms a Cat 1 border type, trust that over <image> regex
+    var bi = borderInfo || {};
+    var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.border || bi.filter;
+    if (!isCat1Border && /<image[\s>]/i.test(svgStr)) { console.log('[DF-exit] <image> detected, skipping'); return svgStr; }
+
+    // Find the outer rect: largest non-white rect by width
+    var rects = [];
+    var allRectCount = 0;
+    var re = /<rect([^>]*)\/?>/gi;
+    var m;
+    while ((m = re.exec(svgStr)) !== null) {
+      allRectCount++;
+      var attrs = m[1];
+      // Skip white background rects and hidden rects
+      if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) continue;
+      if (/display=["']none["']/i.test(attrs)) continue;
+      var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+      var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
+      if (!wM || !hM) continue;
+      rects.push({
+        full: m[0],
+        attrs: attrs,
+        w: parseFloat(wM[1]),
+        h: parseFloat(hM[1]),
+        index: m.index
+      });
+    }
+    console.log('[DF-rects] allRects=' + allRectCount + ' nonWhiteWithDims=' + rects.length);
+    if (rects.length === 0) { console.log('[DF-exit] no rects found'); return svgStr; }
+
+    // Sort by width descending — outer rect is the widest
+    rects.sort(function(a, b) { return b.w - a.w; });
+    var outer = rects[0];
+
+    // Check if this already has an inner rect (double frame template) — skip if so
+    console.log('[DF-outer] w=' + outer.w + ' h=' + outer.h + ' attrs=' + outer.attrs.substring(0, 100));
+    if (rects.length > 1 && rects[1].w > outer.w * 0.9) {
+      var second = rects[1];
+      console.log('[DF-second] w=' + second.w + ' attrs=' + second.attrs.substring(0, 100));
+      if (/fill=["']none["']/i.test(second.attrs) && /stroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(second.attrs)) {
+        console.log('[DF-exit] already has inner white rect');
+        return svgStr; // Already has inner white rect
+      }
+    }
+
+    // Parse outer rect attributes
+    var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+    var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+    var swM = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
+    var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
+    var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
+
+    var ox = xM ? parseFloat(xM[1]) : 0;
+    var oy = yM ? parseFloat(yM[1]) : 0;
+    var ow = outer.w;
+    var oh = outer.h;
+    var osw = swM ? parseFloat(swM[1]) : 50;
+    // autoFit zeroes stroke-width for wavy/stitch — restore from pre-cached original
+    if (osw === 0 && bi.origStrokeWidth) osw = bi.origStrokeWidth;
+    var orx = rxM ? parseFloat(rxM[1]) : 0;
+    var ory = ryM ? parseFloat(ryM[1]) : 0;
+
+    // Detect if Full (has colored fill) or Empty (fill="none")
+    // autoFit wipes fill/stroke for wavy (both → "none") and stitch (stroke removed)
+    // so fall back to pre-cached original colors when post-autoFit values are degraded
+    var fillM = outer.attrs.match(/\bfill=["']([^"']+)["']/);
+    var outerFill = fillM ? fillM[1] : 'none';
+    var strokeM = outer.attrs.match(/\bstroke=["']([^"']+)["']/);
+    var outerStroke = strokeM ? strokeM[1] : '#000000';
+
+    // Restore original colors if autoFit wiped them
+    if (outerFill === 'none' && bi.origFill && bi.origFill !== 'none') {
+      outerFill = bi.origFill;
+    }
+    if ((!strokeM || outerStroke === 'none') && bi.origStroke) {
+      outerStroke = bi.origStroke;
+    }
+
+    var isFull = outerFill !== 'none';
+
+    // Inner rect color: contrast (white/black) on Full, same as outer stroke on Empty
+    var innerColor;
+    if (isFull) {
+      var hex = outerFill.replace('#', '');
+      var r = parseInt(hex.substring(0, 2), 16);
+      var g = parseInt(hex.substring(2, 4), 16);
+      var b = parseInt(hex.substring(4, 6), 16);
+      var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      innerColor = lum > 160 ? '#000000' : '#FFFFFF';
+    } else {
+      innerColor = outerStroke;
+    }
+
+    // Inner rect sits in the visible interior, past the outer stroke's inner edge
+    var gap = osw * 0.3;
+    var inset = osw / 2 + gap;
+    var innerSw = 12;
+    var ix = ox + inset;
+    var iy = oy + inset;
+    var iw = ow - inset * 2;
+    var ih = oh - inset * 2;
+    var irx = orx;
+    var iry = ory;
+
+    var outerFilterUrl = outer.attrs.match(/\bfilter=["']([^"']+)["']/);
+
+    // Build inner elements matching outer border type
+    var innerRect = '';
+
+    if (bi.wavy) {
+      innerRect = _innerWavy(ix, iy, iw, ih, innerSw, innerColor, bi.wavy);
+    } else if (bi.brush) {
+      innerRect = _innerBrush(ix, iy, iw, ih, innerSw, innerColor, bi);
+    } else if (bi.stitch) {
+      innerRect = _innerStitch(ix, iy, iw, ih, innerSw, innerColor, irx, iry, bi.stitch);
+    } else {
+      // Plain rect (or ripped with filter, or with border overlays)
+      innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
+        '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
+        '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
+        '" stroke-miterlimit="10"';
+      if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
+      if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
+      if (outerFilterUrl) innerRect += ' filter="' + outerFilterUrl[1] + '"';
+      innerRect += '/>';
+      // Add overlay shapes for perforated/winding borders
+      if (bi.border) {
+        innerRect += _innerBorderOverlay(ix, iy, iw, ih, innerSw, bi.border);
+      }
+    }
+
+    // Debug: log what we're generating
+    var _btype = bi.wavy || bi.border || (bi.brush ? 'brush' : null) || bi.stitch || bi.filter || 'plain';
+    console.log('[DF-inject] type=' + _btype + ' innerColor=' + innerColor + ' isFull=' + isFull + ' osw=' + osw + ' inset=' + inset.toFixed(1));
+    console.log('[DF-inject] innerRect length=' + innerRect.length + ' start=' + innerRect.substring(0, 120));
+    console.log('[DF-inject] outerRect: x=' + ox + ' y=' + oy + ' w=' + ow + ' h=' + oh + ' fill=' + outerFill + ' stroke=' + outerStroke);
+
+    // Inject inner elements just before the first <text element
+    var textPos = svgStr.search(/<text[\s>]/i);
+    console.log('[DF-inject] textPos=' + textPos + ' svgLen=' + svgStr.length);
+    if (textPos !== -1) {
+      var result = svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
+      console.log('[DF-inject] resultLen=' + result.length + ' (added ' + (result.length - svgStr.length) + ' chars)');
+      return result;
+    }
+    return svgStr.replace(/<\/svg>/, innerRect + '</svg>');
+  }
+
+  // --- Inner rect border effect helpers ---
+
+  function _innerWavy(x, y, w, h, sw, col, type) {
+    // Mirror the outer _generateWavyBorder algorithm with proportionally scaled params
+    var F = function(n) { return n.toFixed(2); };
+    var scWidth = 35;  // same segment target as outer
+    var depth = (type === 'strong') ? 8 : 5;
+    var strokeW = 14;  // proportionally smaller than outer's 20
+
+    var numH = Math.max(3, Math.round(w / scWidth));
+    if (numH % 2 === 0) numH++;   // force ODD for smooth corners
+    var segW = w / numH;
+    var numV = Math.max(3, Math.round(h / segW));
+    if (numV % 2 === 0) numV++;   // force ODD
+    var segH = h / numV;
+    var vD = depth * segH / segW;  // scale vertical depth proportionally
+
+    var path = 'M ' + F(x) + ',' + F(y);
+    // Top (L→R)
+    for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + i * segW;
+      path += ' C '+F(sx+segW*0.3)+','+F(y-fl*depth)+' '+F(sx+segW*0.7)+','+F(y-fl*depth)+' '+F(sx+segW)+','+F(y); }
+    // Right (T→B)
+    for (var i = 0; i < numV; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sy = y + i * segH;
+      path += ' C '+F(x+w+fl*vD)+','+F(sy+segH*0.3)+' '+F(x+w+fl*vD)+','+F(sy+segH*0.7)+' '+F(x+w)+','+F(sy+segH); }
+    // Bottom (R→L)
+    for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + w - i * segW;
+      path += ' C '+F(sx-segW*0.3)+','+F(y+h+fl*depth)+' '+F(sx-segW*0.7)+','+F(y+h+fl*depth)+' '+F(sx-segW)+','+F(y+h); }
+    // Left (B→T)
+    for (var i = 0; i < numV; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sy = y + h - i * segH;
+      path += ' C '+F(x-fl*vD)+','+F(sy-segH*0.3)+' '+F(x-fl*vD)+','+F(sy-segH*0.7)+' '+F(x)+','+F(sy-segH); }
+    path += ' Z';
+    return '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="' + strokeW + '" stroke-linejoin="round"/>';
+  }
+
+  function _innerStitch(x, y, w, h, sw, col, rx, ry, type) {
+    // Light guide rect
+    var s = '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" fill="none" stroke="' + col + '" stroke-width="1" opacity="0.3"';
+    if (rx > 0) s += ' rx="' + rx.toFixed(1) + '"';
+    if (ry > 0) s += ' ry="' + ry.toFixed(1) + '"';
+    s += '/>';
+    // Use same SvgRenderer function as outer, with proportionally scaled params
+    // Outer: sSize=20, sSpacing=20|10  →  Inner: sSize=12, sSpacing=12|6
+    var sSize = 12;
+    var sSpacing = (type === 'line') ? 12 : 6;
+    s += SvgRenderer._generateStitchShapes(x, y, w, h, type, sSize, sSpacing, col);
+    return s;
+  }
+
+  function _innerBorderOverlay(x, y, w, h, sw, spec) {
+    var parts = spec.split('-');
+    var type = parts[0];
+    var origSize = parts[1] ? parseFloat(parts[1]) : 10;
+    var size = Math.max(2, origSize * 0.4);
+    var spacing = size * 3;
+    var s = '';
+    if (type === 'circle') {
+      for (var cx = x + spacing; cx < x + w - spacing / 2; cx += spacing) {
+        s += '<circle cx="' + cx.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
+        s += '<circle cx="' + cx.toFixed(1) + '" cy="' + (y + h).toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
+      }
+      for (var cy = y + spacing; cy < y + h - spacing / 2; cy += spacing) {
+        s += '<circle cx="' + x.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
+        s += '<circle cx="' + (x + w).toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
+      }
+    } else if (type === 'diamond') {
+      for (var cx = x + spacing; cx < x + w - spacing / 2; cx += spacing) {
+        s += '<polygon points="' + cx + ',' + (y - size) + ' ' + (cx + size) + ',' + y + ' ' + cx + ',' + (y + size) + ' ' + (cx - size) + ',' + y + '" fill="white"/>';
+        s += '<polygon points="' + cx + ',' + (y + h - size) + ' ' + (cx + size) + ',' + (y + h) + ' ' + cx + ',' + (y + h + size) + ' ' + (cx - size) + ',' + (y + h) + '" fill="white"/>';
+      }
+      for (var cy = y + spacing; cy < y + h - spacing / 2; cy += spacing) {
+        s += '<polygon points="' + x + ',' + (cy - size) + ' ' + (x + size) + ',' + cy + ' ' + x + ',' + (cy + size) + ' ' + (x - size) + ',' + cy + '" fill="white"/>';
+        s += '<polygon points="' + (x + w) + ',' + (cy - size) + ' ' + (x + w + size) + ',' + cy + ' ' + (x + w) + ',' + (cy + size) + ' ' + (x + w - size) + ',' + cy + '" fill="white"/>';
+      }
+    }
+    return s;
+  }
+
+  function _innerBrush(x, y, w, h, sw, col, bi) {
+    // Clone the outer brush group and scale it to the inner frame dimensions
+    if (!bi.brushCoords || !bi.brushContent) {
+      // Fallback: plain rect if brush data wasn't cached
+      return '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) +
+        '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) +
+        '" fill="none" stroke="' + col + '" stroke-width="' + sw + '"/>';
+    }
+    // Original brush group coords: where the outer brush was designed to fit
+    var origX = bi.brushCoords[0], origY = bi.brushCoords[1];
+    var origW = bi.brushCoords[2], origH = bi.brushCoords[3];
+    var origCX = origX + origW / 2, origCY = origY + origH / 2;
+    // Inner frame center and scale
+    var innerCX = x + w / 2, innerCY = y + h / 2;
+    var sx = w / origW, sy = h / origH;
+    // Transform: move origin to original center, scale, then move to inner center
+    var transform = 'translate(' + innerCX.toFixed(2) + ',' + innerCY.toFixed(2) +
+      ') scale(' + sx.toFixed(4) + ',' + sy.toFixed(4) +
+      ') translate(' + (-origCX).toFixed(2) + ',' + (-origCY).toFixed(2) + ')';
+    return '<g transform="' + transform + '">' + bi.brushContent + '</g>';
+  }
+
+  // Toggle double frame on/off and re-render all previews
+  window.toggleDoubleFrame = function() {
+    doubleFrameOn = !doubleFrameOn;
+    var btn = document.getElementById('btn-double-frame');
+    if (doubleFrameOn) {
+      btn.classList.add('active');
+      btn.textContent = '- Double Frame';
+    } else {
+      btn.classList.remove('active');
+      btn.textContent = '+ Double Frame';
+    }
+    // Re-render all cached previews
+    grid.querySelectorAll('.card').forEach(function(card) {
+      var id = card.dataset.id;
+      var name = card.dataset.name || '?';
+      var svg = svgCache[id];
+      if (!svg) { console.log('[DF-toggle] SKIP ' + name + ' — no cache'); return; }
+      console.log('[DF-toggle] ' + name + ' svgLen=' + svg.length + ' bi=' + JSON.stringify(borderTypeCache[id] || {}));
+      var display = doubleFrameOn ? addDoubleFrame(svg, borderTypeCache[id]) : svg;
+      console.log('[DF-toggle] ' + name + ' changed=' + (display !== svg) + ' displayLen=' + display.length);
+      var previewDiv = card.querySelector('.preview');
+      previewDiv.innerHTML = '';
+      var img = SvgRenderer.createSvgImage(display);
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '160px';
+      previewDiv.appendChild(img);
+    });
+  };
+
+  // Strip "Button " prefix from all template names
+  window.stripButtonPrefix = async function() {
+    var btn = document.getElementById('btn-rename-strip');
+    // Find templates with "Button " prefix
+    var toRename = templates.filter(function(t) { return t.name.indexOf('Button ') === 0; });
+    if (toRename.length === 0) { alert('No templates with "Button " prefix found.'); return; }
+    if (!confirm('Rename ' + toRename.length + ' templates by removing "Button " prefix?')) return;
+    btn.disabled = true;
+    btn.textContent = 'Renaming...';
+    var errors = [];
+    for (var i = 0; i < toRename.length; i++) {
+      var t = toRename[i];
+      var newName = t.name.replace(/^Button\s+/, '');
+      var res = await sb.from('templates').update({ name: newName }).eq('id', t.id);
+      if (res.error) errors.push(t.name + ': ' + res.error.message);
+    }
+    if (errors.length > 0) {
+      alert('Some renames failed:\n' + errors.join('\n'));
+    } else {
+      alert('Renamed ' + toRename.length + ' templates. Reloading...');
+      location.reload();
+    }
+  };
+
+  function updateMarkedCount() {
+    document.getElementById('marked-count').textContent = markedSet.size;
+    // Update marked list
+    var listDiv = document.getElementById('marked-list');
+    if (markedSet.size === 0) {
+      listDiv.innerHTML = '<em>No templates marked.</em>';
+      return;
+    }
+    var items = [];
+    markedSet.forEach(function(id) {
+      var card = grid.querySelector('[data-id="' + id + '"]');
+      if (card) items.push(card.dataset.name);
+    });
+    items.sort();
+    listDiv.innerHTML = '<strong>Marked as redundant (' + items.length + '):</strong><br>' +
+      items.map(function(n) { return '&bull; ' + escapeHtml(n); }).join('<br>');
+  }
+
+  window.filterCards = function(filter) {
+    document.querySelectorAll('.controls button').forEach(function(b) { b.classList.remove('active'); });
+    document.getElementById('btn-' + filter).classList.add('active');
+    grid.querySelectorAll('.card').forEach(function(card) {
+      // Always hide DB doubles (they'll be generated programmatically)
+      if (card.dataset.frame === 'double') { card.style.display = 'none'; return; }
+      var show = true;
+      if (filter === 'active') show = card.dataset.active === 'true';
+      else if (filter === 'inactive') show = card.dataset.active === 'false';
+      else if (filter === 'marked') show = card.classList.contains('marked');
+      card.style.display = show ? '' : 'none';
+    });
+  };
+
+  window.toggleMarkedList = function() {
+    var listDiv = document.getElementById('marked-list');
+    listDiv.classList.toggle('visible');
+    updateMarkedCount();
+  };
+
+  window.clearMarked = function() {
+    markedSet.clear();
+    grid.querySelectorAll('.card.marked').forEach(function(c) { c.classList.remove('marked'); });
+    updateMarkedCount();
+  };
+
+  window.searchCards = function(query) {
+    var q = query.toLowerCase().trim();
+    grid.querySelectorAll('.card').forEach(function(card) {
+      if (card.dataset.frame === 'double') { card.style.display = 'none'; return; }
+      if (!q) { card.style.display = ''; return; }
+      var name = (card.dataset.name || '').toLowerCase();
+      card.style.display = name.indexOf(q) !== -1 ? '' : 'none';
+    });
+  };
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+})();
+</script>
+</body>
+</html>

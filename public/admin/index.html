@@ -137,8 +137,14 @@
 
         <!-- Template list -->
         <div class="profile-section" id="template-list-section">
-          <div class="profile-section-title">Existing Templates</div>
-          <div id="template-list"></div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div class="profile-section-title" style="margin-bottom:0;">Existing Templates</div>
+            <div style="display:flex; gap:0.5rem;">
+              <button class="btn btn-secondary btn-small" id="btn-activate-all">Activate All</button>
+              <button class="btn btn-secondary btn-small" id="btn-deactivate-all">Deactivate All</button>
+            </div>
+          </div>
+          <div id="template-list" style="margin-top:1rem;"></div>
         </div>
 
         <!-- Template Edit (hidden by default) -->
@@ -149,7 +155,7 @@
 
           <div class="profile-section">
             <div class="profile-section-title">Edit Template: <span id="edit-tpl-name-display"></span></div>
-            <div id="edit-svg-preview" style="max-width:100%; overflow:auto; border:1px solid #e5e5e5; border-radius:8px; padding:1rem; background:#fafafa; margin-bottom:1rem;"></div>
+            <div id="edit-svg-preview" style="max-width:100%; overflow:hidden; border:1px solid #e5e5e5; border-radius:8px; padding:1rem; background:#fafafa; margin-bottom:1rem;"></div>
           </div>
 
           <div class="profile-section">

@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lined Stamps Preview — All Taxonomy Combinations</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+  h1 { text-align: center; margin-bottom: 10px; }
+  .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+  .section { margin-bottom: 40px; }
+  .section h2 { margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 5px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(860px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+  }
+  .card .label {
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #333;
+  }
+  .card .pair {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    justify-content: center;
+  }
+  .card .pair .variant {
+    flex: 1;
+    max-width: 400px;
+  }
+  .card .pair .variant-label {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 4px;
+  }
+  .card svg {
+    width: 100%;
+    height: auto;
+  }
+</style>
+</head>
+<body>
+<h1>Lined Stamps Preview</h1>
+<p class="subtitle">Frame (Single / Double) &times; Edge Effect (10 types) = 20 combinations</p>
+
+<div id="preview-container"></div>
+
+<script>
+(function() {
+  // SVG generation params
+  var W = 600, H = 200;
+  var barThick = 22;
+  var barY1 = 30;                       // top bar y
+  var barY2 = H - barThick - 30;        // bottom bar y
+  var barX = 60;
+  var barW = W - 120;
+  var color = '#BE1E2D';
+  var textStr = 'STAMP TEXT';
+
+  // Double frame: inner bars offset
+  var dblGap = 8;
+  var dblThick = 8;
+
+  var edgeEffects = [
+    { id: 'plain',      label: 'Plain' },
+    { id: 'zigzag',     label: 'Zigzag' },
+    { id: 'perforated', label: 'Perforated' },
+    { id: 'wavy-gentle',label: 'Wavy Gentle' },
+    { id: 'wavy-strong',label: 'Wavy Strong' },
+    { id: 'ripped',     label: 'Ripped' },
+    { id: 'stitch-line',label: 'Stitch Line' },
+    { id: 'stitch-circle', label: 'Stitch Circle' },
+    { id: 'brush',      label: 'Brush Stroke' },
+    { id: 'dashed',     label: 'Dashed' },
+    { id: 'dotted',     label: 'Dotted' },
+    { id: 'dashdot',    label: 'Dash-Dot' }
+  ];
+
+  var frames = [
+    { id: 'single', label: 'Single' },
+    { id: 'double', label: 'Double' }
+  ];
+
+  var container = document.getElementById('preview-container');
+
+  frames.forEach(function(frame) {
+    var section = document.createElement('div');
+    section.className = 'section';
+    section.innerHTML = '<h2>' + frame.label + ' Frame</h2>';
+    var grid = document.createElement('div');
+    grid.className = 'grid';
+
+    edgeEffects.forEach(function(effect) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = '<div class="label">' + frame.label + ' &mdash; ' + effect.label + '</div>';
+      var rectSvg = buildRectSvg(frame.id, effect.id);
+      var linedSvg = buildLinedSvg(frame.id, effect.id);
+      card.innerHTML += '<div class="pair">' +
+        '<div class="variant"><div class="variant-label">RECT</div>' + rectSvg + '</div>' +
+        '<div class="variant"><div class="variant-label">LINED</div>' + linedSvg + '</div>' +
+        '</div>';
+      grid.appendChild(card);
+    });
+
+    section.appendChild(grid);
+    container.appendChild(section);
+  });
+
+  function buildLinedSvg(frameType, effectType) {
+    var defs = '';
+    var bars = '';
+    var extras = '';
+
+    // Top and bottom bar generation based on effect
+    var topBar = generateBar(barX, barY1, barW, barThick, effectType, color, 'top');
+    var botBar = generateBar(barX, barY2, barW, barThick, effectType, color, 'bottom');
+    bars = topBar.shapes + botBar.shapes;
+    defs = topBar.defs + botBar.defs;
+
+    // Double frame: add inner accent bars
+    if (frameType === 'double') {
+      var innerY1 = barY1 + barThick + dblGap;
+      var innerY2 = barY2 - dblGap - dblThick;
+      var innerTop = generateBar(barX, innerY1, barW, dblThick, effectType, color, 'top-inner');
+      var innerBot = generateBar(barX, innerY2, barW, dblThick, effectType, color, 'bot-inner');
+      bars += innerTop.shapes + innerBot.shapes;
+      defs += innerTop.defs + innerBot.defs;
+    }
+
+    // Text
+    var textY = H / 2 + 18;
+    var textEl = '<text x="' + (W / 2) + '" y="' + textY + '" ' +
+      'text-anchor="middle" fill="' + color + '" ' +
+      'font-family="Arial Black, Arial" font-weight="900" font-size="52">' +
+      textStr + '</text>';
+
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">' +
+      (defs ? '<defs>' + defs + '</defs>' : '') +
+      bars + textEl + '</svg>';
+  }
+
+  function buildRectSvg(frameType, effectType) {
+    var defs = '';
+    var rects = '';
+    var pad = 30;
+    var sw = 18;  // stroke width for rect
+    var rx = barX - pad;
+    var ry = barY1 - pad;
+    var rw = barW + pad * 2;
+    var rh = (barY2 + barThick + pad) - ry;
+
+    // Outer rect
+    var outerRect = generateRectFrame(rx, ry, rw, rh, sw, effectType, color, 'rect-outer');
+    rects = outerRect.shapes;
+    defs = outerRect.defs;
+
+    // Double frame: inner accent rect
+    if (frameType === 'double') {
+      var inset = sw / 2 + dblGap;
+      var innerRect = generateRectFrame(rx + inset, ry + inset, rw - inset * 2, rh - inset * 2, dblThick, effectType, color, 'rect-inner');
+      rects += innerRect.shapes;
+      defs += innerRect.defs;
+    }
+
+    // Text
+    var textY = H / 2 + 18;
+    var textEl = '<text x="' + (W / 2) + '" y="' + textY + '" ' +
+      'text-anchor="middle" fill="' + color + '" ' +
+      'font-family="Arial Black, Arial" font-weight="900" font-size="52">' +
+      textStr + '</text>';
+
+    var vbPad = 20;
+    return '<svg viewBox="' + (-vbPad) + ' ' + (-vbPad) + ' ' + (W + vbPad * 2) + ' ' + (H + vbPad * 2) + '" xmlns="http://www.w3.org/2000/svg">' +
+      (defs ? '<defs>' + defs + '</defs>' : '') +
+      rects + textEl + '</svg>';
+  }
+
+  function generateRectFrame(x, y, w, h, sw, effectType, col, id) {
+    var result = { shapes: '', defs: '' };
+    var halfSw = sw / 2;
+
+    switch (effectType) {
+      case 'plain':
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '"/>';
+        break;
+
+      case 'zigzag':
+        // White diamonds along edges
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '"/>';
+        result.shapes += rectEdgeDiamonds(x, y, w, h, sw, 8);
+        break;
+
+      case 'perforated':
+        // White circles along edges
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '"/>';
+        result.shapes += rectEdgeCircles(x, y, w, h, sw, 6);
+        break;
+
+      case 'wavy-gentle':
+      case 'wavy-strong':
+        var wd = (effectType === 'wavy-gentle') ? 5 : 10;
+        result.shapes = rectWavy(x, y, w, h, sw, col, wd);
+        break;
+
+      case 'ripped':
+        var filtId = 'rip-' + id;
+        result.defs = '<filter id="' + filtId + '" x="-5%" y="-5%" width="110%" height="110%">' +
+          '<feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise"/>' +
+          '<feDisplacementMap in="SourceGraphic" in2="noise" scale="6" xChannelSelector="R" yChannelSelector="R"/>' +
+          '</filter>';
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '" filter="url(#' + filtId + ')"/>';
+        break;
+
+      case 'stitch-line':
+      case 'stitch-circle':
+        var sType = (effectType === 'stitch-line') ? 'line' : 'circle';
+        result.shapes = rectStitch(x, y, w, h, sw, col, sType);
+        break;
+
+      case 'brush':
+        result.shapes = rectBrush(x, y, w, h, sw, col);
+        break;
+
+      case 'dashed':
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '" stroke-dasharray="' + (sw * 2) + ' ' + (sw * 0.8) + '"/>';
+        break;
+
+      case 'dotted':
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-dasharray="0.1 ' + (sw * 1.4) + '"/>';
+        break;
+
+      case 'dashdot':
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-dasharray="' + (sw * 2.5) + ' ' + (sw * 0.6) + ' 0.1 ' + (sw * 0.6) + '"/>';
+        break;
+    }
+
+    return result;
+  }
+
+  // --- Rect edge helpers ---
+
+  function rectEdgeCircles(x, y, w, h, sw, r) {
+    var shapes = '';
+    var spacing = r * 3;
+    // Top & bottom edges
+    for (var cx = x + spacing; cx < x + w - spacing / 2; cx += spacing) {
+      shapes += '<circle cx="' + cx + '" cy="' + y + '" r="' + r + '" fill="white"/>';
+      shapes += '<circle cx="' + cx + '" cy="' + (y + h) + '" r="' + r + '" fill="white"/>';
+    }
+    // Left & right edges
+    for (var cy = y + spacing; cy < y + h - spacing / 2; cy += spacing) {
+      shapes += '<circle cx="' + x + '" cy="' + cy + '" r="' + r + '" fill="white"/>';
+      shapes += '<circle cx="' + (x + w) + '" cy="' + cy + '" r="' + r + '" fill="white"/>';
+    }
+    return shapes;
+  }
+
+  function rectEdgeDiamonds(x, y, w, h, sw, size) {
+    var shapes = '';
+    var spacing = size * 3;
+    var s = size;
+    function diamond(cx, cy) {
+      return '<polygon points="' + cx + ',' + (cy - s) + ' ' + (cx + s) + ',' + cy + ' ' + cx + ',' + (cy + s) + ' ' + (cx - s) + ',' + cy + '" fill="white"/>';
+    }
+    for (var cx = x + spacing; cx < x + w - spacing / 2; cx += spacing) {
+      shapes += diamond(cx, y);
+      shapes += diamond(cx, y + h);
+    }
+    for (var cy = y + spacing; cy < y + h - spacing / 2; cy += spacing) {
+      shapes += diamond(x, cy);
+      shapes += diamond(x + w, cy);
+    }
+    return shapes;
+  }
+
+  function rectWavy(x, y, w, h, sw, col, depth) {
+    // Simplified wavy rect as a closed path with wavy edges
+    var segW = 30, segH = 30;
+    var numH = Math.ceil(w / segW);
+    var numV = Math.ceil(h / segH);
+    if (numH % 2 === 0) numH++;
+    if (numV % 2 === 0) numV++;
+    var aSegW = w / numH;
+    var aSegH = h / numV;
+    var d = depth;
+
+    var path = 'M' + x + ',' + y;
+    // Top edge (left to right)
+    for (var i = 0; i < numH; i++) {
+      var sx = x + i * aSegW;
+      var fl = (i % 2 === 0) ? -1 : 1;
+      path += ' C' + (sx + aSegW * 0.3).toFixed(1) + ',' + (y + fl * d).toFixed(1) + ' ' + (sx + aSegW * 0.7).toFixed(1) + ',' + (y + fl * d).toFixed(1) + ' ' + (sx + aSegW).toFixed(1) + ',' + y;
+    }
+    // Right edge (top to bottom)
+    for (var i = 0; i < numV; i++) {
+      var sy = y + i * aSegH;
+      var fl = (i % 2 === 0) ? 1 : -1;
+      path += ' C' + (x + w + fl * d).toFixed(1) + ',' + (sy + aSegH * 0.3).toFixed(1) + ' ' + (x + w + fl * d).toFixed(1) + ',' + (sy + aSegH * 0.7).toFixed(1) + ' ' + (x + w).toFixed(1) + ',' + (sy + aSegH).toFixed(1);
+    }
+    // Bottom edge (right to left)
+    for (var i = 0; i < numH; i++) {
+      var sx = x + w - i * aSegW;
+      var fl = (i % 2 === 0) ? 1 : -1;
+      path += ' C' + (sx - aSegW * 0.3).toFixed(1) + ',' + (y + h + fl * d).toFixed(1) + ' ' + (sx - aSegW * 0.7).toFixed(1) + ',' + (y + h + fl * d).toFixed(1) + ' ' + (sx - aSegW).toFixed(1) + ',' + (y + h);
+    }
+    // Left edge (bottom to top)
+    for (var i = 0; i < numV; i++) {
+      var sy = y + h - i * aSegH;
+      var fl = (i % 2 === 0) ? -1 : 1;
+      path += ' C' + (x + fl * d).toFixed(1) + ',' + (sy - aSegH * 0.3).toFixed(1) + ' ' + (x + fl * d).toFixed(1) + ',' + (sy - aSegH * 0.7).toFixed(1) + ' ' + x + ',' + (sy - aSegH).toFixed(1);
+    }
+    path += ' Z';
+    return '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '" stroke-linejoin="round"/>';
+  }
+
+  function rectStitch(x, y, w, h, sw, col, type) {
+    var shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + col + '" stroke-width="1" opacity="0.3"/>';
+    var spacing = (type === 'line') ? 18 : 12;
+    var size = (type === 'line') ? 10 : 4;
+    // Top & bottom
+    for (var cx = x + spacing; cx < x + w - spacing / 2; cx += spacing) {
+      if (type === 'line') {
+        shapes += '<rect x="' + (cx - size / 2) + '" y="' + (y - 3) + '" width="' + size + '" height="6" fill="' + col + '"/>';
+        shapes += '<rect x="' + (cx - size / 2) + '" y="' + (y + h - 3) + '" width="' + size + '" height="6" fill="' + col + '"/>';
+      } else {
+        shapes += '<circle cx="' + cx + '" cy="' + y + '" r="' + size + '" fill="' + col + '"/>';
+        shapes += '<circle cx="' + cx + '" cy="' + (y + h) + '" r="' + size + '" fill="' + col + '"/>';
+      }
+    }
+    // Left & right
+    for (var cy = y + spacing; cy < y + h - spacing / 2; cy += spacing) {
+      if (type === 'line') {
+        shapes += '<rect x="' + (x - 3) + '" y="' + (cy - size / 2) + '" width="6" height="' + size + '" fill="' + col + '"/>';
+        shapes += '<rect x="' + (x + w - 3) + '" y="' + (cy - size / 2) + '" width="6" height="' + size + '" fill="' + col + '"/>';
+      } else {
+        shapes += '<circle cx="' + x + '" cy="' + cy + '" r="' + size + '" fill="' + col + '"/>';
+        shapes += '<circle cx="' + (x + w) + '" cy="' + cy + '" r="' + size + '" fill="' + col + '"/>';
+      }
+    }
+    return shapes;
+  }
+
+  function rectBrush(x, y, w, h, sw, col) {
+    var shapes = '';
+    // 4 sides as rough brush strokes
+    var sides = [
+      [x, y, x + w, y],         // top
+      [x + w, y, x + w, y + h], // right
+      [x + w, y + h, x, y + h], // bottom
+      [x, y + h, x, y]          // left
+    ];
+    sides.forEach(function(s) {
+      for (var i = 0; i < 3; i++) {
+        var off = (Math.random() - 0.5) * 4;
+        var strokeW = sw * (0.3 + Math.random() * 0.5);
+        var opacity = 0.5 + Math.random() * 0.5;
+        var isH = (s[1] === s[3]);
+        var x1 = s[0] + (isH ? 0 : off);
+        var y1 = s[1] + (isH ? off : 0);
+        var x2 = s[2] + (isH ? 0 : off);
+        var y2 = s[3] + (isH ? off : 0);
+        shapes += '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="' + col + '" stroke-width="' + strokeW.toFixed(1) + '" stroke-linecap="round" opacity="' + opacity.toFixed(2) + '"/>';
+      }
+    });
+    return shapes;
+  }
+
+  function generateBar(x, y, w, h, effectType, col, id) {
+    var result = { shapes: '', defs: '' };
+
+    switch (effectType) {
+      case 'plain':
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + col + '"/>';
+        break;
+
+      case 'zigzag':
+        result.shapes = zigzagBar(x, y, w, h, col, 8);
+        break;
+
+      case 'perforated':
+        result.shapes = perforatedBar(x, y, w, h, col, 6);
+        break;
+
+      case 'wavy-gentle':
+        result.shapes = wavyBar(x, y, w, h, col, 5, id);
+        break;
+
+      case 'wavy-strong':
+        result.shapes = wavyBar(x, y, w, h, col, 10, id);
+        break;
+
+      case 'ripped':
+        var filtId = 'rip-' + id;
+        result.defs = '<filter id="' + filtId + '" x="-5%" y="-30%" width="110%" height="160%">' +
+          '<feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise"/>' +
+          '<feDisplacementMap in="SourceGraphic" in2="noise" scale="8" xChannelSelector="R" yChannelSelector="R"/>' +
+          '</filter>';
+        result.shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + col + '" filter="url(#' + filtId + ')"/>';
+        break;
+
+      case 'stitch-line':
+        result.shapes = stitchBar(x, y, w, h, col, 'line');
+        break;
+
+      case 'stitch-circle':
+        result.shapes = stitchBar(x, y, w, h, col, 'circle');
+        break;
+
+      case 'brush':
+        result.shapes = brushBar(x, y, w, h, col, id);
+        break;
+
+      case 'dashed':
+        result.shapes = '<line x1="' + x + '" y1="' + (y + h / 2) + '" x2="' + (x + w) + '" y2="' + (y + h / 2) + '" ' +
+          'stroke="' + col + '" stroke-width="' + h + '" stroke-dasharray="' + (h * 2) + ' ' + (h * 0.8) + '"/>';
+        break;
+
+      case 'dotted':
+        result.shapes = '<line x1="' + x + '" y1="' + (y + h / 2) + '" x2="' + (x + w) + '" y2="' + (y + h / 2) + '" ' +
+          'stroke="' + col + '" stroke-width="' + h + '" stroke-linecap="round" stroke-dasharray="0.1 ' + (h * 1.4) + '"/>';
+        break;
+
+      case 'dashdot':
+        result.shapes = '<line x1="' + x + '" y1="' + (y + h / 2) + '" x2="' + (x + w) + '" y2="' + (y + h / 2) + '" ' +
+          'stroke="' + col + '" stroke-width="' + h + '" stroke-linecap="round" stroke-dasharray="' + (h * 2.5) + ' ' + (h * 0.6) + ' 0.1 ' + (h * 0.6) + '"/>';
+        break;
+    }
+
+    return result;
+  }
+
+  // --- Edge effect generators ---
+
+  function zigzagBar(x, y, w, h, col, toothSize) {
+    // Filled bar with zigzag top and bottom edges
+    var ts = toothSize;
+    var numTeeth = Math.floor(w / (ts * 2));
+    var actualW = numTeeth * ts * 2;
+    var startX = x + (w - actualW) / 2;
+
+    var topEdge = 'M' + x + ',' + (y + h);
+    topEdge += ' L' + x + ',' + (y + ts);
+    for (var i = 0; i < numTeeth; i++) {
+      topEdge += ' L' + (startX + i * ts * 2 + ts) + ',' + y;
+      topEdge += ' L' + (startX + (i + 1) * ts * 2) + ',' + (y + ts);
+    }
+    topEdge += ' L' + (x + w) + ',' + (y + ts);
+    topEdge += ' L' + (x + w) + ',' + (y + h);
+
+    var botEdge = 'M' + x + ',' + y;
+    botEdge += ' L' + x + ',' + (y + h - ts);
+    for (var i = 0; i < numTeeth; i++) {
+      botEdge += ' L' + (startX + i * ts * 2 + ts) + ',' + (y + h);
+      botEdge += ' L' + (startX + (i + 1) * ts * 2) + ',' + (y + h - ts);
+    }
+    botEdge += ' L' + (x + w) + ',' + (y + h - ts);
+    botEdge += ' L' + (x + w) + ',' + y;
+
+    return '<path d="' + topEdge + ' Z" fill="' + col + '"/>' +
+           '<path d="' + botEdge + ' Z" fill="' + col + '"/>';
+  }
+
+  function perforatedBar(x, y, w, h, col, radius) {
+    // Solid bar with circular cutouts along edges
+    var r = radius;
+    var spacing = r * 3;
+    var shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + col + '"/>';
+    var cx = x + spacing;
+    while (cx < x + w - spacing / 2) {
+      // Top edge circles
+      shapes += '<circle cx="' + cx + '" cy="' + y + '" r="' + r + '" fill="white"/>';
+      // Bottom edge circles
+      shapes += '<circle cx="' + cx + '" cy="' + (y + h) + '" r="' + r + '" fill="white"/>';
+      cx += spacing;
+    }
+    return shapes;
+  }
+
+  function wavyBar(x, y, w, h, col, depth, id) {
+    // Bar with wavy top and bottom edges
+    var segW = 30;
+    var numSegs = Math.ceil(w / segW);
+    if (numSegs % 2 === 0) numSegs++;
+    var actualSegW = w / numSegs;
+    var d = depth;
+
+    // Top wavy edge
+    var topPath = 'M' + x + ',' + (y + h);
+    topPath += ' L' + x + ',' + (y + d);
+    for (var i = 0; i < numSegs; i++) {
+      var sx = x + i * actualSegW;
+      var fl = (i % 2 === 0) ? 1 : -1;
+      var cp1x = (sx + actualSegW * 0.3).toFixed(1);
+      var cp2x = (sx + actualSegW * 0.7).toFixed(1);
+      var endx = (sx + actualSegW).toFixed(1);
+      var cpy = (y + d - fl * d).toFixed(1);
+      topPath += ' C' + cp1x + ',' + cpy + ' ' + cp2x + ',' + cpy + ' ' + endx + ',' + (y + d).toFixed(1);
+    }
+    topPath += ' L' + (x + w) + ',' + (y + h) + ' Z';
+
+    // Bottom wavy edge
+    var botPath = 'M' + x + ',' + y;
+    botPath += ' L' + x + ',' + (y + h - d);
+    for (var i = 0; i < numSegs; i++) {
+      var sx = x + i * actualSegW;
+      var fl = (i % 2 === 0) ? -1 : 1;
+      var cp1x = (sx + actualSegW * 0.3).toFixed(1);
+      var cp2x = (sx + actualSegW * 0.7).toFixed(1);
+      var endx = (sx + actualSegW).toFixed(1);
+      var cpy = (y + h - d - fl * d).toFixed(1);
+      botPath += ' C' + cp1x + ',' + cpy + ' ' + cp2x + ',' + cpy + ' ' + endx + ',' + (y + h - d).toFixed(1);
+    }
+    botPath += ' L' + (x + w) + ',' + y + ' Z';
+
+    return '<path d="' + topPath + '" fill="' + col + '"/>' +
+           '<path d="' + botPath + '" fill="' + col + '"/>';
+  }
+
+  function stitchBar(x, y, w, h, col, type) {
+    // Thin bar with stitch shapes along it
+    var shapes = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + col + '" opacity="0.3"/>';
+    var spacing = (type === 'line') ? 20 : 12;
+    var size = (type === 'line') ? h * 1.2 : h * 0.6;
+    var cx = x + spacing;
+    var cy = y + h / 2;
+
+    while (cx < x + w - spacing / 2) {
+      if (type === 'line') {
+        // Dashes along the bar
+        shapes += '<rect x="' + (cx - size / 2) + '" y="' + (cy - h * 0.3) + '" width="' + size + '" height="' + (h * 0.6) + '" fill="' + col + '"/>';
+      } else {
+        // Circles
+        shapes += '<circle cx="' + cx + '" cy="' + cy + '" r="' + size + '" fill="' + col + '"/>';
+      }
+      cx += spacing;
+    }
+    return shapes;
+  }
+
+  function brushBar(x, y, w, h, col, id) {
+    // Rough brush-stroke bar using multiple offset sub-bars
+    var shapes = '';
+    var numStrokes = 5;
+    for (var i = 0; i < numStrokes; i++) {
+      var offY = (Math.random() - 0.5) * h * 0.4;
+      var offX = (Math.random() - 0.5) * 4;
+      var sw = h * (0.15 + Math.random() * 0.25);
+      var opacity = 0.5 + Math.random() * 0.5;
+      shapes += '<line x1="' + (x + offX) + '" y1="' + (y + h / 2 + offY) + '" ' +
+        'x2="' + (x + w + offX) + '" y2="' + (y + h / 2 + offY) + '" ' +
+        'stroke="' + col + '" stroke-width="' + sw.toFixed(1) + '" ' +
+        'stroke-linecap="round" opacity="' + opacity.toFixed(2) + '"/>';
+    }
+    return shapes;
+  }
+
+})();
+</script>
+</body>
+</html>

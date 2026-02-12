@@ -1651,15 +1651,8 @@ const SvgRenderer = {
               var brushTransform = 'translate(' + newBCX.toFixed(2) + ',' + newBCY.toFixed(2) + ') scale(' + bsx.toFixed(4) + ',' + bsy.toFixed(4) + ') translate(' + (-origBCX).toFixed(2) + ',' + (-origBCY).toFixed(2) + ')';
               result = result.replace(/(<g[^>]*data-brush-border=["'][^"']*["'])([^>]*>)/, '$1 transform="' + brushTransform + '"$2');
 
-              // Rotated copy for vertical edges
-              var brushMatchV = result.match(/data-brush-border-v=["']([^"']+)["']/);
-              if (brushMatchV) {
-                // Swap W↔H to account for 90° rotation
-                var rotSx = (newRectWidth / origBH) * overScale;
-                var rotSy = (newRectHeight / origBW) * overScale;
-                var rotTransform = 'translate(' + newBCX.toFixed(2) + ',' + newBCY.toFixed(2) + ') scale(' + rotSx.toFixed(4) + ',' + rotSy.toFixed(4) + ') rotate(90) translate(' + (-origBCX).toFixed(2) + ',' + (-origBCY).toFixed(2) + ')';
-                result = result.replace(/(<g[^>]*data-brush-border-v=["'][^"']*["'])([^>]*>)/, '$1 transform="' + rotTransform + '"$2');
-              }
+              // Hide vertical brush group — rotated horizontal paths don't produce natural verticals
+              result = result.replace(/<g[^>]*data-brush-border-v=["'][^"']*["'][^>]*>[\s\S]*?<\/g>/, '');
             }
 
             // ---- FIT VIEWBOX TO CONTENT ----
