@@ -320,6 +320,31 @@
     }
   }
 
+  // ---- Family ordering (matches all-templates-preview.html) ----
+  function getFamilyOrder(name) {
+    var n = name.toLowerCase();
+    if (n.indexOf('brushstroke') !== -1) return 1;
+    if (n.indexOf('wavy') !== -1) return 2;
+    if (n.indexOf('ripped') !== -1) return 3;
+    if (n.indexOf('stitch line') !== -1) return 4;
+    if (n.indexOf('stitch circle') !== -1) return 5;
+    if (n.indexOf('stitch square') !== -1) return 6;
+    if (n.indexOf('soft round') !== -1) return 7;
+    if (n.indexOf('strong round') !== -1) return 8;
+    if (n.indexOf('straight') !== -1) return 9;
+    if (n.indexOf('strong perforated') !== -1) return 10;
+    if (n.indexOf('spaced perforated') !== -1) return 11;
+    if (n.indexOf('zigzag') !== -1) return 12;
+    return 99;
+  }
+
+  function getVariantOrder(name) {
+    var n = name.toLowerCase();
+    if (n.indexOf('full') !== -1) return 1;
+    if (n.indexOf('empty') !== -1) return 2;
+    return 3;
+  }
+
   // ---- Template List ----
   async function loadTemplateList() {
     var listDiv = document.getElementById('template-list');
@@ -335,14 +360,30 @@
       if (result.error) throw result.error;
       var templates = result.data || [];
 
+      // Sort by family, then Full before Empty
+      templates.sort(function (a, b) {
+        var fa = getFamilyOrder(a.name);
+        var fb = getFamilyOrder(b.name);
+        if (fa !== fb) return fa - fb;
+        return getVariantOrder(a.name) - getVariantOrder(b.name);
+      });
+
       if (templates.length === 0) {
         listDiv.innerHTML = '<p style="color:#888;">No templates uploaded yet.</p>';
         return;
       }
 
+      var lastFamily = -1;
       listDiv.innerHTML = templates.map(function (tpl) {
         var publicUrl = tpl.svg_path ? sb.storage.from('templates').getPublicUrl(tpl.svg_path).data.publicUrl : '';
-        return '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid #f0f0f0;">' +
+        var family = getFamilyOrder(tpl.name);
+        var header = '';
+        if (family !== lastFamily) {
+          lastFamily = family;
+          var familyNames = { 1: 'Brushstroke', 2: 'Wavy', 3: 'Ripped Paper', 4: 'Stitch Line', 5: 'Stitch Circle', 6: 'Stitch Square', 7: 'Soft Round Corners', 8: 'Strong Round Corners', 9: 'Straight Corners', 10: 'Strong Perforated', 11: 'Spaced Perforated', 12: 'Zigzag' };
+          header = '<div style="padding:0.6rem 0 0.3rem; margin-top:0.5rem; font-size:0.8rem; font-weight:700; color:#4f46e5; text-transform:uppercase; letter-spacing:0.05em; border-top:2px solid #e0e0e0;">' + (familyNames[family] || 'Other') + '</div>';
+        }
+        return header + '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid #f0f0f0;">' +
           '<div class="tpl-name-hover" style="position:relative;cursor:pointer;" data-svg-url="' + escapeHtml(publicUrl) + '" data-tpl-id="' + tpl.id + '">' +
             '<strong style="color:#4f46e5;text-decoration:underline;">' + escapeHtml(tpl.name) + '</strong> ' +
             '<span style="font-size:0.75rem; color:#888;">(' + (tpl.shape || '?') + ' / ' + (tpl.object_type || '?') + ')</span>' +

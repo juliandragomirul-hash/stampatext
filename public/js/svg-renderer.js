@@ -14,7 +14,6 @@ const SvgRenderer = {
   _fontMap: {
     'Oswald':       { url: '/fonts/Oswald-Medium.ttf',        format: 'truetype' },
     'AntonSC':      { url: '/fonts/AntonSC-Regular.ttf',      format: 'truetype' },
-    'HussarBold':   { url: '/fonts/HussarBd.otf',             format: 'opentype' },
     'RobotoBlack':  { url: '/fonts/Roboto-Black.ttf',         format: 'truetype' },
     'AbrilFatface': { url: '/fonts/AbrilFatface-Regular.ttf',  format: 'truetype' },
     'AlfaSlabOne':  { url: '/fonts/AlfaSlabOne-Regular.ttf',  format: 'truetype' },
@@ -157,10 +156,6 @@ const SvgRenderer = {
       { from: "'AntonSC-Regular'", to: "'AntonSC'", weight: '400' },
       { from: "'Anton SC'", to: "'AntonSC'", weight: '400' },
       { from: "'AntonSC'", to: "'AntonSC'", weight: '400' },
-      // Hussar Bold
-      { from: "'HussarBd'", to: "'HussarBold'", weight: '700' },
-      { from: "'Hussar Bold'", to: "'HussarBold'", weight: '700' },
-      { from: "'HussarBold'", to: "'HussarBold'", weight: '700' },
       // Abril Fatface
       { from: "'AbrilFatface-Regular'", to: "'AbrilFatface'", weight: '400' },
       { from: "'Abril Fatface'", to: "'AbrilFatface'", weight: '400' },
@@ -570,9 +565,9 @@ const SvgRenderer = {
    */
   _generateWavyBorder: function(x, y, w, h, color, strokeW, variant, filled) {
     var F = function(n) { return n.toFixed(2); };
-    var scWidth = 35;
-    var depth = (variant === 'strong') ? 12 : 7;
-    strokeW = 20;  // fixed — wave shape tuned for sw=20
+    var scWidth = (variant === 'strong') ? 80 : 35;
+    var depth = (variant === 'strong') ? 20 : 7;
+    strokeW = 40;
 
     var numH = Math.max(3, Math.round(w / scWidth));
     if (numH % 2 === 0) numH++;   // force ODD for smooth corners
@@ -1247,7 +1242,6 @@ const SvgRenderer = {
       '<style>' +
       '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
       '@font-face{font-family:"AntonSC";src:url("/fonts/AntonSC-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"HussarBold";src:url("/fonts/HussarBd.otf") format("opentype");font-weight:700;}' +
       '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
       '@font-face{font-family:"AbrilFatface";src:url("/fonts/AbrilFatface-Regular.ttf") format("truetype");font-weight:400;}' +
       '@font-face{font-family:"AlfaSlabOne";src:url("/fonts/AlfaSlabOne-Regular.ttf") format("truetype");font-weight:400;}' +
@@ -1338,6 +1332,11 @@ const SvgRenderer = {
               if (widthAtMinFont > effectiveMaxWidth) {
                 newScaleX = originalScaleX * (effectiveMaxWidth / widthAtMinFont);
               }
+            }
+
+            // Stitch shapes extend far outside the rect — scale up text+rect to compensate
+            if (/data-stitch=/i.test(svgString)) {
+              newFontSize *= 1.15;
             }
 
             // Apply font-size change in the string
@@ -1493,6 +1492,24 @@ const SvgRenderer = {
                   na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
                   if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
                   if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
+                  // Adjust rx/ry so inner stroke edge is also rounded
+                  var rxMatch = na.match(/\brx=["']([\d.]+)["']/);
+                  var ryMatch = na.match(/\bry=["']([\d.]+)["']/);
+                  var swForRx = na.match(/stroke-width=["']([\d.]+)["']/);
+                  if (rxMatch && swForRx) {
+                    var origRx = parseFloat(rxMatch[1]);
+                    var halfSw = parseFloat(swForRx[1]) / 2;
+                    var newRx;
+                    if (origRx < halfSw) {
+                      // Small rx (Soft) — boost so inner edge is rounded
+                      newRx = (halfSw * 3).toFixed(1);
+                    } else {
+                      // Already rounded (Strong) — boost further to differentiate
+                      newRx = (origRx + halfSw * 3).toFixed(1);
+                    }
+                    na = na.replace(/\brx=["'][\d.]+["']/, 'rx="' + newRx + '"');
+                    if (ryMatch) na = na.replace(/\bry=["'][\d.]+["']/, 'ry="' + newRx + '"');
+                  }
                   // Capture border shape data from outer rect
                   var borderAttr = attrs.match(/data-border=["']([^"']+)["']/);
                   if (borderAttr) {
@@ -1527,8 +1544,8 @@ const SvgRenderer = {
                       color: stitchColorMatch ? stitchColorMatch[1] : '#000000'
                     };
                     na = na.replace(/\s*data-stitch=["'][^"']+["']/, '');
-                    // Remove stroke — stitch shapes ARE the border
-                    na = na.replace(/\s*stroke=["'][^"']*["']/, '');
+                    // Hide stroke — stitch shapes ARE the border (keep attr for viewBox bounds scan)
+                    na = na.replace(/stroke=["'][^"']*["']/, 'stroke="none"');
                     na = na.replace(/\s*stroke-width=["'][^"']*["']/, '');
                     na = na.replace(/\s*stroke-miterlimit=["'][^"']*["']/, '');
                   }
@@ -1579,6 +1596,8 @@ const SvgRenderer = {
               var bParts = borderShapeData.type.split('-');
               var bShape = bParts[0];
               var bRadius = parseFloat(bParts[1]) || 15;
+              // Double diamond size for zigzag only (don't affect circle/perforated)
+              if (bShape === 'diamond') bRadius = bRadius * 1.5;
               var bSpacingMult = bParts[2] ? parseFloat(bParts[2]) : 2.5;
               var shapesHtml = SvgRenderer._generateBorderShapes(
                 borderShapeData.x, borderShapeData.y,
@@ -1591,8 +1610,8 @@ const SvgRenderer = {
             // ---- STITCH BORDER (line/square/circle shapes) ----
             if (stitchData) {
               var sType = stitchData.type;
-              var sSize = 20;
-              var sSpacing = (sType === 'line') ? 20 : 10; // normal for line, tight for circle/square
+              var sSize = (sType === 'circle') ? 50 : 40;
+              var sSpacing = (sType === 'circle') ? 20 : (sType === 'line') ? 30 : 20;
               // Offset shapes outward so they're clearly outside the fill
               var sOffset = sSize * 0.75;
               var stitchHtml = SvgRenderer._generateStitchShapes(
@@ -1650,6 +1669,30 @@ const SvgRenderer = {
               var newBCY = newRectY + newRectHeight / 2;
               var brushTransform = 'translate(' + newBCX.toFixed(2) + ',' + newBCY.toFixed(2) + ') scale(' + bsx.toFixed(4) + ',' + bsy.toFixed(4) + ') translate(' + (-origBCX).toFixed(2) + ',' + (-origBCY).toFixed(2) + ')';
               result = result.replace(/(<g[^>]*data-brush-border=["'][^"']*["'])([^>]*>)/, '$1 transform="' + brushTransform + '"$2');
+              // Duplicate brush group for denser/stronger strokes
+              var brushGroupMatch = result.match(/<g[^>]*data-brush-border=["'][^"']*["'][^>]*>([\s\S]*?)<\/g>/);
+              if (brushGroupMatch) {
+                var dupeGroup = '<g transform="' + brushTransform + '">' + brushGroupMatch[1].trim() + '</g>';
+                result = result.replace(/<g[^>]*data-brush-border=["'][^"']*["'][^>]*>[\s\S]*?<\/g>/, '$&' + dupeGroup + dupeGroup);
+              }
+              // Shrink the colored rect so brush strokes are exposed at edges
+              var shrink = 70;
+              var shrunkX = (newRectX + shrink).toFixed(2);
+              var shrunkY = (newRectY + shrink).toFixed(2);
+              var shrunkW = (newRectWidth - shrink * 2).toFixed(2);
+              var shrunkH = (newRectHeight - shrink * 2).toFixed(2);
+              // Find and resize the colored rect
+              var colorRectRe = /<rect([^>]*fill=["']#[A-Fa-f0-9]{6}["'][^>]*)\/?\>/i;
+              var crMatch = result.match(colorRectRe);
+              if (crMatch && !/fill=["']#FFF/i.test(crMatch[1]) && !/fill=["']white/i.test(crMatch[1])) {
+                var oldRect = crMatch[0];
+                var newRect = oldRect
+                  .replace(/\bx=["'][^"']*["']/, 'x="' + shrunkX + '"')
+                  .replace(/\by=["'][^"']*["']/, 'y="' + shrunkY + '"')
+                  .replace(/\bwidth=["'][^"']*["']/, 'width="' + shrunkW + '"')
+                  .replace(/\bheight=["'][^"']*["']/, 'height="' + shrunkH + '"');
+                result = result.replace(oldRect, newRect);
+              }
 
               // Hide vertical brush group — rotated horizontal paths don't produce natural verticals
               result = result.replace(/<g[^>]*data-brush-border-v=["'][^"']*["'][^>]*>[\s\S]*?<\/g>/, '');
@@ -1669,6 +1712,8 @@ const SvgRenderer = {
               rectMatches.forEach(function(rectTag) {
                 // Skip display:none
                 if (rectTag.match(/display\s*[:=]\s*["']?none/i)) return;
+                // Skip generated stitch shape rects (fill-only, no stroke)
+                if (!rectTag.match(/\bstroke=/i)) return;
                 // Skip background rects (white fill at origin)
                 var isWhiteFill = rectTag.match(/fill=["']#FFFFFF["']/i) || rectTag.match(/fill=["']white["']/i);
                 var xMatch = rectTag.match(/\bx=["']([\d.\-]+)["']/);
@@ -1698,10 +1743,13 @@ const SvgRenderer = {
                   if (swMatch) maxStrokeWidth = Math.max(maxStrokeWidth, parseFloat(swMatch[1]));
                 });
                 var strokePadding = maxStrokeWidth / 2 + 15;
-                // Brush border paths extend further — need extra padding
-                if (brushMatch) strokePadding = Math.max(strokePadding, 60);
+                // Brush border paths extend further — padding scales with overScale
+                if (brushMatch) {
+                  var brushExtent = (overScale - 1) * Math.max(origBW, origBH) / 2 + 30;
+                  strokePadding = Math.max(strokePadding, brushExtent);
+                }
                 // Stitch shapes extend beyond rect edge (offset + size/2)
-                if (stitchData) strokePadding = Math.max(strokePadding, 40);
+                if (stitchData) strokePadding = Math.max(strokePadding, 70);
                 // Wavy border arcs extend beyond rect edge (depth + strokeW/2)
                 if (wavyData) strokePadding = Math.max(strokePadding, 35);
 

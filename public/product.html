@@ -52,6 +52,16 @@
 
         <div class="filter-section">
           <div class="filter-section-header">
+            <span class="filter-section-title">FRAME</span>
+          </div>
+          <div class="product-toggle-group" id="product-frame-toggle">
+            <button class="product-toggle-btn active" data-value="single">Single</button>
+            <button class="product-toggle-btn" data-value="double">Double</button>
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-section-header">
             <span class="filter-section-title">TILT</span>
           </div>
           <div class="product-toggle-group" id="product-tilt-toggle">
@@ -167,7 +177,6 @@
       var AVAILABLE_FONTS = [
         { key: 'Oswald',       label: 'Oswald' },
         { key: 'AntonSC',      label: 'Anton SC' },
-        { key: 'HussarBold',   label: 'Hussar Bold' },
         { key: 'RobotoBlack',  label: 'Roboto Black' },
         { key: 'AbrilFatface', label: 'Abril Fatface' },
         { key: 'AlfaSlabOne',  label: 'Alfa Slab One' },
@@ -180,8 +189,7 @@
       ];
 
       var FONT_WEIGHTS = {
-        'Oswald': '500', 'AntonSC': '400', 'HussarBold': '700',
-        'RobotoBlack': '900',
+        'Oswald': '500', 'AntonSC': '400', 'RobotoBlack': '900',
         'AbrilFatface': '400', 'AlfaSlabOne': '400',
         'Bangers': '400', 'SpecialElite': '400', 'ArmyRust': '400',
         'Gunplay': '400', 'Agbalumo': '400',
@@ -194,17 +202,16 @@
       // lineHeightMul: multiplier on default 1.1 line-height for tspan dy
       // baselineShift: vertical offset as fraction of font-size (positive = down)
       var FONT_CONFIG = {
-        'Oswald':       { scale: 1.00, baselineShift: 0.02 },
-        'AntonSC':      { scale: 0.97, baselineShift: 0.06 },
-        'HussarBold':   { scale: 0.72, baselineShift: 0.14, wordSpacing: 0.20 },
-        'RobotoBlack':  { scale: 0.84, baselineShift: 0.06, wordSpacing: 0.20 },
-        'AbrilFatface': { scale: 0.83, baselineShift: 0.06, wordSpacing: 0.20 },
-        'AlfaSlabOne':  { scale: 0.68, baselineShift: 0.15, letterSpacing: 0.04 },
-        'Bangers':      { scale: 1.10, letterSpacing: 0.06, baselineShift: -0.04, horizontalShift: -0.06 },
-        'SpecialElite': { scale: 0.92, baselineShift: -0.01 },
-        'ArmyRust':     { scale: 1.15, letterSpacing: 0.04, lineHeightMul: 0.85, baselineShift: -0.18 },
-        'Gunplay':      { scale: 0.87, baselineShift: 0.08, horizontalShift: -0.02 },
-        'Agbalumo':     { scale: 0.82, baselineShift: 0.08, letterSpacing: 0.03 },
+        'Oswald':       { scale: 1.20, baselineShift: 0.02 },
+        'AntonSC':      { scale: 1.21, baselineShift: 0.04 },
+        'RobotoBlack':  { scale: 0.97, baselineShift: -0.02, wordSpacing: 0.20 },
+        'AbrilFatface': { scale: 0.88, baselineShift: -0.02, wordSpacing: 0.20 },
+        'AlfaSlabOne':  { scale: 0.76, baselineShift: 0.00, letterSpacing: 0.04 },
+        'Bangers':      { scale: 1.25, letterSpacing: 0.06, baselineShift: -0.04, horizontalShift: -0.03 },
+        'SpecialElite': { scale: 1.06, baselineShift: -0.04 },
+        'ArmyRust':     { scale: 1.30, letterSpacing: 0.04, lineHeightMul: 0.85, baselineShift: -0.12 },
+        'Gunplay':      { scale: 1.02, baselineShift: 0.01, horizontalShift: -0.02 },
+        'Agbalumo':     { scale: 0.91, baselineShift: -0.03, letterSpacing: 0.03 },
         'BebasNeue':    { scale: 1.00 }
       };
 
@@ -319,6 +326,8 @@
       var currentFont = '';
       var currentTilt = 0;
       var currentTexture = '';
+      var currentFrame = 'single';
+      var borderInfo = null;
       var isProcessing = false;
 
       // ---- Parse URL params ----
@@ -330,6 +339,7 @@
       currentFont = params.get('font') || '';
       currentTilt = parseInt(params.get('tilt'), 10) || 0;
       currentTexture = params.get('texture') || '';
+      currentFrame = params.get('frame') || 'single';
 
       if (!templateId) {
         document.getElementById('product-preview').innerHTML =
@@ -438,6 +448,7 @@
       // ---- Build UI ----
       buildFontPicker();
       buildColorPalette();
+      setToggleState('product-frame-toggle', currentFrame);
       setToggleState('product-tilt-toggle', String(currentTilt));
       setToggleState('product-texture-toggle', currentTexture);
       await renderPreview();
@@ -465,6 +476,18 @@
         });
         swatch.classList.add('selected');
         currentColor = swatch.dataset.color;
+        renderPreview();
+      });
+
+      // Frame toggle
+      document.getElementById('product-frame-toggle').addEventListener('click', function(e) {
+        var btn = e.target.closest('.product-toggle-btn');
+        if (!btn) return;
+        this.querySelectorAll('.product-toggle-btn').forEach(function(b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        currentFrame = btn.dataset.value || 'single';
         renderPreview();
       });
 
@@ -560,6 +583,154 @@
         });
       }
 
+      function detectBorderType(svgStr) {
+        var rects = [];
+        var re = /<rect([^>]*)\/?>/gi;
+        var m;
+        while ((m = re.exec(svgStr)) !== null) {
+          var attrs = m[1];
+          if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+            var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+            if (!hasColoredStroke) continue;
+          }
+          var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+          if (!wM) continue;
+          rects.push({ attrs: attrs, w: parseFloat(wM[1]) });
+        }
+        rects.sort(function(a, b) { return b.w - a.w; });
+        var origFill = null, origStroke = null, origStrokeWidth = null;
+        if (rects.length > 0) {
+          var outerAttrs = rects[0].attrs;
+          var fM = outerAttrs.match(/\bfill=["']([^"']+)["']/);
+          var sM = outerAttrs.match(/\bstroke=["']([^"']+)["']/);
+          var swM = outerAttrs.match(/stroke-width=["']([\d.]+)["']/);
+          origFill = fM ? fM[1] : null;
+          origStroke = sM ? sM[1] : null;
+          origStrokeWidth = swM ? parseFloat(swM[1]) : null;
+        }
+        var wavyM = svgStr.match(/data-wavy=["']([^"']+)["']/);
+        var borderM = svgStr.match(/data-border=["']([^"']+)["']/);
+        var stitchM = svgStr.match(/data-stitch=["']([^"']+)["']/);
+        var brushM = svgStr.match(/data-brush-border=["']([^"']+)["']/);
+        var filterM = svgStr.match(/data-filter=["']([^"']+)["']/);
+        var brushCoords = null, brushContent = null;
+        if (brushM) {
+          brushCoords = brushM[1].split(',').map(Number);
+          var bgM = svgStr.match(/<g[^>]*data-brush-border=["'][^"']*["'][^>]*>([\s\S]*?)<\/g>/);
+          if (bgM) brushContent = bgM[1].trim();
+        }
+        return {
+          wavy: wavyM ? wavyM[1] : null,
+          border: borderM ? borderM[1] : null,
+          stitch: stitchM ? stitchM[1] : null,
+          brush: !!brushM,
+          brushCoords: brushCoords,
+          brushContent: brushContent,
+          filter: filterM ? filterM[1] : null,
+          origFill: origFill,
+          origStroke: origStroke,
+          origStrokeWidth: origStrokeWidth
+        };
+      }
+
+      function addDoubleFrame(svgStr, bi) {
+        bi = bi || {};
+        var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.border || bi.filter;
+        if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
+        var rects = [];
+        var re = /<rect([^>]*)\/?>/gi;
+        var m;
+        while ((m = re.exec(svgStr)) !== null) {
+          var attrs = m[1];
+          if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+            var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+            if (!hasColoredStroke) continue;
+          }
+          if (/display=["']none["']/i.test(attrs)) continue;
+          var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+          var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
+          if (!wM || !hM) continue;
+          rects.push({ full: m[0], attrs: attrs, w: parseFloat(wM[1]), h: parseFloat(hM[1]), index: m.index });
+        }
+        if (rects.length === 0) return svgStr;
+        rects.sort(function(a, b) { return b.w - a.w; });
+        var outer = rects[0];
+        if (rects.length > 1 && rects[1].w > outer.w * 0.9) {
+          var second = rects[1];
+          if (/fill=["']none["']/i.test(second.attrs) && /stroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(second.attrs)) {
+            return svgStr;
+          }
+        }
+        var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+        var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+        var swM = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
+        var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
+        var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
+        var ox = xM ? parseFloat(xM[1]) : 0;
+        var oy = yM ? parseFloat(yM[1]) : 0;
+        var ow = outer.w, oh = outer.h;
+        var osw = swM ? parseFloat(swM[1]) : (bi.origStrokeWidth || 20);
+        if (osw === 0 && bi.origStrokeWidth) osw = bi.origStrokeWidth;
+        var orx = rxM ? parseFloat(rxM[1]) : 0;
+        var ory = ryM ? parseFloat(ryM[1]) : 0;
+        var fillM = outer.attrs.match(/\bfill=["']([^"']+)["']/);
+        var outerFill = fillM ? fillM[1] : 'none';
+        var strokeM = outer.attrs.match(/\bstroke=["']([^"']+)["']/);
+        var outerStroke = strokeM ? strokeM[1] : '#000000';
+        if (outerFill === 'none' && bi.wavy && bi.origFill && bi.origFill !== 'none') outerFill = bi.origFill;
+        if ((!strokeM || outerStroke === 'none') && bi.origStroke) outerStroke = bi.origStroke;
+        var isFull = outerFill !== 'none' && !/^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(outerFill);
+        var innerColor;
+        if (isFull) {
+          var hex = outerFill.replace('#', '');
+          var r = parseInt(hex.substring(0, 2), 16);
+          var g = parseInt(hex.substring(2, 4), 16);
+          var b = parseInt(hex.substring(4, 6), 16);
+          var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          innerColor = lum > 160 ? '#000000' : '#FFFFFF';
+        } else {
+          innerColor = outerStroke;
+          if (!innerColor || innerColor === 'none' || /^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(innerColor)) {
+            innerColor = bi.origFill && bi.origFill !== 'none' ? bi.origFill : '#000000';
+          }
+        }
+        var innerSw = 12;
+        var inset = osw / 2;
+        if (bi.stitch && !isFull) inset = 12;
+        if (bi.brush) inset = Math.max(inset, Math.min(ow, oh) * 0.12);
+        if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
+        if (!isFull && !bi.wavy && !bi.brush && !bi.stitch && !bi.filter) {
+          inset = osw / 2 + innerSw / 2 + 12;
+        }
+        var ix = ox + inset, iy = oy + inset;
+        var iw = ow - inset * 2, ih = oh - inset * 2;
+        var irx = Math.max(0, orx - inset), iry = Math.max(0, ory - inset);
+        var innerRect;
+        if (bi.wavy) {
+          var wavyRe = /<path[^>]*stroke-linejoin="round"[^>]*\/?>/;
+          var wavyMatch = svgStr.match(wavyRe);
+          if (wavyMatch) {
+            innerRect = wavyMatch[0]
+              .replace(/fill="[^"]*"/, 'fill="none"')
+              .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
+              .replace(/stroke-width="[^"]*"/, 'stroke-width="12"');
+          } else {
+            return svgStr;
+          }
+        } else {
+          innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
+            '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
+            '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
+            '" stroke-miterlimit="10"';
+          if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
+          if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
+          innerRect += '/>';
+        }
+        var textPos = svgStr.search(/<text[\s>]/i);
+        if (textPos !== -1) return svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
+        return svgStr.replace(/<\/svg>/, innerRect + '</svg>');
+      }
+
       async function renderPreview() {
         if (isProcessing) return;
         isProcessing = true;
@@ -568,9 +739,22 @@
         previewEl.style.opacity = '0.5';
 
         try {
+          var savedBaseFontSize = baseFontSize;
+          var savedBaseTextTy = baseTextTy;
+          if (currentFrame === 'double') {
+            var reduction = baseFontSize * 0.15;
+            baseFontSize *= 0.85;
+            baseTextTy -= reduction * 0.35;
+          }
           var svg = changeFont(baseSvg, currentFont);
+          baseFontSize = savedBaseFontSize;
+          baseTextTy = savedBaseTextTy;
           svg = SvgRenderer.colorize(svg, currentColor);
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
+          if (currentFrame === 'double') {
+            if (!borderInfo) borderInfo = detectBorderType(baseSvg);
+            svg = addDoubleFrame(svg, borderInfo);
+          }
           // Capture pre-tilt viewBox width for scale compensation
           var preTiltVbW = 0;
           var preTiltMatch = svg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+[\d.\-]+\s*["']/);
@@ -621,6 +805,7 @@
           '&text=' + encodeURIComponent(userText) +
           '&color=' + encodeURIComponent(currentColor.replace('#', '')) +
           '&font=' + encodeURIComponent(currentFont) +
+          '&frame=' + encodeURIComponent(currentFrame) +
           '&tilt=' + encodeURIComponent(currentTilt) +
           (currentTexture ? '&texture=' + encodeURIComponent(currentTexture) : '');
         window.history.replaceState(null, '', newUrl);

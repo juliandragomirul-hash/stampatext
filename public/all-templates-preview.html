@@ -143,6 +143,37 @@
   var templates = result.data || [];
   var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
 
+  // Sort templates by family grouping
+  function getFamilyOrder(name) {
+    var n = name.toLowerCase();
+    if (n.indexOf('brushstroke') !== -1) return 1;
+    if (n.indexOf('wavy') !== -1) return 2;
+    if (n.indexOf('ripped') !== -1) return 3;
+    if (n.indexOf('stitch line') !== -1) return 4;
+    if (n.indexOf('stitch circle') !== -1) return 5;
+    if (n.indexOf('stitch square') !== -1) return 6;
+    if (n.indexOf('soft round') !== -1) return 7;
+    if (n.indexOf('strong round') !== -1) return 8;
+    if (n.indexOf('straight') !== -1) return 9;
+    if (n.indexOf('strong perforated') !== -1) return 10;
+    if (n.indexOf('spaced perforated') !== -1) return 11;
+    if (n.indexOf('zigzag') !== -1) return 12;
+    return 99;
+  }
+  function getVariantOrder(name) {
+    var n = name.toLowerCase();
+    if (n.indexOf('full') !== -1) return 0;
+    if (n.indexOf('empty') !== -1) return 1;
+    return 2;
+  }
+  templates.sort(function(a, b) {
+    var fa = getFamilyOrder(a.name), fb = getFamilyOrder(b.name);
+    if (fa !== fb) return fa - fb;
+    var va = getVariantOrder(a.name), vb = getVariantOrder(b.name);
+    if (va !== vb) return va - vb;
+    return a.name.localeCompare(b.name);
+  });
+
   var singles = templates.filter(function(t) { return !/double frame/i.test(t.name); });
   var doubles = templates.filter(function(t) { return /double frame/i.test(t.name); });
   document.getElementById('total-count').textContent = templates.length;
@@ -163,10 +194,20 @@
     var isDouble = /double frame/i.test(tpl.name);
     card.dataset.frame = isDouble ? 'double' : 'single';
     if (isDouble) card.style.display = 'none'; // hide DB doubles by default
+    // Hide Gentle Wavy — keeping only Strong Wavy (renamed to "Wavy")
+    if (/gentle wavy/i.test(tpl.name)) card.style.display = 'none';
+    // Hide Soft Perforated — ditched
+    if (/soft perforated/i.test(tpl.name)) card.style.display = 'none';
+    // Hide Soft Zigzag — ditched
+    if (/soft zigzag/i.test(tpl.name)) card.style.display = 'none';
+    // Renames
+    var displayName = tpl.name.replace(/Strong Wavy/gi, 'Wavy');
+    displayName = displayName.replace(/Strong Perforated Stamp/gi, 'Soft Perforated Postal Stamp');
+    displayName = displayName.replace(/Spaced Perforated Stamp/gi, 'Strong Perforated Postal Stamp');
 
     card.innerHTML =
       '<div class="id-label">#' + (i + 1) + '</div>' +
-      '<div class="name" title="' + escapeHtml(tpl.name) + '">' + escapeHtml(tpl.name) + '</div>' +
+      '<div class="name" title="' + escapeHtml(displayName) + '">' + escapeHtml(displayName) + '</div>' +
       '<div class="preview"><span style="color:#ccc;">Loading...</span></div>' +
       '<div class="status ' + (tpl.is_active ? 'active' : 'inactive') + '">' +
         (tpl.is_active ? 'Active' : 'Inactive') +
@@ -200,13 +241,11 @@
       var svgUrl = baseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
       var svgString = await SvgRenderer.fetchSvg(svgUrl);
       var cleaned = SvgRenderer.cleanSvgString(svgString);
+      // Replace default text with "APPROVED"
+      cleaned = SvgRenderer.replaceTextInString(cleaned, 0, 'APPROVED');
 
       // Detect border type BEFORE autoFit strips data attributes
       borderTypeCache[tpl.id] = detectBorderType(cleaned);
-      var _bi = borderTypeCache[tpl.id];
-      var _type = _bi.wavy || _bi.border || (_bi.brush ? 'brush' : null) || _bi.stitch || _bi.filter || 'plain';
-      console.log('[DF] ' + tpl.name + ' → ' + _type, _bi);
-
       // Auto-fit using text zone data (same as gallery)
       var zones = tpl.text_zones || [];
       var didAutoFit = false;
@@ -236,10 +275,87 @@
       img.style.maxWidth = '100%';
       img.style.maxHeight = '160px';
       previewDiv.appendChild(img);
+
+      // Generate Empty variant for Brushstroke Full
+      if (/brushstroke.*full/i.test(tpl.name) && borderTypeCache[tpl.id] && borderTypeCache[tpl.id].brush) {
+        var emptyCard = card.parentNode.querySelector('[data-name="Brushstroke Empty Single Frame"]');
+        if (!emptyCard) {
+          emptyCard = document.createElement('div');
+          emptyCard.className = 'card';
+          emptyCard.dataset.id = tpl.id + '-empty';
+          emptyCard.dataset.name = 'Brushstroke Empty Single Frame';
+          emptyCard.dataset.active = 'false';
+          emptyCard.dataset.frame = 'single';
+          emptyCard.innerHTML =
+            '<div class="id-label">#1b</div>' +
+            '<div class="name">Brushstroke Empty Single Frame</div>' +
+            '<div class="preview"></div>' +
+            '<div class="status inactive">Generated</div>';
+          card.parentNode.insertBefore(emptyCard, card.nextSibling);
+        }
+        var emptySvg = makeBrushEmpty(cleaned);
+        var emptyId = tpl.id + '-empty';
+        // Cache empty SVG and borderInfo for double frame toggle
+        svgCache[emptyId] = emptySvg;
+        var fullBi = borderTypeCache[tpl.id];
+        borderTypeCache[emptyId] = {
+          wavy: fullBi.wavy, border: fullBi.border, stitch: fullBi.stitch,
+          brush: fullBi.brush, brushCoords: fullBi.brushCoords, brushContent: fullBi.brushContent,
+          filter: fullBi.filter,
+          origFill: 'none',
+          origStroke: fullBi.origFill || fullBi.origStroke,
+          origStrokeWidth: fullBi.origStrokeWidth
+        };
+        var emptyDisplay = doubleFrameOn ? addDoubleFrame(emptySvg, borderTypeCache[emptyId]) : emptySvg;
+        var emptyPreview = emptyCard.querySelector('.preview');
+        emptyPreview.innerHTML = '';
+        var emptyImg = SvgRenderer.createSvgImage(emptyDisplay);
+        emptyImg.style.maxWidth = '100%';
+        emptyImg.style.maxHeight = '160px';
+        emptyPreview.appendChild(emptyImg);
+      }
     } catch (err) {
       previewDiv.innerHTML = '<span style="color:#cc0000;font-size:11px;">Error</span>';
       console.error('Preview failed for', tpl.name, err);
     }
+  }
+
+  // Generate Brushstroke Empty from Full: remove red fill, add white center rect over brush
+  function makeBrushEmpty(fullSvg) {
+    var svg = fullSvg;
+    // Find the colored (non-white) rect and set its fill to "none"
+    var colorRectRe = /<rect([^>]*)fill=["']#(?!FFF)[A-Fa-f0-9]{6}["']([^>]*)>/i;
+    var m = svg.match(colorRectRe);
+    if (m) {
+      // Extract rect dimensions for the white center
+      var xM = m[0].match(/\bx=["']([\d.\-]+)["']/);
+      var yM = m[0].match(/\by=["']([\d.\-]+)["']/);
+      var wM = m[0].match(/\bwidth=["']([\d.]+)["']/);
+      var hM = m[0].match(/\bheight=["']([\d.]+)["']/);
+      var rx = xM ? parseFloat(xM[1]) : 0;
+      var ry = yM ? parseFloat(yM[1]) : 0;
+      var rw = wM ? parseFloat(wM[1]) : 0;
+      var rh = hM ? parseFloat(hM[1]) : 0;
+      // Extract the original fill color for text
+      var fillColorM = m[0].match(/fill=["'](#[A-Fa-f0-9]{6})["']/);
+      var rectColor = fillColorM ? fillColorM[1] : '#D42229';
+      // Remove the colored rect fill
+      svg = svg.replace(m[0], m[0].replace(/fill=["']#[A-Fa-f0-9]{6}["']/, 'fill="none"'));
+      // Insert a white rect AFTER the brush group to mask the center
+      var inset = 50;
+      var whiteRect = '<rect x="' + (rx + inset).toFixed(2) + '" y="' + (ry + inset).toFixed(2) +
+        '" width="' + (rw - inset * 2).toFixed(2) + '" height="' + (rh - inset * 2).toFixed(2) +
+        '" fill="#FFFFFF"/>';
+      // Place white rect just before <text
+      var textPos = svg.search(/<text[\s>]/i);
+      if (textPos !== -1) {
+        svg = svg.slice(0, textPos) + whiteRect + svg.slice(textPos);
+      }
+      // Change text color to the original rect fill color
+      svg = svg.replace(/(<text[^>]*fill=["'])#[A-Fa-f0-9]{6}(["'])/gi, '$1' + rectColor + '$2');
+      svg = svg.replace(/(<tspan[^>]*fill=["'])#[A-Fa-f0-9]{6}(["'])/gi, '$1' + rectColor + '$2');
+    }
+    return svg;
   }
 
   // --- Detect border type from raw SVG (before autoFit strips data attributes) ---
@@ -251,7 +367,10 @@
     var m;
     while ((m = re.exec(svgStr)) !== null) {
       var attrs = m[1];
-      if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) continue;
+      if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+        var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+        if (!hasColoredStroke) continue;
+      }
       var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
       if (!wM) continue;
       rects.push({ attrs: attrs, w: parseFloat(wM[1]) });
@@ -304,18 +423,19 @@
     // But if borderInfo already confirms a Cat 1 border type, trust that over <image> regex
     var bi = borderInfo || {};
     var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.border || bi.filter;
-    if (!isCat1Border && /<image[\s>]/i.test(svgStr)) { console.log('[DF-exit] <image> detected, skipping'); return svgStr; }
+    if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
 
     // Find the outer rect: largest non-white rect by width
     var rects = [];
-    var allRectCount = 0;
     var re = /<rect([^>]*)\/?>/gi;
     var m;
     while ((m = re.exec(svgStr)) !== null) {
-      allRectCount++;
       var attrs = m[1];
-      // Skip white background rects and hidden rects
-      if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) continue;
+      // Skip white background rects (but keep white-filled rects that have a colored stroke — those are empty frame rects)
+      if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+        var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+        if (!hasColoredStroke) continue;
+      }
       if (/display=["']none["']/i.test(attrs)) continue;
       var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
       var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
@@ -328,21 +448,19 @@
         index: m.index
       });
     }
-    console.log('[DF-rects] allRects=' + allRectCount + ' nonWhiteWithDims=' + rects.length);
-    if (rects.length === 0) { console.log('[DF-exit] no rects found'); return svgStr; }
+    if (rects.length === 0) {
+      return svgStr;
+    }
 
     // Sort by width descending — outer rect is the widest
     rects.sort(function(a, b) { return b.w - a.w; });
     var outer = rects[0];
 
     // Check if this already has an inner rect (double frame template) — skip if so
-    console.log('[DF-outer] w=' + outer.w + ' h=' + outer.h + ' attrs=' + outer.attrs.substring(0, 100));
     if (rects.length > 1 && rects[1].w > outer.w * 0.9) {
       var second = rects[1];
-      console.log('[DF-second] w=' + second.w + ' attrs=' + second.attrs.substring(0, 100));
       if (/fill=["']none["']/i.test(second.attrs) && /stroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(second.attrs)) {
-        console.log('[DF-exit] already has inner white rect');
-        return svgStr; // Already has inner white rect
+        return svgStr;
       }
     }
 
@@ -357,8 +475,7 @@
     var oy = yM ? parseFloat(yM[1]) : 0;
     var ow = outer.w;
     var oh = outer.h;
-    var osw = swM ? parseFloat(swM[1]) : 50;
-    // autoFit zeroes stroke-width for wavy/stitch — restore from pre-cached original
+    var osw = swM ? parseFloat(swM[1]) : (bi.origStrokeWidth || 20);
     if (osw === 0 && bi.origStrokeWidth) osw = bi.origStrokeWidth;
     var orx = rxM ? parseFloat(rxM[1]) : 0;
     var ory = ryM ? parseFloat(ryM[1]) : 0;
@@ -371,15 +488,18 @@
     var strokeM = outer.attrs.match(/\bstroke=["']([^"']+)["']/);
     var outerStroke = strokeM ? strokeM[1] : '#000000';
 
-    // Restore original colors if autoFit wiped them
-    if (outerFill === 'none' && bi.origFill && bi.origFill !== 'none') {
+    // Restore original colors only for border types where autoFit wipes fill/stroke
+    // (wavy strips both, stitch strips stroke) — NOT for genuinely empty templates
+    var autoFitWipesFill = bi.wavy;
+    if (outerFill === 'none' && autoFitWipesFill && bi.origFill && bi.origFill !== 'none') {
       outerFill = bi.origFill;
     }
     if ((!strokeM || outerStroke === 'none') && bi.origStroke) {
       outerStroke = bi.origStroke;
     }
 
-    var isFull = outerFill !== 'none';
+    // White fill is visually empty — treat as "not full" so inner rect uses stroke color
+    var isFull = outerFill !== 'none' && !/^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(outerFill);
 
     // Inner rect color: contrast (white/black) on Full, same as outer stroke on Empty
     var innerColor;
@@ -391,162 +511,70 @@
       var lum = 0.299 * r + 0.587 * g + 0.114 * b;
       innerColor = lum > 160 ? '#000000' : '#FFFFFF';
     } else {
+      // Empty: use outer stroke color, but never white (would be invisible)
       innerColor = outerStroke;
+      if (!innerColor || innerColor === 'none' || /^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(innerColor)) {
+        innerColor = bi.origFill && bi.origFill !== 'none' ? bi.origFill : '#000000';
+      }
     }
 
     // Inner rect sits in the visible interior, past the outer stroke's inner edge
-    var gap = osw * 0.3;
-    var inset = osw / 2 + gap;
     var innerSw = 12;
+    var inset = osw / 2;
+    // Stitch empty: stroke removed, stitch shapes are outside — inner rect sits close to edge
+    if (bi.stitch && !isFull) inset = 12;
+    // Brush templates: rect has no stroke, visual border is the brush group
+    if (bi.brush) inset = Math.max(inset, Math.min(ow, oh) * 0.12);
+    // Ripped paper empty: filter displaces edges, needs extra gap
+    if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
+    // Plain empty: same-color strokes need gap between them (Offset Path technique)
+    // Minimum inset = outer half-stroke + inner half-stroke + visible gap
+    // This preserves maximum corner radius while ensuring two distinct borders
+    if (!isFull && !bi.wavy && !bi.brush && !bi.stitch && !bi.filter) {
+      inset = osw / 2 + innerSw / 2 + 12;
+    }
     var ix = ox + inset;
     var iy = oy + inset;
     var iw = ow - inset * 2;
     var ih = oh - inset * 2;
-    var irx = orx;
-    var iry = ory;
+    // Offset Path: inner corner radius shrinks by inset (like Illustrator's Object > Path > Offset Path)
+    var irx = Math.max(0, orx - inset);
+    var iry = Math.max(0, ory - inset);
 
-    var outerFilterUrl = outer.attrs.match(/\bfilter=["']([^"']+)["']/);
-
-    // Build inner elements matching outer border type
-    var innerRect = '';
-
+    // Build inner border
+    var innerRect;
     if (bi.wavy) {
-      innerRect = _innerWavy(ix, iy, iw, ih, innerSw, innerColor, bi.wavy);
-    } else if (bi.brush) {
-      innerRect = _innerBrush(ix, iy, iw, ih, innerSw, innerColor, bi);
-    } else if (bi.stitch) {
-      innerRect = _innerStitch(ix, iy, iw, ih, innerSw, innerColor, irx, iry, bi.stitch);
+      // "Copy in place" technique: duplicate the outer wavy path with thinner white stroke
+      // The thick outer stroke (40) with a thin white stroke (12) on top = double frame effect
+      var wavyRe = /<path[^>]*stroke-linejoin="round"[^>]*\/?>/;
+      var wavyMatch = svgStr.match(wavyRe);
+      if (wavyMatch) {
+        innerRect = wavyMatch[0]
+          .replace(/fill="[^"]*"/, 'fill="none"')
+          .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
+          .replace(/stroke-width="[^"]*"/, 'stroke-width="12"');
+      } else {
+        return svgStr;
+      }
     } else {
-      // Plain rect (or ripped with filter, or with border overlays)
+      // All other types: plain rect with Offset Path corner radius
       innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
         '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
         '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
         '" stroke-miterlimit="10"';
       if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
       if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
-      if (outerFilterUrl) innerRect += ' filter="' + outerFilterUrl[1] + '"';
       innerRect += '/>';
-      // Add overlay shapes for perforated/winding borders
-      if (bi.border) {
-        innerRect += _innerBorderOverlay(ix, iy, iw, ih, innerSw, bi.border);
-      }
     }
 
-    // Debug: log what we're generating
-    var _btype = bi.wavy || bi.border || (bi.brush ? 'brush' : null) || bi.stitch || bi.filter || 'plain';
-    console.log('[DF-inject] type=' + _btype + ' innerColor=' + innerColor + ' isFull=' + isFull + ' osw=' + osw + ' inset=' + inset.toFixed(1));
-    console.log('[DF-inject] innerRect length=' + innerRect.length + ' start=' + innerRect.substring(0, 120));
-    console.log('[DF-inject] outerRect: x=' + ox + ' y=' + oy + ' w=' + ow + ' h=' + oh + ' fill=' + outerFill + ' stroke=' + outerStroke);
-
-    // Inject inner elements just before the first <text element
+    // Inject inner border just before the first <text element
     var textPos = svgStr.search(/<text[\s>]/i);
-    console.log('[DF-inject] textPos=' + textPos + ' svgLen=' + svgStr.length);
     if (textPos !== -1) {
-      var result = svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
-      console.log('[DF-inject] resultLen=' + result.length + ' (added ' + (result.length - svgStr.length) + ' chars)');
-      return result;
+      return svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
     }
     return svgStr.replace(/<\/svg>/, innerRect + '</svg>');
   }
 
-  // --- Inner rect border effect helpers ---
-
-  function _innerWavy(x, y, w, h, sw, col, type) {
-    // Mirror the outer _generateWavyBorder algorithm with proportionally scaled params
-    var F = function(n) { return n.toFixed(2); };
-    var scWidth = 35;  // same segment target as outer
-    var depth = (type === 'strong') ? 8 : 5;
-    var strokeW = 14;  // proportionally smaller than outer's 20
-
-    var numH = Math.max(3, Math.round(w / scWidth));
-    if (numH % 2 === 0) numH++;   // force ODD for smooth corners
-    var segW = w / numH;
-    var numV = Math.max(3, Math.round(h / segW));
-    if (numV % 2 === 0) numV++;   // force ODD
-    var segH = h / numV;
-    var vD = depth * segH / segW;  // scale vertical depth proportionally
-
-    var path = 'M ' + F(x) + ',' + F(y);
-    // Top (L→R)
-    for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + i * segW;
-      path += ' C '+F(sx+segW*0.3)+','+F(y-fl*depth)+' '+F(sx+segW*0.7)+','+F(y-fl*depth)+' '+F(sx+segW)+','+F(y); }
-    // Right (T→B)
-    for (var i = 0; i < numV; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sy = y + i * segH;
-      path += ' C '+F(x+w+fl*vD)+','+F(sy+segH*0.3)+' '+F(x+w+fl*vD)+','+F(sy+segH*0.7)+' '+F(x+w)+','+F(sy+segH); }
-    // Bottom (R→L)
-    for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + w - i * segW;
-      path += ' C '+F(sx-segW*0.3)+','+F(y+h+fl*depth)+' '+F(sx-segW*0.7)+','+F(y+h+fl*depth)+' '+F(sx-segW)+','+F(y+h); }
-    // Left (B→T)
-    for (var i = 0; i < numV; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sy = y + h - i * segH;
-      path += ' C '+F(x-fl*vD)+','+F(sy-segH*0.3)+' '+F(x-fl*vD)+','+F(sy-segH*0.7)+' '+F(x)+','+F(sy-segH); }
-    path += ' Z';
-    return '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="' + strokeW + '" stroke-linejoin="round"/>';
-  }
-
-  function _innerStitch(x, y, w, h, sw, col, rx, ry, type) {
-    // Light guide rect
-    var s = '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" fill="none" stroke="' + col + '" stroke-width="1" opacity="0.3"';
-    if (rx > 0) s += ' rx="' + rx.toFixed(1) + '"';
-    if (ry > 0) s += ' ry="' + ry.toFixed(1) + '"';
-    s += '/>';
-    // Use same SvgRenderer function as outer, with proportionally scaled params
-    // Outer: sSize=20, sSpacing=20|10  →  Inner: sSize=12, sSpacing=12|6
-    var sSize = 12;
-    var sSpacing = (type === 'line') ? 12 : 6;
-    s += SvgRenderer._generateStitchShapes(x, y, w, h, type, sSize, sSpacing, col);
-    return s;
-  }
-
-  function _innerBorderOverlay(x, y, w, h, sw, spec) {
-    var parts = spec.split('-');
-    var type = parts[0];
-    var origSize = parts[1] ? parseFloat(parts[1]) : 10;
-    var size = Math.max(2, origSize * 0.4);
-    var spacing = size * 3;
-    var s = '';
-    if (type === 'circle') {
-      for (var cx = x + spacing; cx < x + w - spacing / 2; cx += spacing) {
-        s += '<circle cx="' + cx.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
-        s += '<circle cx="' + cx.toFixed(1) + '" cy="' + (y + h).toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
-      }
-      for (var cy = y + spacing; cy < y + h - spacing / 2; cy += spacing) {
-        s += '<circle cx="' + x.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
-        s += '<circle cx="' + (x + w).toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + size.toFixed(1) + '" fill="white"/>';
-      }
-    } else if (type === 'diamond') {
-      for (var cx = x + spacing; cx < x + w - spacing / 2; cx += spacing) {
-        s += '<polygon points="' + cx + ',' + (y - size) + ' ' + (cx + size) + ',' + y + ' ' + cx + ',' + (y + size) + ' ' + (cx - size) + ',' + y + '" fill="white"/>';
-        s += '<polygon points="' + cx + ',' + (y + h - size) + ' ' + (cx + size) + ',' + (y + h) + ' ' + cx + ',' + (y + h + size) + ' ' + (cx - size) + ',' + (y + h) + '" fill="white"/>';
-      }
-      for (var cy = y + spacing; cy < y + h - spacing / 2; cy += spacing) {
-        s += '<polygon points="' + x + ',' + (cy - size) + ' ' + (x + size) + ',' + cy + ' ' + x + ',' + (cy + size) + ' ' + (x - size) + ',' + cy + '" fill="white"/>';
-        s += '<polygon points="' + (x + w) + ',' + (cy - size) + ' ' + (x + w + size) + ',' + cy + ' ' + (x + w) + ',' + (cy + size) + ' ' + (x + w - size) + ',' + cy + '" fill="white"/>';
-      }
-    }
-    return s;
-  }
-
-  function _innerBrush(x, y, w, h, sw, col, bi) {
-    // Clone the outer brush group and scale it to the inner frame dimensions
-    if (!bi.brushCoords || !bi.brushContent) {
-      // Fallback: plain rect if brush data wasn't cached
-      return '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) +
-        '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) +
-        '" fill="none" stroke="' + col + '" stroke-width="' + sw + '"/>';
-    }
-    // Original brush group coords: where the outer brush was designed to fit
-    var origX = bi.brushCoords[0], origY = bi.brushCoords[1];
-    var origW = bi.brushCoords[2], origH = bi.brushCoords[3];
-    var origCX = origX + origW / 2, origCY = origY + origH / 2;
-    // Inner frame center and scale
-    var innerCX = x + w / 2, innerCY = y + h / 2;
-    var sx = w / origW, sy = h / origH;
-    // Transform: move origin to original center, scale, then move to inner center
-    var transform = 'translate(' + innerCX.toFixed(2) + ',' + innerCY.toFixed(2) +
-      ') scale(' + sx.toFixed(4) + ',' + sy.toFixed(4) +
-      ') translate(' + (-origCX).toFixed(2) + ',' + (-origCY).toFixed(2) + ')';
-    return '<g transform="' + transform + '">' + bi.brushContent + '</g>';
-  }
 
   // Toggle double frame on/off and re-render all previews
   window.toggleDoubleFrame = function() {
@@ -562,12 +590,9 @@
     // Re-render all cached previews
     grid.querySelectorAll('.card').forEach(function(card) {
       var id = card.dataset.id;
-      var name = card.dataset.name || '?';
       var svg = svgCache[id];
-      if (!svg) { console.log('[DF-toggle] SKIP ' + name + ' — no cache'); return; }
-      console.log('[DF-toggle] ' + name + ' svgLen=' + svg.length + ' bi=' + JSON.stringify(borderTypeCache[id] || {}));
+      if (!svg) return;
       var display = doubleFrameOn ? addDoubleFrame(svg, borderTypeCache[id]) : svg;
-      console.log('[DF-toggle] ' + name + ' changed=' + (display !== svg) + ' displayLen=' + display.length);
       var previewDiv = card.querySelector('.preview');
       previewDiv.innerHTML = '';
       var img = SvgRenderer.createSvgImage(display);
