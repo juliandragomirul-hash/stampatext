@@ -4,7 +4,6 @@
  */
 (function () {
   // ---- Constants ----
-  var INITIAL_COUNT = 9;
   var DEFAULT_PAGE_SIZE = 9;
 
   // ---- Custom color palette ----
@@ -134,7 +133,7 @@
 
     try {
       await Gallery.processAll(text);
-      await Gallery.showInitialRandom(INITIAL_COUNT);
+      await Gallery.showInitialRandom();
 
       // Update URL so back navigation restores search
       var newUrl = '/?text=' + encodeURIComponent(text);
@@ -176,7 +175,7 @@
       // Fall back to fresh random generation
       try {
         await Gallery.processAll(text);
-        await Gallery.showInitialRandom(INITIAL_COUNT);
+        await Gallery.showInitialRandom();
       } catch (err2) {
         document.getElementById('results-batches').innerHTML =
           '<div class="stamp-empty">Something went wrong. Please try again.</div>';

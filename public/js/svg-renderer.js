@@ -1712,8 +1712,12 @@ const SvgRenderer = {
               rectMatches.forEach(function(rectTag) {
                 // Skip display:none
                 if (rectTag.match(/display\s*[:=]\s*["']?none/i)) return;
-                // Skip generated stitch shape rects (fill-only, no stroke)
-                if (!rectTag.match(/\bstroke=/i)) return;
+                // Skip small generated stitch shape rects (fill-only, no stroke)
+                // But keep large fill-only rects (e.g. brushstroke main rect)
+                if (!rectTag.match(/\bstroke=/i)) {
+                  var swCheck = rectTag.match(/\swidth=["']([\d.]+)["']/);
+                  if (!swCheck || parseFloat(swCheck[1]) < 100) return;
+                }
                 // Skip background rects (white fill at origin)
                 var isWhiteFill = rectTag.match(/fill=["']#FFFFFF["']/i) || rectTag.match(/fill=["']white["']/i);
                 var xMatch = rectTag.match(/\bx=["']([\d.\-]+)["']/);

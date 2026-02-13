@@ -190,12 +190,12 @@ const Gallery = {
   },
 
   /**
-   * Show initial random results after Stamp click.
-   * Each stamp gets a random palette color, random tilt, and random texture applied.
+   * Show initial results after Stamp click.
+   * One stamp per template, half red (#FF0000), half random palette colors.
+   * No tilt, no texture. Shuffled order.
    * Clears all previous batches.
-   * @param {number} count
    */
-  async showInitialRandom(count) {
+  async showInitialRandom() {
     // Clear all previous batches
     var container = document.getElementById('results-batches');
     container.innerHTML = '';
@@ -207,38 +207,37 @@ const Gallery = {
       return;
     }
 
-    // Build `count` stamps, each with a unique random color, random tilt, and random texture.
+    // Shuffle all base templates
     var shuffled = [...this.baseResults].sort(function () { return Math.random() - 0.5; });
     var batch = [];
-    var usedColors = [];
-    var TILTS = [0, -20];
-    var TEXTURES = [null, 'grungy_texture']; // null = no texture
+    var halfCount = Math.ceil(shuffled.length / 2);
+    var usedRandomColors = [];
 
-    for (var i = 0; i < count; i++) {
-      var base = shuffled[i % shuffled.length];
-      var available = this.PALETTE_COLORS.filter(function (c) { return usedColors.indexOf(c) === -1; });
-      if (available.length === 0) available = this.PALETTE_COLORS;
-      var randomColor = available[Math.floor(Math.random() * available.length)];
-      usedColors.push(randomColor);
+    for (var i = 0; i < shuffled.length; i++) {
+      var base = shuffled[i];
 
-      var randomTilt = TILTS[Math.floor(Math.random() * TILTS.length)];
-      var randomTexture = TEXTURES[Math.floor(Math.random() * TEXTURES.length)];
+      // First half red, second half random palette color
+      var color;
+      if (i < halfCount) {
+        color = '#FF0000';
+      } else {
+        var available = this.PALETTE_COLORS.filter(function (c) {
+          return c !== '#FF0000' && usedRandomColors.indexOf(c) === -1;
+        });
+        if (available.length === 0) {
+          available = this.PALETTE_COLORS.filter(function (c) { return c !== '#FF0000'; });
+        }
+        color = available[Math.floor(Math.random() * available.length)];
+        usedRandomColors.push(color);
+      }
 
       try {
-        var colorized = SvgRenderer.colorize(base.svgString, randomColor);
+        var colorized = SvgRenderer.colorize(base.svgString, color);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
-        var tilted = randomTilt !== 0 ? SvgRenderer.applyTilt(cropped, randomTilt) : cropped;
-        var textured = randomTexture ? await SvgRenderer.applyTexture(tilted, randomTexture) : tilted;
-
-        // Validate we got a non-empty SVG
-        if (!textured || textured.indexOf('<svg') === -1) {
-          console.warn('Empty SVG result, using colorized version without texture');
-          textured = tilted;
-        }
 
         batch.push({
           templateId: base.templateId,
-          svgString: textured,
+          svgString: cropped,
           shape: base.shape,
           objectType: base.objectType,
           colors: base.colors,
@@ -246,16 +245,15 @@ const Gallery = {
           height: base.height,
           name: base.name,
           displayText: base.displayText,
-          appliedColor: randomColor,
-          appliedTilt: randomTilt,
-          appliedTexture: randomTexture
+          appliedColor: color,
+          appliedTilt: 0,
+          appliedTexture: null
         });
       } catch (err) {
         console.warn('Failed to process stamp variant:', err);
-        // Fallback: use base SVG with just colorization
         batch.push({
           templateId: base.templateId,
-          svgString: SvgRenderer.colorize(base.svgString, randomColor),
+          svgString: SvgRenderer.colorize(base.svgString, color),
           shape: base.shape,
           objectType: base.objectType,
           colors: base.colors,
@@ -263,12 +261,15 @@ const Gallery = {
           height: base.height,
           name: base.name,
           displayText: base.displayText,
-          appliedColor: randomColor,
+          appliedColor: color,
           appliedTilt: 0,
           appliedTexture: null
         });
       }
     }
+
+    // Shuffle again so reds and random colors are interleaved
+    batch.sort(function () { return Math.random() - 0.5; });
 
     this.allResults = batch;
 
