@@ -8,16 +8,12 @@
 
   // ---- Custom color palette ----
   var PALETTE_COLORS = [
-    '#000000', '#FF0000', '#8B0000', '#FF1493', '#FF4500',
-    '#FF8C00', '#FFD700', '#FFFF00', '#BDB76B', '#9400D3',
-    '#4B0082', '#7CFC00', '#32CD32', '#00FF7F', '#008000',
-    '#808000', '#556B2F', '#00FFFF', '#00CED1', '#4682B4',
-    '#1E90FF', '#4169E1', '#000080', '#8B4513', '#FFFFFF',
-    '#C0C0C0', '#A9A9A9'
+    '#000000', '#8B0000', '#003366', '#2D572C', '#4B0082',
+    '#FF0000', '#FF6600', '#1E90FF', '#FF1493', '#32CD32'
   ];
 
   // ---- State ----
-  var currentFilters = { colors: [], tilts: [], textures: [], shapes: [], objects: [] };
+  var currentFilters = { colors: [], tilts: [], textures: [], shapes: [], objects: [], frames: [], borders: [], corners: [], fills: [] };
   var currentPageSize = DEFAULT_PAGE_SIZE;
   var isProcessing = false;
 
@@ -100,8 +96,8 @@
           });
           this.textContent = allSelected ? 'Select all' : 'Deselect all';
         } else {
-          // Toggle checkboxes
-          var checkboxes = container.querySelectorAll('input[type="checkbox"]');
+          // Toggle checkboxes (skip disabled coming-soon items)
+          var checkboxes = container.querySelectorAll('input[type="checkbox"]:not(:disabled)');
           var allChecked = Array.prototype.every.call(checkboxes, function (cb) { return cb.checked; });
           checkboxes.forEach(function (cb) {
             cb.checked = !allChecked;
@@ -264,6 +260,30 @@
       selectedObjects.push(el.value);
     });
 
+    // Read selected frames
+    var selectedFrames = [];
+    document.querySelectorAll('#frame-filters input:checked').forEach(function (el) {
+      selectedFrames.push(el.value);
+    });
+
+    // Read selected borders
+    var selectedBorders = [];
+    document.querySelectorAll('#border-filters input:checked').forEach(function (el) {
+      selectedBorders.push(el.value);
+    });
+
+    // Read selected corners
+    var selectedCorners = [];
+    document.querySelectorAll('#corner-filters input:checked').forEach(function (el) {
+      selectedCorners.push(el.value);
+    });
+
+    // Read selected fills
+    var selectedFills = [];
+    document.querySelectorAll('#fill-filters input:checked').forEach(function (el) {
+      selectedFills.push(el.value);
+    });
+
     // Read selected quantity
     var quantityRadio = document.querySelector('#quantity-filters input[name="quantity"]:checked');
     if (quantityRadio) {
@@ -275,7 +295,11 @@
       tilts: selectedTilts,
       textures: selectedTextures,
       shapes: selectedShapes,
-      objects: selectedObjects
+      objects: selectedObjects,
+      frames: selectedFrames,
+      borders: selectedBorders,
+      corners: selectedCorners,
+      fills: selectedFills
     };
 
     // Apply filters (async due to texture loading)

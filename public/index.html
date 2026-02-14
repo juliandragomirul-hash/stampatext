@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -40,7 +40,7 @@
 
   <!-- Filters Modal -->
   <div class="modal-overlay" id="filters-modal">
-    <div class="modal" style="max-width:520px;">
+    <div class="modal" style="max-width:680px;">
       <button class="modal-close" id="filters-modal-close">&times;</button>
       <h3 class="modal-title">Preferences</h3>
 
@@ -53,15 +53,90 @@
         <div class="color-palette" id="color-palette"></div>
       </div>
 
-      <!-- TILT -->
+      <!-- OBJECT -->
       <div class="filter-section">
         <div class="filter-section-header">
-          <span class="filter-section-title">TILT</span>
-          <a href="#" class="filter-select-all" data-target="tilt-filters">Select all</a>
+          <span class="filter-section-title">OBJECT</span>
+          <a href="#" class="filter-select-all" data-target="object-filters">Select all</a>
         </div>
-        <div class="filter-checkboxes" id="tilt-filters">
-          <label class="filter-checkbox-label"><input type="checkbox" value="0"> Straight</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="-20"> 20 degrees</label>
+        <div class="filter-checkboxes" id="object-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="stamp"> Stamp</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="sticker" disabled> Sticker</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="button" disabled> Button</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="banner" disabled> Banner</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="bubble_cloud" disabled> Bubble / Cloud</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="blackboard" disabled> Blackboard</label>
+        </div>
+      </div>
+
+      <!-- SHAPE -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">SHAPE</span>
+          <a href="#" class="filter-select-all" data-target="shape-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="shape-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="rectangle"> Rect / Square</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="lined" disabled> Lined</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="circle_ellipse" disabled> Circle / Ellipse</label>
+          <label class="filter-checkbox-label filter-coming-soon"><input type="checkbox" value="irregular" disabled> Irregular</label>
+        </div>
+      </div>
+
+      <!-- FRAME -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">FRAME</span>
+          <a href="#" class="filter-select-all" data-target="frame-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="frame-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="single"> Single</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="double"> Double</label>
+        </div>
+      </div>
+
+      <!-- BORDER -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">BORDER</span>
+          <a href="#" class="filter-select-all" data-target="border-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="border-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="simple"> Simple</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="wavy"> Wavy</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="brushstroke"> Brushstroke</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="stitch_line"> Stitch line</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="stitch_square"> Stitch square</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="stitch_circle"> Stitch dot</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="torn_edge"> Torn edge</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="perforated_spaced"> Spaced perforated</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="perforated"> Perforated</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="zigzag"> Zigzag</label>
+        </div>
+      </div>
+
+      <!-- CORNERS -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">CORNERS</span>
+          <a href="#" class="filter-select-all" data-target="corner-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="corner-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="straight"> Straight</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="soft_round"> Soft round</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="strong_round"> Rounded</label>
+        </div>
+      </div>
+
+      <!-- FILL -->
+      <div class="filter-section">
+        <div class="filter-section-header">
+          <span class="filter-section-title">FILL</span>
+          <a href="#" class="filter-select-all" data-target="fill-filters">Select all</a>
+        </div>
+        <div class="filter-checkboxes" id="fill-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="full"> Filled</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="empty"> Outlined</label>
         </div>
       </div>
 
@@ -77,33 +152,15 @@
         </div>
       </div>
 
-      <!-- SHAPE -->
+      <!-- TILT -->
       <div class="filter-section">
         <div class="filter-section-header">
-          <span class="filter-section-title">SHAPE</span>
-          <a href="#" class="filter-select-all" data-target="shape-filters">Select all</a>
+          <span class="filter-section-title">TILT</span>
+          <a href="#" class="filter-select-all" data-target="tilt-filters">Select all</a>
         </div>
-        <div class="filter-checkboxes" id="shape-filters">
-          <label class="filter-checkbox-label"><input type="checkbox" value="circle"> Circle</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="square"> Square</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="rectangle"> Rectangle</label>
-        </div>
-      </div>
-
-      <!-- OBJECT -->
-      <div class="filter-section">
-        <div class="filter-section-header">
-          <span class="filter-section-title">OBJECT</span>
-          <a href="#" class="filter-select-all" data-target="object-filters">Select all</a>
-        </div>
-        <div class="filter-checkboxes" id="object-filters">
-          <label class="filter-checkbox-label"><input type="checkbox" value="stamp"> Stamp</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="sticker"> Sticker</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="button"> Button</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="banner"> Banner</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="blackboard"> Blackboard</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="speech_bubble"> Speech Bubble</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="speech_cloud"> Speech Cloud</label>
+        <div class="filter-checkboxes" id="tilt-filters">
+          <label class="filter-checkbox-label"><input type="checkbox" value="0"> Straight</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="-20"> 20 degrees</label>
         </div>
       </div>
 
@@ -173,8 +230,8 @@
   <script src="/js/supabase-client.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/router.js"></script>
-  <script src="/js/svg-renderer.js?v=39"></script>
-  <script src="/js/gallery.js?v=29"></script>
+  <script src="/js/svg-renderer.js?v=40"></script>
+  <script src="/js/gallery.js?v=33"></script>
   <script>
     // Inline restore check — runs BEFORE stamp-app.js, cannot be cached separately
     (function() {

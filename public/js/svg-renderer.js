@@ -10,20 +10,22 @@ const SvgRenderer = {
   // Font data cache for embedding in exported SVGs (base64 @font-face rules)
   _fontDataCache: {},
 
+  // Counter for unique SVG IDs (prevents cross-template <use> reference conflicts
+  // when multiple inline SVGs share the same page)
+  _svgIdCounter: 0,
+
   // Map of font names to local font files and their format
   _fontMap: {
-    'Oswald':       { url: '/fonts/Oswald-Medium.ttf',        format: 'truetype' },
-    'AntonSC':      { url: '/fonts/AntonSC-Regular.ttf',      format: 'truetype' },
-    'RobotoBlack':  { url: '/fonts/Roboto-Black.ttf',         format: 'truetype' },
-    'AbrilFatface': { url: '/fonts/AbrilFatface-Regular.ttf',  format: 'truetype' },
-    'AlfaSlabOne':  { url: '/fonts/AlfaSlabOne-Regular.ttf',  format: 'truetype' },
-    'Bangers':      { url: '/fonts/Bangers-Regular.ttf',      format: 'truetype' },
-    'SpecialElite': { url: '/fonts/SpecialElite.ttf',         format: 'truetype' },
-    'ArmyRust':     { url: '/fonts/army-rust.ttf',            format: 'truetype' },
-    'Gunplay':      { url: '/fonts/gunplay-regular.otf',      format: 'opentype' },
-
-    'Agbalumo':     { url: '/fonts/Agbalumo-Regular.ttf',     format: 'truetype' },
-    'BebasNeue':    { url: '/fonts/BebasNeue-Regular.ttf',    format: 'truetype' }
+    'Oswald':          { url: '/fonts/Oswald-Medium.ttf',         format: 'truetype' },
+    'Montserrat':      { url: '/fonts/Montserrat-Black.ttf',      format: 'truetype' },
+    'Nunito':          { url: '/fonts/Nunito-Black.ttf',           format: 'truetype' },
+    'RobotoBlack':     { url: '/fonts/Roboto-Black.ttf',          format: 'truetype' },
+    'PlayfairDisplay': { url: '/fonts/PlayfairDisplay-Bold.ttf',  format: 'truetype' },
+    'Merriweather':    { url: '/fonts/Merriweather-Black.ttf',    format: 'truetype' },
+    'Bitter':          { url: '/fonts/Bitter-Bold.ttf',            format: 'truetype' },
+    'Exo2':            { url: '/fonts/Exo2-Black.ttf',            format: 'truetype' },
+    'Comfortaa':       { url: '/fonts/Comfortaa-Bold.ttf',        format: 'truetype' },
+    'Raleway':         { url: '/fonts/Raleway-Black.ttf',         format: 'truetype' }
   },
 
   /**
@@ -129,49 +131,42 @@ const SvgRenderer = {
     // Adobe uses 'Oswald-Medium', 'Oswald-Regular', etc. but Google Fonts
     // uses 'Oswald' with font-weight to select the variant.
     var fontMappings = [
+      // Oswald variants (from Adobe/SVG exports)
       { from: "'Oswald-Medium'", to: "'Oswald'", weight: '500' },
       { from: "'Oswald-Regular'", to: "'Oswald'", weight: '400' },
       { from: "'Oswald-Bold'", to: "'Oswald'", weight: '700' },
       { from: "'Oswald-SemiBold'", to: "'Oswald'", weight: '600' },
       { from: "'Oswald-Light'", to: "'Oswald'", weight: '300' },
       { from: "'Oswald-ExtraLight'", to: "'Oswald'", weight: '200' },
-      // Gunplay font (custom, loaded from /fonts/)
-      { from: "'Gunplay-Regular'", to: "'Gunplay'", weight: '400' },
-      { from: "'Gunplay'", to: "'Gunplay'", weight: '400' },
-      // Bebas Neue font (custom, loaded from /fonts/)
-      { from: "'BebasNeue-Regular'", to: "'BebasNeue'", weight: '400' },
-      { from: "'BebasNeue'", to: "'BebasNeue'", weight: '400' },
-      // Army Rust font (custom, loaded from /fonts/)
-      { from: "'ARMYRUST'", to: "'ArmyRust'", weight: '400' },
-      { from: "'ArmyRust'", to: "'ArmyRust'", weight: '400' },
-      { from: "'ARMY RUST'", to: "'ArmyRust'", weight: '400' },
-      { from: "'Army Rust'", to: "'ArmyRust'", weight: '400' },
-      // Bangers font (Google Fonts)
-      { from: "'Bangers-Regular'", to: "'Bangers'", weight: '400' },
-      { from: "'Bangers'", to: "'Bangers'", weight: '400' },
-      // Roboto Black font
+      // Montserrat
+      { from: "'Montserrat-Black'", to: "'Montserrat'", weight: '900' },
+      { from: "'Montserrat'", to: "'Montserrat'", weight: '900' },
+      // Nunito
+      { from: "'Nunito-Black'", to: "'Nunito'", weight: '900' },
+      { from: "'Nunito'", to: "'Nunito'", weight: '900' },
+      // Roboto Black
       { from: "'Roboto-Black'", to: "'RobotoBlack'", weight: '900' },
       { from: "'RobotoBlack'", to: "'RobotoBlack'", weight: '900' },
-      // Anton SC
-      { from: "'AntonSC-Regular'", to: "'AntonSC'", weight: '400' },
-      { from: "'Anton SC'", to: "'AntonSC'", weight: '400' },
-      { from: "'AntonSC'", to: "'AntonSC'", weight: '400' },
-      // Abril Fatface
-      { from: "'AbrilFatface-Regular'", to: "'AbrilFatface'", weight: '400' },
-      { from: "'Abril Fatface'", to: "'AbrilFatface'", weight: '400' },
-      { from: "'AbrilFatface'", to: "'AbrilFatface'", weight: '400' },
-      // Alfa Slab One
-      { from: "'AlfaSlabOne-Regular'", to: "'AlfaSlabOne'", weight: '400' },
-      { from: "'Alfa Slab One'", to: "'AlfaSlabOne'", weight: '400' },
-      { from: "'AlfaSlabOne'", to: "'AlfaSlabOne'", weight: '400' },
-      // Special Elite
-      { from: "'SpecialElite-Regular'", to: "'SpecialElite'", weight: '400' },
-      { from: "'Special Elite'", to: "'SpecialElite'", weight: '400' },
-      { from: "'SpecialElite'", to: "'SpecialElite'", weight: '400' },
-
-      // Agbalumo
-      { from: "'Agbalumo-Regular'", to: "'Agbalumo'", weight: '400' },
-      { from: "'Agbalumo'", to: "'Agbalumo'", weight: '400' }
+      // Playfair Display
+      { from: "'PlayfairDisplay-Bold'", to: "'PlayfairDisplay'", weight: '700' },
+      { from: "'Playfair Display'", to: "'PlayfairDisplay'", weight: '700' },
+      { from: "'PlayfairDisplay'", to: "'PlayfairDisplay'", weight: '700' },
+      // Merriweather
+      { from: "'Merriweather-Black'", to: "'Merriweather'", weight: '900' },
+      { from: "'Merriweather'", to: "'Merriweather'", weight: '900' },
+      // Bitter
+      { from: "'Bitter-Bold'", to: "'Bitter'", weight: '700' },
+      { from: "'Bitter'", to: "'Bitter'", weight: '700' },
+      // Exo 2
+      { from: "'Exo2-Black'", to: "'Exo2'", weight: '900' },
+      { from: "'Exo 2'", to: "'Exo2'", weight: '900' },
+      { from: "'Exo2'", to: "'Exo2'", weight: '900' },
+      // Comfortaa
+      { from: "'Comfortaa-Bold'", to: "'Comfortaa'", weight: '700' },
+      { from: "'Comfortaa'", to: "'Comfortaa'", weight: '700' },
+      // Raleway
+      { from: "'Raleway-Black'", to: "'Raleway'", weight: '900' },
+      { from: "'Raleway'", to: "'Raleway'", weight: '900' }
     ];
     fontMappings.forEach(function(m) {
       // Replace font-family attribute - only add font-weight if not already present
@@ -190,6 +185,40 @@ const SvgRenderer = {
     }
 
     return cleaned;
+  },
+
+  /**
+   * Make all id="..." attributes unique by appending a counter suffix.
+   * Prevents cross-SVG <use href="#id"> conflicts when multiple inline SVGs
+   * share the same HTML page (e.g. gallery grid).
+   * Updates id definitions, href/xlink:href references, and url(#...) references.
+   */
+  uniquifySvgIds(svgString) {
+    var suffix = '_s' + (++this._svgIdCounter);
+
+    // Collect all id="..." values
+    var ids = [];
+    var idRe = /\bid=["']([^"']+)["']/g;
+    var m;
+    while ((m = idRe.exec(svgString)) !== null) {
+      if (ids.indexOf(m[1]) === -1) ids.push(m[1]);
+    }
+    if (ids.length === 0) return svgString;
+
+    var result = svgString;
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      var escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var newId = id + suffix;
+      // Replace id definitions
+      result = result.replace(new RegExp('\\bid="' + escaped + '"', 'g'), 'id="' + newId + '"');
+      // Replace href="#id" and xlink:href="#id" references
+      result = result.replace(new RegExp('href="#' + escaped + '"', 'g'), 'href="#' + newId + '"');
+      // Replace url(#id) references (filter, clip-path, mask)
+      result = result.replace(new RegExp('url\\(#' + escaped + '\\)', 'g'), 'url(#' + newId + ')');
+    }
+
+    return result;
   },
 
   /**
@@ -1072,7 +1101,7 @@ const SvgRenderer = {
           var originalAttrs = originalTspanMatch[1];
           // Extract styling attributes (exclude x, y, dy which we'll set ourselves)
           // Note: font-family uses a special regex because the value can contain nested quotes
-          // e.g., font-family="'Bangers'" - the [^"']* would stop at the inner single quote
+          // e.g., font-family="'Montserrat'" - the [^"']* would stop at the inner single quote
           var fillMatch = originalAttrs.match(/fill=["'][^"']*["']/);
           var fontFamilyMatch = originalAttrs.match(/font-family="([^"]*)"/);  // Match double-quoted value only
           if (!fontFamilyMatch) {
@@ -1238,20 +1267,18 @@ const SvgRenderer = {
     // Category 1: Dynamic Frame - TEXT-FIRST approach
     // Create an HTML wrapper with fonts to measure text accurately
     var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-      '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
+      '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
       '<style>' +
       '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
-      '@font-face{font-family:"AntonSC";src:url("/fonts/AntonSC-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"Nunito";src:url("/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
       '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
-      '@font-face{font-family:"AbrilFatface";src:url("/fonts/AbrilFatface-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"AlfaSlabOne";src:url("/fonts/AlfaSlabOne-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"Bangers";src:url("/fonts/Bangers-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"SpecialElite";src:url("/fonts/SpecialElite.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:400;}' +
-
-      '@font-face{font-family:"Agbalumo";src:url("/fonts/Agbalumo-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"PlayfairDisplay";src:url("/fonts/PlayfairDisplay-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"Merriweather";src:url("/fonts/Merriweather-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"Raleway";src:url("/fonts/Raleway-Black.ttf") format("truetype");font-weight:900;}' +
       '*{margin:0;padding:0;}' +
       '</style>' +
       '</head><body>' + svgString + '</body></html>';
@@ -1866,12 +1893,12 @@ const SvgRenderer = {
     if (fontDetectMatch) detectedFont = fontDetectMatch[1].replace(/'/g, '').toLowerCase();
 
     var charWidthFactor;
-    if (detectedFont.indexOf('roboto') !== -1) {
+    if (detectedFont.indexOf('oswald') !== -1) {
+      charWidthFactor = 0.42;  // Oswald (condensed)
+    } else if (detectedFont.indexOf('roboto') !== -1) {
       charWidthFactor = 0.53;  // Roboto Black uppercase
-    } else if (detectedFont.indexOf('bebas') !== -1) {
-      charWidthFactor = 0.45;  // Bebas Neue (condensed)
     } else {
-      charWidthFactor = 0.38;  // Bangers (default)
+      charWidthFactor = 0.50;  // Standard width (default)
     }
     console.log('Fixed Frame: font="' + detectedFont + '", charWidthFactor=' + charWidthFactor);
 
@@ -2516,21 +2543,18 @@ const SvgRenderer = {
       document.body.appendChild(iframe);
 
       var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-        '<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
+        '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' +
         '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
-        '@font-face{font-family:"AntonSC";src:url("/fonts/AntonSC-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"HussarBold";src:url("/fonts/HussarBd.otf") format("opentype");font-weight:700;}' +
+        '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"Nunito";src:url("/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
         '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
-        '@font-face{font-family:"AbrilFatface";src:url("/fonts/AbrilFatface-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"AlfaSlabOne";src:url("/fonts/AlfaSlabOne-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"Bangers";src:url("/fonts/Bangers-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"SpecialElite";src:url("/fonts/SpecialElite.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"ArmyRust";src:url("/fonts/army-rust.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"Gunplay";src:url("/fonts/gunplay-regular.otf") format("opentype");font-weight:400;}' +
-  
-        '@font-face{font-family:"Agbalumo";src:url("/fonts/Agbalumo-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"BebasNeue";src:url("/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"PlayfairDisplay";src:url("/fonts/PlayfairDisplay-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"Merriweather";src:url("/fonts/Merriweather-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"Raleway";src:url("/fonts/Raleway-Black.ttf") format("truetype");font-weight:900;}' +
         '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +
         '</head><body>' + svgString + '</body></html>';

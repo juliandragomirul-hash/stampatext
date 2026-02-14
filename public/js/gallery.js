@@ -15,73 +15,54 @@ const Gallery = {
   currentText: '',
 
   // Base results: text replaced but NOT colorized
-  baseResults: [],    // [{templateId, svgString, shape, objectType, colors, width, height, name}]
+  baseResults: [],    // [{templateId, svgString, shape, objectType, frameType, borderType, fillType, cornerType, colors, width, height, name}]
 
   // Currently displayed/available results (colorized variants)
-  allResults: [],       // [{templateId, svgString, shape, objectType, colors, width, height, name, appliedColor}]
+  allResults: [],       // [{...baseResult, appliedColor, appliedTilt, appliedTexture}]
   filteredResults: [],
   displayedCount: 0,
   isFirstShowMore: true,
 
   // Palette colors (same as stamp-app.js)
   PALETTE_COLORS: [
-    '#000000', '#FF0000', '#8B0000', '#FF1493', '#FF4500',
-    '#FF8C00', '#FFD700', '#FFFF00', '#BDB76B', '#9400D3',
-    '#4B0082', '#7CFC00', '#32CD32', '#00FF7F', '#008000',
-    '#808000', '#556B2F', '#00FFFF', '#00CED1', '#4682B4',
-    '#1E90FF', '#4169E1', '#000080', '#8B4513',
-    '#C0C0C0', '#A9A9A9'
+    '#000000', '#8B0000', '#003366', '#2D572C', '#4B0082',
+    '#FF0000', '#FF6600', '#1E90FF', '#FF1493', '#32CD32'
   ],
 
   COLOR_NAMES: {
-    '#000000': 'Black', '#FF0000': 'Red', '#8B0000': 'Dark Red',
-    '#FF1493': 'Deep Pink', '#FF4500': 'Orange Red', '#FF8C00': 'Dark Orange',
-    '#FFD700': 'Gold', '#FFFF00': 'Yellow', '#BDB76B': 'Dark Khaki',
-    '#9400D3': 'Dark Violet', '#4B0082': 'Indigo', '#7CFC00': 'Lawn Green',
-    '#32CD32': 'Lime Green', '#00FF7F': 'Spring Green', '#008000': 'Green',
-    '#808000': 'Olive', '#556B2F': 'Dark Olive', '#00FFFF': 'Cyan',
-    '#00CED1': 'Dark Turquoise', '#4682B4': 'Steel Blue', '#1E90FF': 'Dodger Blue',
-    '#4169E1': 'Royal Blue', '#000080': 'Navy', '#8B4513': 'Saddle Brown',
-    '#C0C0C0': 'Silver', '#A9A9A9': 'Dark Gray'
+    '#000000': 'Black', '#8B0000': 'Dark Red', '#003366': 'Navy',
+    '#2D572C': 'Forest Green', '#4B0082': 'Indigo',
+    '#FF0000': 'Red', '#FF6600': 'Orange', '#1E90FF': 'Dodger Blue',
+    '#FF1493': 'Hot Pink', '#32CD32': 'Lime Green'
   },
 
   getColorName(hex) {
     return this.COLOR_NAMES[(hex || '').toUpperCase()] || hex;
   },
 
-  buildDescription(text, colorName, templateName) {
-    var n = (templateName || '').toLowerCase();
-    // Border style (adjective before "stamp")
-    var border = '';
-    if (n.indexOf('strong wavy') !== -1) border = 'deep wavy';
-    else if (n.indexOf('gentle wavy') !== -1) border = 'wavy';
-    else if (n.indexOf('brushstroke') !== -1) border = 'brushstroke';
-    else if (n.indexOf('stitch line') !== -1) border = 'stitch line';
-    else if (n.indexOf('stitch square') !== -1) border = 'stitch square';
-    else if (n.indexOf('stitch circle') !== -1) border = 'stitch dot';
-    else if (n.indexOf('ripped paper') !== -1) border = 'torn edge';
-    else if (n.indexOf('spaced perforated') !== -1) border = 'spaced perforated';
-    else if (n.indexOf('strong perforated') !== -1) border = 'deep perforated';
-    else if (n.indexOf('soft perforated') !== -1) border = 'perforated';
-    else if (n.indexOf('strong zigzag') !== -1) border = 'deep zigzag';
-    else if (n.indexOf('soft zigzag') !== -1) border = 'zigzag';
-    // Fill (adjective before "stamp")
-    var fill = '';
-    if (n.indexOf('empty') !== -1) fill = 'outlined';
-    // Corners ("with" clause)
+  BORDER_LABELS: {
+    wavy: 'wavy', brushstroke: 'brushstroke',
+    stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
+    torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
+    perforated: 'perforated', zigzag: 'zigzag'
+  },
+
+  buildDescription(text, colorName, borderType, fillType, cornerType, objectType, appliedTilt, appliedTexture) {
+    var border = this.BORDER_LABELS[borderType] || 'simple';
+    var fill = (fillType === 'empty') ? 'outlined' : '';
+    var texture = (appliedTexture === 'grungy_texture') ? 'grungy' : '';
+    var tilt = (appliedTilt && appliedTilt !== 0) ? 'tilted' : '';
+    var obj = (objectType || 'stamp').replace(/_/g, ' ');
     var corners = '';
-    if (n.indexOf('strong round') !== -1) corners = 'rounded corners';
-    else if (n.indexOf('soft round') !== -1) corners = 'soft corners';
-    // Frame ("with" clause)
-    var frame = '';
-    if (n.indexOf('double') !== -1) frame = 'double border';
-    // Build: "TEXT" written on [color] [border?] [fill?] stamp [with corners? and frame?]
-    var adjectives = [border, fill].filter(Boolean).join(' ');
-    var stampPhrase = (adjectives ? adjectives + ' ' : '') + 'stamp';
-    var withParts = [corners, frame].filter(Boolean);
+    if (cornerType === 'strong_round') corners = 'rounded corners';
+    else if (cornerType === 'soft_round') corners = 'soft corners';
+    // Build: "TEXT" written on [color] [texture?] [tilt?] [border?] [fill?] [objectType] [with corners?]
+    var adjectives = [texture, tilt, border, fill].filter(Boolean).join(' ');
+    var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
+    var withParts = [corners].filter(Boolean);
     var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
     return '\u201C' + this.escapeHtml(text) + '\u201D written on ' +
-      colorName.toLowerCase() + ' ' + stampPhrase + withClause;
+      colorName.toLowerCase() + ' ' + objPhrase + withClause;
   },
 
   /**
@@ -124,6 +105,7 @@ const Gallery = {
         const svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
         const rawSvg = await SvgRenderer.fetchSvg(svgUrl);
         var cleanedSvg = SvgRenderer.cleanSvgString(rawSvg);
+        cleanedSvg = SvgRenderer.uniquifySvgIds(cleanedSvg);
 
         // Detect text case from original SVG
         var displayText = userText;
@@ -177,6 +159,10 @@ const Gallery = {
           svgString: cleanedSvg,
           shape: tpl.shape,
           objectType: tpl.object_type,
+          frameType: tpl.frame_type || 'single',
+          borderType: tpl.border_type || null,
+          fillType: tpl.fill_type || 'full',
+          cornerType: tpl.corner_type || null,
           colors: tpl.colors || [],
           width: tpl.width,
           height: tpl.height,
@@ -240,6 +226,10 @@ const Gallery = {
           svgString: cropped,
           shape: base.shape,
           objectType: base.objectType,
+          frameType: base.frameType,
+          borderType: base.borderType,
+          fillType: base.fillType,
+          cornerType: base.cornerType,
           colors: base.colors,
           width: base.width,
           height: base.height,
@@ -256,6 +246,10 @@ const Gallery = {
           svgString: SvgRenderer.colorize(base.svgString, color),
           shape: base.shape,
           objectType: base.objectType,
+          frameType: base.frameType,
+          borderType: base.borderType,
+          fillType: base.fillType,
+          cornerType: base.cornerType,
           colors: base.colors,
           width: base.width,
           height: base.height,
@@ -294,11 +288,25 @@ const Gallery = {
   async applyFilters(filters) {
     // Filter base templates by shape and object type
     var matchingBases = this.baseResults.filter(function (r) {
-      if (filters.shapes.length > 0) {
+      if (filters.shapes && filters.shapes.length > 0) {
         if (filters.shapes.indexOf(r.shape) === -1) return false;
       }
-      if (filters.objects.length > 0) {
+      if (filters.objects && filters.objects.length > 0) {
         if (filters.objects.indexOf(r.objectType) === -1) return false;
+      }
+      if (filters.frames && filters.frames.length > 0) {
+        if (filters.frames.indexOf(r.frameType) === -1) return false;
+      }
+      if (filters.borders && filters.borders.length > 0) {
+        var borderVal = r.borderType || 'simple';
+        if (filters.borders.indexOf(borderVal) === -1) return false;
+      }
+      if (filters.corners && filters.corners.length > 0) {
+        var cornerVal = r.cornerType || 'straight';
+        if (filters.corners.indexOf(cornerVal) === -1) return false;
+      }
+      if (filters.fills && filters.fills.length > 0) {
+        if (filters.fills.indexOf(r.fillType) === -1) return false;
       }
       return true;
     });
@@ -346,11 +354,15 @@ const Gallery = {
                 svgString: textured,
                 shape: base.shape,
                 objectType: base.objectType,
+                frameType: base.frameType,
+                borderType: base.borderType,
+                fillType: base.fillType,
+                cornerType: base.cornerType,
                 colors: base.colors,
                 width: base.width,
                 height: base.height,
                 name: base.name,
-          displayText: base.displayText,
+                displayText: base.displayText,
                 appliedColor: color,
                 appliedTilt: tilt,
                 appliedTexture: textureId
@@ -362,11 +374,15 @@ const Gallery = {
                 svgString: tilted,
                 shape: base.shape,
                 objectType: base.objectType,
+                frameType: base.frameType,
+                borderType: base.borderType,
+                fillType: base.fillType,
+                cornerType: base.cornerType,
                 colors: base.colors,
                 width: base.width,
                 height: base.height,
                 name: base.name,
-          displayText: base.displayText,
+                displayText: base.displayText,
                 appliedColor: color,
                 appliedTilt: tilt,
                 appliedTexture: null
@@ -451,7 +467,11 @@ const Gallery = {
         (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
 
       var colorName = self.getColorName(r.appliedColor);
-      var description = self.buildDescription(r.displayText || self.currentText, colorName, r.name);
+      var description = self.buildDescription(
+        r.displayText || self.currentText, colorName,
+        r.borderType, r.fillType, r.cornerType,
+        r.objectType, r.appliedTilt, r.appliedTexture
+      );
 
       var actionsDiv = document.createElement('a');
       actionsDiv.className = 'stamp-card-actions';
@@ -628,6 +648,10 @@ const Gallery = {
           svgString: textured,
           shape: base.shape,
           objectType: base.objectType,
+          frameType: base.frameType,
+          borderType: base.borderType,
+          fillType: base.fillType,
+          cornerType: base.cornerType,
           colors: base.colors,
           width: base.width,
           height: base.height,

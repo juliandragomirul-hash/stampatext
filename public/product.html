@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -149,163 +149,133 @@
   <script src="/js/supabase.umd.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/supabase-client.js"></script>
-  <script src="/js/svg-renderer.js?v=39"></script>
+  <script src="/js/svg-renderer.js?v=40"></script>
   <script>
     (async function() {
       // ---- Constants ----
       var PALETTE_COLORS = [
-        '#000000', '#FF0000', '#8B0000', '#FF1493', '#FF4500',
-        '#FF8C00', '#FFD700', '#FFFF00', '#BDB76B', '#9400D3',
-        '#4B0082', '#7CFC00', '#32CD32', '#00FF7F', '#008000',
-        '#808000', '#556B2F', '#00FFFF', '#00CED1', '#4682B4',
-        '#1E90FF', '#4169E1', '#000080', '#8B4513',
-        '#C0C0C0', '#A9A9A9'
+        '#000000', '#8B0000', '#003366', '#2D572C', '#4B0082',
+        '#FF0000', '#FF6600', '#1E90FF', '#FF1493', '#32CD32'
       ];
 
       var COLOR_NAMES = {
-        '#000000': 'Black', '#FF0000': 'Red', '#8B0000': 'Dark Red',
-        '#FF1493': 'Deep Pink', '#FF4500': 'Orange Red', '#FF8C00': 'Dark Orange',
-        '#FFD700': 'Gold', '#FFFF00': 'Yellow', '#BDB76B': 'Dark Khaki',
-        '#9400D3': 'Dark Violet', '#4B0082': 'Indigo', '#7CFC00': 'Lawn Green',
-        '#32CD32': 'Lime Green', '#00FF7F': 'Spring Green', '#008000': 'Green',
-        '#808000': 'Olive', '#556B2F': 'Dark Olive', '#00FFFF': 'Cyan',
-        '#00CED1': 'Dark Turquoise', '#4682B4': 'Steel Blue', '#1E90FF': 'Dodger Blue',
-        '#4169E1': 'Royal Blue', '#000080': 'Navy', '#8B4513': 'Saddle Brown',
-        '#C0C0C0': 'Silver', '#A9A9A9': 'Dark Gray'
+        '#000000': 'Black', '#8B0000': 'Dark Red', '#003366': 'Navy',
+        '#2D572C': 'Forest Green', '#4B0082': 'Indigo',
+        '#FF0000': 'Red', '#FF6600': 'Orange', '#1E90FF': 'Dodger Blue',
+        '#FF1493': 'Hot Pink', '#32CD32': 'Lime Green'
       };
 
       var AVAILABLE_FONTS = [
-        { key: 'Oswald',       label: 'Oswald' },
-        { key: 'AntonSC',      label: 'Anton SC' },
-        { key: 'RobotoBlack',  label: 'Roboto Black' },
-        { key: 'AbrilFatface', label: 'Abril Fatface' },
-        { key: 'AlfaSlabOne',  label: 'Alfa Slab One' },
-        { key: 'Bangers',      label: 'Bangers' },
-        { key: 'SpecialElite', label: 'Special Elite' },
-        { key: 'ArmyRust',     label: 'Army Rust' },
-        { key: 'Gunplay',      label: 'Gunplay' },
-
-        { key: 'Agbalumo',     label: 'Agbalumo' }
+        { key: 'Oswald',          label: 'Oswald' },
+        { key: 'Montserrat',      label: 'Montserrat' },
+        { key: 'Nunito',          label: 'Nunito' },
+        { key: 'RobotoBlack',     label: 'Roboto Black' },
+        { key: 'PlayfairDisplay', label: 'Playfair Display' },
+        { key: 'Merriweather',    label: 'Merriweather' },
+        { key: 'Bitter',          label: 'Bitter' },
+        { key: 'Exo2',            label: 'Exo 2' },
+        { key: 'Comfortaa',       label: 'Comfortaa' },
+        { key: 'Raleway',         label: 'Raleway' }
       ];
 
       var FONT_WEIGHTS = {
-        'Oswald': '500', 'AntonSC': '400', 'RobotoBlack': '900',
-        'AbrilFatface': '400', 'AlfaSlabOne': '400',
-        'Bangers': '400', 'SpecialElite': '400', 'ArmyRust': '400',
-        'Gunplay': '400', 'Agbalumo': '400',
-        'BebasNeue': '400'
+        'Oswald': '500', 'Montserrat': '900', 'Nunito': '900',
+        'RobotoBlack': '900', 'PlayfairDisplay': '700',
+        'Merriweather': '900', 'Bitter': '700',
+        'Exo2': '900', 'Comfortaa': '700', 'Raleway': '900'
       };
 
-      // Per-font scaling config (calibrated relative to Oswald baseline)
-      // scale: font-size multiplier (< 1 shrinks wider fonts, > 1 grows narrower fonts)
-      // letterSpacing: fraction of font-size added as SVG letter-spacing
-      // lineHeightMul: multiplier on default 1.1 line-height for tspan dy
-      // baselineShift: vertical offset as fraction of font-size (positive = down)
-      var FONT_CONFIG = {
-        'Oswald':       { scale: 1.20, baselineShift: 0.02 },
-        'AntonSC':      { scale: 1.21, baselineShift: 0.04 },
-        'RobotoBlack':  { scale: 0.97, baselineShift: -0.02, wordSpacing: 0.20 },
-        'AbrilFatface': { scale: 0.88, baselineShift: -0.02, wordSpacing: 0.20 },
-        'AlfaSlabOne':  { scale: 0.76, baselineShift: 0.00, letterSpacing: 0.04 },
-        'Bangers':      { scale: 1.25, letterSpacing: 0.06, baselineShift: -0.04, horizontalShift: -0.03 },
-        'SpecialElite': { scale: 1.06, baselineShift: -0.04 },
-        'ArmyRust':     { scale: 1.30, letterSpacing: 0.04, lineHeightMul: 0.85, baselineShift: -0.12 },
-        'Gunplay':      { scale: 1.02, baselineShift: 0.01, horizontalShift: -0.02 },
-        'Agbalumo':     { scale: 0.91, baselineShift: -0.03, letterSpacing: 0.03 },
-        'BebasNeue':    { scale: 1.00 }
-      };
+      // Stored for font switching — re-runs autoFit with new font
+      var rawCleanedSvg = null;
+      var storedZones = [];
+      var storedDisplayText = '';
+      var initialBaseSvg = null; // First render's SVG — preserves stamp shape
 
-      var baseFontSize = 0;
-      var baseTextTx = 0;
-      var baseTextTy = 0;
-      var baseTspanCount = 0;
-
-      function changeFont(svgString, fontKey) {
+      async function rebuildWithFont(fontKey) {
+        if (!rawCleanedSvg) return baseSvg;
         var weight = FONT_WEIGHTS[fontKey] || '400';
-        var config = FONT_CONFIG[fontKey] || {};
 
-        // Replace font-family (preserve inner single quotes for CSS matching)
-        var result = svgString.replace(/font-family=["']'?[^"']*'?["']/g,
+        // Start from raw template, replace font-family + weight
+        var svg = rawCleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + fontKey + "'\"");
-        // Replace font-weight wherever it appears
-        result = result.replace(/font-weight=["'][^"']*["']/g,
+        svg = svg.replace(/font-weight=["'][^"']*["']/g,
           'font-weight="' + weight + '"');
 
-        if (baseFontSize > 0) {
-          var scaleFactor = config.scale || 1.0;
-          var scaledFontSize = baseFontSize * scaleFactor;
-          // Clamp to safe range
-          scaledFontSize = Math.min(scaledFontSize, baseFontSize * 1.4);
-          scaledFontSize = Math.max(scaledFontSize, baseFontSize * 0.5);
+        // Replace text + auto-fit (same logic as initial load)
+        var didAutoFit = false;
+        for (var i = 0; i < storedZones.length; i++) {
+          var zone = storedZones[i];
+          var idx = zone.svg_element_index || 0;
+          svg = SvgRenderer.replaceTextInString(svg, idx, storedDisplayText);
 
-          // Update font-size
-          result = result.replace(/font-size=["'][\d.]+["']/g,
-            'font-size="' + scaledFontSize.toFixed(2) + '"');
-
-          // Letter spacing (fraction of font-size → SVG user units)
-          var ls = config.letterSpacing || 0;
-          if (ls > 0) {
-            var lsPx = (scaledFontSize * ls).toFixed(2);
-            if (/<text[^>]*letter-spacing=/i.test(result)) {
-              result = result.replace(/(<text[^>]*?)letter-spacing=["'][^"']*["']/i,
-                '$1letter-spacing="' + lsPx + '"');
-            } else {
-              result = result.replace(/<text([^>]*?)>/i,
-                '<text$1 letter-spacing="' + lsPx + '">');
-            }
-          } else {
-            // Remove any previously added letter-spacing
-            result = result.replace(/(<text[^>]*?) letter-spacing=["'][^"']*["']/i, '$1');
+          if (zone.bounding_width) {
+            var originalScaleX = zone.transform_matrix
+              ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1
+              : 1;
+            svg = await SvgRenderer.autoFitTextInString(
+              svg, idx, zone.bounding_width,
+              zone.font_size, originalScaleX
+            );
+            didAutoFit = true;
           }
-
-          // Word spacing (fraction of font-size → SVG user units)
-          var ws = config.wordSpacing || 0;
-          if (ws > 0) {
-            var wsPx = (scaledFontSize * ws).toFixed(2);
-            if (/<text[^>]*word-spacing=/i.test(result)) {
-              result = result.replace(/(<text[^>]*?)word-spacing=["'][^"']*["']/i,
-                '$1word-spacing="' + wsPx + '"');
-            } else {
-              result = result.replace(/<text([^>]*?)>/i,
-                '<text$1 word-spacing="' + wsPx + '">');
-            }
-          } else {
-            // Remove any previously added word-spacing
-            result = result.replace(/(<text[^>]*?) word-spacing=["'][^"']*["']/i, '$1');
-          }
-
-          // Positioning: adjust transform tx/ty (works for all templates)
-          var bShift = (config.baselineShift || 0) * scaledFontSize;
-          var hShift = (config.horizontalShift || 0) * scaledFontSize;
-          var newTx = baseTextTx + hShift;
-          var newTy = baseTextTy + (scaledFontSize - baseFontSize) * 0.39 + bShift;
-          var tyMatched = false;
-          result = result.replace(
-            /<text([^>]*?)transform=["']matrix\(\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*\)["']([^>]*?)>/i,
-            function(_, before, a, b, c, d, tx, ty, after) {
-              tyMatched = true;
-              return '<text' + before + 'transform="matrix(' + a + ' ' + b + ' ' + c + ' ' + d + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')"' + after + '>';
-            }
-          );
-          if (!tyMatched) console.warn('[FontScale] transform regex DID NOT MATCH!');
-
-          // Multi-line: also recalculate tspan dy for line spacing
-          if (baseTspanCount > 1) {
-            var lhMul = config.lineHeightMul || 1.0;
-            var lineHeight = scaledFontSize * 1.1 * lhMul;
-            var totalSpan = (baseTspanCount - 1) * lineHeight;
-            var firstDy = -totalSpan / 2 + scaledFontSize * 0.39;
-            var dyIdx = 0;
-            result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function(_, before) {
-              var dy = (dyIdx === 0) ? firstDy : lineHeight;
-              dyIdx++;
-              return '<tspan' + before + 'dy="' + dy.toFixed(2) + '"';
-            });
-          }
-
         }
 
-        return result;
+        // Category 2 (Fixed Frame): always auto-fit using container rect
+        if (!didAutoFit && /<image[\s>]/i.test(svg)) {
+          svg = await SvgRenderer.autoFitTextInString(svg, 0, 1, 128, 1);
+        }
+
+        // Category 1 (Dynamic Frame): preserve initial stamp shape
+        var isCat1 = !/<image[\s>]/i.test(svg);
+        if (isCat1) {
+          if (!initialBaseSvg) {
+            // First render — store as the reference shape
+            initialBaseSvg = svg;
+          } else {
+            // Transplant autoFit text into initial stamp shape
+            var autoFitTexts = [];
+            svg.replace(/<text[\s\S]*?<\/text>/gi, function(m) {
+              autoFitTexts.push(m);
+            });
+
+            // Calculate Y offset to re-center text in the (taller) initial viewBox
+            function vbCenter(s) {
+              var m = s.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+              if (!m) return null;
+              return {
+                x: parseFloat(m[1]) + parseFloat(m[3]) / 2,
+                y: parseFloat(m[2]) + parseFloat(m[4]) / 2
+              };
+            }
+            var cAuto = vbCenter(svg);
+            var cInit = vbCenter(initialBaseSvg);
+
+            if (cAuto && cInit) {
+              var dx = cInit.x - cAuto.x;
+              var dy = cInit.y - cAuto.y;
+              if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+                for (var j = 0; j < autoFitTexts.length; j++) {
+                  autoFitTexts[j] = autoFitTexts[j].replace(
+                    /transform=["']translate\(\s*([\d.\-]+)[,\s]+([\d.\-]+)\s*\)["']/,
+                    function(_, tx, ty) {
+                      return 'transform="translate(' +
+                        (parseFloat(tx) + dx).toFixed(2) + ', ' +
+                        (parseFloat(ty) + dy).toFixed(2) + ')"';
+                    }
+                  );
+                }
+              }
+            }
+
+            // Splice autoFit text into the initial stamp shape
+            var ti = 0;
+            svg = initialBaseSvg.replace(/<text[\s\S]*?<\/text>/gi, function() {
+              return autoFitTexts[ti++] || '';
+            });
+          }
+        }
+
+        return svg;
       }
 
       var DOWNLOAD_SIZES = {
@@ -321,6 +291,10 @@
       var baseSvg = null;
       var currentSvg = null;
       var templateName = '';
+      var templateBorderType = null;
+      var templateFillType = 'full';
+      var templateCornerType = null;
+      var templateObjectType = 'stamp';
       var userText = '';
       var currentColor = '';
       var currentFont = '';
@@ -365,6 +339,10 @@
       }
 
       templateName = tpl.name;
+      templateBorderType = tpl.border_type || null;
+      templateFillType = tpl.fill_type || 'full';
+      templateCornerType = tpl.corner_type || null;
+      templateObjectType = tpl.object_type || 'stamp';
       document.title = 'StampaText - ' + templateName;
 
       // ---- Fetch SVG from storage ----
@@ -390,45 +368,14 @@
         }
       })();
 
-      // ---- Replace text + auto-fit ----
-      var editableZones = (tpl.text_zones || [])
+      // ---- Store raw template for font switching ----
+      storedZones = (tpl.text_zones || [])
         .filter(function(z) { return z.is_editable; })
         .sort(function(a, b) { return a.sort_order - b.sort_order; });
+      storedDisplayText = displayText;
+      rawCleanedSvg = cleanedSvg;
 
-      var didAutoFit = false;
-      for (var i = 0; i < editableZones.length; i++) {
-        var zone = editableZones[i];
-        var idx = zone.svg_element_index || 0;
-        cleanedSvg = SvgRenderer.replaceTextInString(cleanedSvg, idx, userText);
-
-        if (zone.bounding_width) {
-          var originalScaleX = zone.transform_matrix
-            ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1
-            : 1;
-          cleanedSvg = await SvgRenderer.autoFitTextInString(
-            cleanedSvg, idx, zone.bounding_width,
-            zone.font_size, originalScaleX
-          );
-          didAutoFit = true;
-        }
-      }
-
-      // Category 2 (Fixed Frame): always auto-fit using container rect from SVG
-      if (!didAutoFit && /<image[\s>]/i.test(cleanedSvg)) {
-        cleanedSvg = await SvgRenderer.autoFitTextInString(cleanedSvg, 0, 1, 128, 1);
-      }
-
-      baseSvg = cleanedSvg;
-
-      // Extract basic font scaling params from autoFit result
-      (function() {
-        var fsM = baseSvg.match(/font-size=["']([\d.]+)["']/);
-        baseFontSize = fsM ? parseFloat(fsM[1]) : 0;
-        baseTspanCount = (baseSvg.match(/<tspan/gi) || []).length;
-        var txTyM = baseSvg.match(/<text[^>]*transform=["']matrix\(\s*[\d.\-]+\s+[\d.\-]+\s+[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+([\d.\-]+)\s*\)["']/i);
-        baseTextTx = txTyM ? parseFloat(txTyM[1]) : 0;
-        baseTextTy = txTyM ? parseFloat(txTyM[2]) : 0;
-      })();
+      // ---- Detect font + color, then build initial baseSvg via autoFit ----
 
       // Detect current font from SVG if not in URL
       if (!currentFont) {
@@ -444,6 +391,9 @@
       if (!currentColor || PALETTE_COLORS.indexOf(currentColor) === -1) {
         currentColor = '#000000';
       }
+
+      // Initial render: run autoFit with selected font
+      baseSvg = await rebuildWithFont(currentFont);
 
       // ---- Build UI ----
       buildFontPicker();
@@ -555,8 +505,6 @@
           picker.appendChild(btn);
         });
       }
-
-      // FONT_WEIGHTS, FONT_CONFIG, changeFont defined above with constants
 
       function buildColorPalette() {
         var palette = document.getElementById('product-color-palette');
@@ -707,10 +655,10 @@
         var irx = Math.max(0, orx - inset), iry = Math.max(0, ory - inset);
         var innerRect;
         if (bi.wavy) {
-          var wavyRe = /<path[^>]*stroke-linejoin="round"[^>]*\/?>/;
-          var wavyMatch = svgStr.match(wavyRe);
-          if (wavyMatch) {
-            innerRect = wavyMatch[0]
+          var wavyRe = /<path[^>]*stroke-linejoin="round"[^>]*\/?>/gi;
+          var wavyAll = svgStr.match(wavyRe);
+          if (wavyAll) {
+            innerRect = wavyAll[wavyAll.length - 1]
               .replace(/fill="[^"]*"/, 'fill="none"')
               .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
               .replace(/stroke-width="[^"]*"/, 'stroke-width="12"');
@@ -739,20 +687,13 @@
         previewEl.style.opacity = '0.5';
 
         try {
-          var savedBaseFontSize = baseFontSize;
-          var savedBaseTextTy = baseTextTy;
-          if (currentFrame === 'double') {
-            var reduction = baseFontSize * 0.15;
-            baseFontSize *= 0.85;
-            baseTextTy -= reduction * 0.35;
-          }
-          var svg = changeFont(baseSvg, currentFont);
-          baseFontSize = savedBaseFontSize;
-          baseTextTy = savedBaseTextTy;
+          // Rebuild from raw template with current font (autoFit handles sizing)
+          baseSvg = await rebuildWithFont(currentFont);
+          var svg = baseSvg;
           svg = SvgRenderer.colorize(svg, currentColor);
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
           if (currentFrame === 'double') {
-            if (!borderInfo) borderInfo = detectBorderType(baseSvg);
+            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
             svg = addDoubleFrame(svg, borderInfo);
           }
           // Capture pre-tilt viewBox width for scale compensation
@@ -793,10 +734,29 @@
         }
       }
 
+      var BORDER_LABELS = {
+        wavy: 'wavy', brushstroke: 'brushstroke',
+        stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
+        torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
+        perforated: 'perforated', zigzag: 'zigzag'
+      };
+
       function updateDescription() {
         var colorName = getColorName(currentColor);
+        var border = BORDER_LABELS[templateBorderType] || 'simple';
+        var fill = (templateFillType === 'empty') ? 'outlined' : '';
+        var texture = (currentTexture === 'grungy_texture') ? 'grungy' : '';
+        var tilt = (currentTilt && currentTilt !== 0) ? 'tilted' : '';
+        var obj = (templateObjectType || 'stamp').replace(/_/g, ' ');
+        var corners = '';
+        if (templateCornerType === 'strong_round') corners = 'rounded corners';
+        else if (templateCornerType === 'soft_round') corners = 'soft corners';
+        var adjectives = [texture, tilt, border, fill].filter(Boolean).join(' ');
+        var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
+        var withParts = [corners].filter(Boolean);
+        var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
         var desc = '\u201C' + displayText + '\u201D written on ' +
-          colorName.toLowerCase() + ' ' + templateName;
+          colorName.toLowerCase() + ' ' + objPhrase + withClause;
         document.getElementById('product-description').textContent = desc;
       }
 

@@ -1,16 +1,14 @@
-/* Custom fonts — 12 selected + BebasNeue for backward compat */
+/* 10 worldwide fonts — Latin Extended + Cyrillic + Vietnamese */
 @font-face { font-family: 'Oswald'; src: url('/fonts/Oswald-Medium.ttf') format('truetype'); font-weight: 500; font-display: swap; }
-@font-face { font-family: 'AntonSC'; src: url('/fonts/AntonSC-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Montserrat'; src: url('/fonts/Montserrat-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Nunito'; src: url('/fonts/Nunito-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
 @font-face { font-family: 'RobotoBlack'; src: url('/fonts/Roboto-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
-@font-face { font-family: 'AbrilFatface'; src: url('/fonts/AbrilFatface-Regular.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: 'AlfaSlabOne'; src: url('/fonts/AlfaSlabOne-Regular.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: 'Bangers'; src: url('/fonts/Bangers-Regular.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: 'SpecialElite'; src: url('/fonts/SpecialElite.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: 'ArmyRust'; src: url('/fonts/army-rust.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: 'Gunplay'; src: url('/fonts/gunplay-regular.otf') format('opentype'); font-display: swap; }
-
-@font-face { font-family: 'Agbalumo'; src: url('/fonts/Agbalumo-Regular.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: 'BebasNeue'; src: url('/fonts/BebasNeue-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'PlayfairDisplay'; src: url('/fonts/PlayfairDisplay-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Merriweather'; src: url('/fonts/Merriweather-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Bitter'; src: url('/fonts/Bitter-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Exo2'; src: url('/fonts/Exo2-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Comfortaa'; src: url('/fonts/Comfortaa-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Raleway'; src: url('/fonts/Raleway-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
 
 * {
   margin: 0;
@@ -181,6 +179,8 @@ a:hover {
   padding: 2rem;
   width: 100%;
   max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
 }
@@ -855,6 +855,11 @@ a:hover {
 
 .filter-checkbox-label input[type="checkbox"] {
   accent-color: #dc2626;
+}
+
+.filter-coming-soon {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 /* ========== RESPONSIVE ========== */
