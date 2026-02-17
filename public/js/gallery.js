@@ -47,22 +47,73 @@ const Gallery = {
     perforated: 'perforated', zigzag: 'zigzag'
   },
 
-  buildDescription(text, colorName, borderType, fillType, cornerType, objectType, appliedTilt, appliedTexture) {
-    var border = this.BORDER_LABELS[borderType] || 'simple';
-    var fill = (fillType === 'empty') ? 'outlined' : '';
+  // Border style family grouping (mirrors admin-templates.js)
+  BORDER_STYLE_FAMILIES: {
+    simple:            { family: 1, sub: 1 },
+    stitch_line:       { family: 2, sub: 1 },
+    stitch_square:     { family: 2, sub: 2 },
+    stitch_circle:     { family: 2, sub: 3 },
+    zigzag:            { family: 3, sub: 1 },
+    perforated:        { family: 3, sub: 2 },
+    perforated_spaced: { family: 3, sub: 3 },
+    wavy:              { family: 3, sub: 4 },
+    brushstroke:       { family: 4, sub: 1 },
+    torn_edge:         { family: 4, sub: 2 }
+  },
+
+  FAMILY_NAMES: {
+    1: 'Plain border',
+    2: 'Stitch border',
+    3: 'Zigzag / Perforated border',
+    4: 'Irregular border'
+  },
+
+  CORNER_ORDER: { straight: 1, soft_round: 2, medium_round: 3, strong_round: 4 },
+
+  FRAME_ORDER: ['single', 'double', 'split'],
+
+  // Which border counts are valid per border style (tested in in-frame-preview.html)
+  FRAME_COMPAT: {
+    simple:            ['single', 'double', 'split'],
+    stitch_line:       ['single', 'double', 'split'],
+    stitch_square:     ['single', 'double', 'split'],
+    stitch_circle:     ['single', 'double', 'split'],
+    zigzag:            ['single', 'double'],
+    perforated:        ['single', 'double'],
+    perforated_spaced: ['single', 'double'],
+    wavy:              ['single', 'split'],
+    brushstroke:       ['single', 'double'],
+    torn_edge:         ['single', 'double', 'split']
+  },
+
+  buildDescription(text, colorName, borderType, fillType, cornerType, objectType, appliedTilt, appliedTexture, appliedFrame, svgString) {
+    var border = this.BORDER_LABELS[borderType] || 'plain';
+    var fill = (fillType === 'empty') ? 'outlined' : 'filled';
     var texture = (appliedTexture === 'grungy_texture') ? 'grungy' : '';
     var tilt = (appliedTilt && appliedTilt !== 0) ? 'tilted' : '';
-    var obj = (objectType || 'stamp').replace(/_/g, ' ');
-    var corners = '';
-    if (cornerType === 'strong_round') corners = 'rounded corners';
-    else if (cornerType === 'soft_round') corners = 'soft corners';
-    // Build: "TEXT" written on [color] [texture?] [tilt?] [border?] [fill?] [objectType] [with corners?]
-    var adjectives = [texture, tilt, border, fill].filter(Boolean).join(' ');
+    var frame = '';
+    if (appliedFrame === 'double') frame = 'double border';
+    else if (appliedFrame === 'split') frame = 'split border';
+    var shape = '';
+    if (svgString) {
+      var vbM = svgString.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+([\d.\-]+)/);
+      if (vbM) {
+        var ratio = parseFloat(vbM[1]) / parseFloat(vbM[2]);
+        shape = (ratio >= 0.85 && ratio <= 1.15) ? 'square' : 'rectangle';
+      }
+    }
+    var obj = ((shape || 'rectangle') + ' ' + (objectType || 'stamp')).replace(/_/g, ' ');
+    var corners = 'straight corners';
+    if (cornerType === 'strong_round') corners = 'strong round corners';
+    else if (cornerType === 'medium_round') corners = 'medium round corners';
+    else if (cornerType === 'soft_round') corners = 'soft round corners';
+    // Build: "TEXT" written on [fill] [color] [texture?] [tilt?] [border style?] [frame?] [shape] [objectType] [with corners?]
+    var adjectives = [texture, tilt, border, frame].filter(Boolean).join(' ');
     var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
     var withParts = [corners].filter(Boolean);
     var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
     return '\u201C' + this.escapeHtml(text) + '\u201D written on ' +
-      colorName.toLowerCase() + ' ' + objPhrase + withClause;
+      fill + ' ' + colorName.toLowerCase() + ' ' + objPhrase + withClause;
   },
 
   /**
@@ -176,10 +227,9 @@ const Gallery = {
   },
 
   /**
-   * Show initial results after Stamp click.
-   * One stamp per template, half red (#FF0000), half random palette colors.
-   * No tilt, no texture. Shuffled order.
-   * Clears all previous batches.
+   * Show initial catalog: all templates × 3 border counts, grouped by border style family.
+   * Random colors from palette, no tilt, no texture.
+   * Order: family → sub-type → corner → border count → fill.
    */
   async showInitialRandom() {
     // Clear all previous batches
@@ -193,37 +243,80 @@ const Gallery = {
       return;
     }
 
-    // Shuffle all base templates
-    var shuffled = [...this.baseResults].sort(function () { return Math.random() - 0.5; });
-    var batch = [];
-    var halfCount = Math.ceil(shuffled.length / 2);
-    var usedRandomColors = [];
+    var self = this;
 
-    for (var i = 0; i < shuffled.length; i++) {
-      var base = shuffled[i];
+    // Filter to single-frame templates only (double-frame variants generated programmatically)
+    var singles = this.baseResults.filter(function(b) { return b.frameType === 'single'; });
 
-      // First half red, second half random palette color
-      var color;
-      if (i < halfCount) {
-        color = '#FF0000';
-      } else {
-        var available = this.PALETTE_COLORS.filter(function (c) {
-          return c !== '#FF0000' && usedRandomColors.indexOf(c) === -1;
-        });
-        if (available.length === 0) {
-          available = this.PALETTE_COLORS.filter(function (c) { return c !== '#FF0000'; });
-        }
-        color = available[Math.floor(Math.random() * available.length)];
-        usedRandomColors.push(color);
+    // Sort by family → sub-type → corner → fill (full before empty)
+    singles.sort(function(a, b) {
+      var fa = self.BORDER_STYLE_FAMILIES[a.borderType || 'simple'] || { family: 99, sub: 99 };
+      var fb = self.BORDER_STYLE_FAMILIES[b.borderType || 'simple'] || { family: 99, sub: 99 };
+      if (fa.family !== fb.family) return fa.family - fb.family;
+      if (fa.sub !== fb.sub) return fa.sub - fb.sub;
+      var ca = self.CORNER_ORDER[a.cornerType || 'straight'] || 99;
+      var cb = self.CORNER_ORDER[b.cornerType || 'straight'] || 99;
+      if (ca !== cb) return ca - cb;
+      // Full before empty
+      var filla = a.fillType === 'full' ? 0 : 1;
+      var fillb = b.fillType === 'full' ? 0 : 1;
+      return filla - fillb;
+    });
+
+    // Build family groups: { familyId: { name, results[] } }
+    var familyGroups = {};
+    var allResults = [];
+
+    for (var i = 0; i < singles.length; i++) {
+      var base = singles[i];
+      var familyInfo = this.BORDER_STYLE_FAMILIES[base.borderType || 'simple'] || { family: 1, sub: 1 };
+      var familyId = familyInfo.family;
+
+      if (!familyGroups[familyId]) {
+        var shapeLabel = (base.shape || 'rectangle').replace(/_/g, '/');
+        familyGroups[familyId] = {
+          name: this.FAMILY_NAMES[familyId] + ' ' + shapeLabel + ' stamps',
+          results: []
+        };
       }
 
-      try {
-        var colorized = SvgRenderer.colorize(base.svgString, color);
-        var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+      // Detect border info once per template (needed for double + split)
+      var bi = SvgRenderer.detectBorderType(base.svgString);
+      SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: base.fillType });
 
-        batch.push({
+      // Generate border count variants (filtered by compatibility)
+      var allowedFrames = this.FRAME_COMPAT[base.borderType || 'simple'] || this.FRAME_ORDER;
+      for (var f = 0; f < allowedFrames.length; f++) {
+        var frameMode = allowedFrames[f];
+
+        // Random color per variant
+        var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
+
+        var colorized, cropped;
+        try {
+          colorized = SvgRenderer.colorize(base.svgString, color);
+          colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
+          cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+        } catch (err) {
+          console.warn('Failed to process template:', base.name, err);
+          cropped = SvgRenderer.colorize(base.svgString, color);
+        }
+
+        var framed = cropped;
+        try {
+          if (frameMode === 'double') {
+            framed = SvgRenderer.addDoubleFrame(cropped, bi, color);
+          } else if (frameMode === 'split') {
+            framed = SvgRenderer.addSplitBorder(cropped, bi);
+          }
+        } catch (err) {
+          console.warn('Failed to apply frame "' + frameMode + '" to:', base.name, err);
+          framed = cropped;
+        }
+
+        var result = {
           templateId: base.templateId,
-          svgString: cropped,
+          svgString: framed,
           shape: base.shape,
           objectType: base.objectType,
           frameType: base.frameType,
@@ -236,43 +329,20 @@ const Gallery = {
           name: base.name,
           displayText: base.displayText,
           appliedColor: color,
+          appliedFrame: frameMode,
           appliedTilt: 0,
           appliedTexture: null
-        });
-      } catch (err) {
-        console.warn('Failed to process stamp variant:', err);
-        batch.push({
-          templateId: base.templateId,
-          svgString: SvgRenderer.colorize(base.svgString, color),
-          shape: base.shape,
-          objectType: base.objectType,
-          frameType: base.frameType,
-          borderType: base.borderType,
-          fillType: base.fillType,
-          cornerType: base.cornerType,
-          colors: base.colors,
-          width: base.width,
-          height: base.height,
-          name: base.name,
-          displayText: base.displayText,
-          appliedColor: color,
-          appliedTilt: 0,
-          appliedTexture: null
-        });
+        };
+
+        familyGroups[familyId].results.push(result);
+        allResults.push(result);
       }
     }
 
-    // Shuffle again so reds and random colors are interleaved
-    batch.sort(function () { return Math.random() - 0.5; });
+    this.allResults = allResults;
 
-    this.allResults = batch;
-
-    // Render as a batch section
-    var userText = document.getElementById('stamp-input').value.trim();
-    var title = 'Showing <strong>' + batch.length + '</strong> results for <strong>"' + this.escapeHtml(userText) + '"</strong>. Want to see more? Hit that <strong>Show more</strong> button and select your preferences.<br><span class="stamp-results-timestamp">Generated at ' + this.formatTime() + '</span>';
-    this.appendBatchSection(title, batch);
-    this.updateBatchButtons('initial');
-
+    // Render grouped sections
+    this.appendGroupedBatchSections(familyGroups, allResults.length);
     this.showResultsUI();
   },
 
@@ -295,7 +365,12 @@ const Gallery = {
         if (filters.objects.indexOf(r.objectType) === -1) return false;
       }
       if (filters.frames && filters.frames.length > 0) {
-        if (filters.frames.indexOf(r.frameType) === -1) return false;
+        // 'split' is a rendering of single templates, so match 'single' frame_type
+        var matchesFrame = filters.frames.indexOf(r.frameType) !== -1;
+        if (!matchesFrame && r.frameType === 'single' && filters.frames.indexOf('split') !== -1) {
+          matchesFrame = true;
+        }
+        if (!matchesFrame) return false;
       }
       if (filters.borders && filters.borders.length > 0) {
         var borderVal = r.borderType || 'simple';
@@ -330,63 +405,96 @@ const Gallery = {
       });
     }
 
-    // Generate variants: template × color × tilt × texture
+    // Determine which frame renderings are selected
+    var selectedFrames = filters.frames && filters.frames.length > 0 ? filters.frames : [];
+
+    // Generate variants: template × color × frame × tilt × texture
     var variants = [];
     for (var i = 0; i < matchingBases.length; i++) {
       var base = matchingBases[i];
+
+      // Determine which frame renderings apply to this template
+      var frameRenderings = [];
+      if (selectedFrames.length === 0) {
+        // No frame filter = show template as-is
+        frameRenderings = ['none'];
+      } else {
+        if (base.frameType === 'single' && selectedFrames.indexOf('single') !== -1) frameRenderings.push('single');
+        if (base.frameType === 'double' && selectedFrames.indexOf('double') !== -1) frameRenderings.push('double');
+        if (base.frameType === 'single' && selectedFrames.indexOf('split') !== -1) frameRenderings.push('split');
+      }
+      if (frameRenderings.length === 0) continue;
+
+      // Compute border info once per template (needed for split)
+      var bi = null;
+      if (frameRenderings.indexOf('split') !== -1) {
+        bi = SvgRenderer.detectBorderType(base.svgString);
+        SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: base.fillType });
+      }
+
       for (var j = 0; j < colorsToApply.length; j++) {
         var color = colorsToApply[j];
         var colorized = SvgRenderer.colorize(base.svgString, color);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
-        for (var k = 0; k < tiltsToApply.length; k++) {
-          var tilt = tiltsToApply[k];
-          var tilted = tilt !== 0 ? SvgRenderer.applyTilt(cropped, tilt) : cropped;
-          for (var t = 0; t < texturesToApply.length; t++) {
-            var textureId = texturesToApply[t];
-            try {
-              var textured = textureId ? await SvgRenderer.applyTexture(tilted, textureId) : tilted;
-              // Validate we got a non-empty SVG
-              if (!textured || textured.indexOf('<svg') === -1) {
-                textured = tilted;
+
+        for (var f = 0; f < frameRenderings.length; f++) {
+          var frameMode = frameRenderings[f];
+          var framed = cropped;
+          if (frameMode === 'split') {
+            framed = SvgRenderer.addSplitBorder(cropped, bi);
+          }
+
+          for (var k = 0; k < tiltsToApply.length; k++) {
+            var tilt = tiltsToApply[k];
+            var tilted = tilt !== 0 ? SvgRenderer.applyTilt(framed, tilt) : framed;
+            for (var t = 0; t < texturesToApply.length; t++) {
+              var textureId = texturesToApply[t];
+              try {
+                var textured = textureId ? await SvgRenderer.applyTexture(tilted, textureId) : tilted;
+                if (!textured || textured.indexOf('<svg') === -1) {
+                  textured = tilted;
+                }
+                variants.push({
+                  templateId: base.templateId,
+                  svgString: textured,
+                  shape: base.shape,
+                  objectType: base.objectType,
+                  frameType: base.frameType,
+                  borderType: base.borderType,
+                  fillType: base.fillType,
+                  cornerType: base.cornerType,
+                  colors: base.colors,
+                  width: base.width,
+                  height: base.height,
+                  name: base.name,
+                  displayText: base.displayText,
+                  appliedColor: color,
+                  appliedFrame: frameMode === 'none' ? base.frameType : frameMode,
+                  appliedTilt: tilt,
+                  appliedTexture: textureId
+                });
+              } catch (err) {
+                console.warn('Failed to apply texture, using tilted version:', err);
+                variants.push({
+                  templateId: base.templateId,
+                  svgString: tilted,
+                  shape: base.shape,
+                  objectType: base.objectType,
+                  frameType: base.frameType,
+                  borderType: base.borderType,
+                  fillType: base.fillType,
+                  cornerType: base.cornerType,
+                  colors: base.colors,
+                  width: base.width,
+                  height: base.height,
+                  name: base.name,
+                  displayText: base.displayText,
+                  appliedColor: color,
+                  appliedFrame: frameMode === 'none' ? base.frameType : frameMode,
+                  appliedTilt: tilt,
+                  appliedTexture: null
+                });
               }
-              variants.push({
-                templateId: base.templateId,
-                svgString: textured,
-                shape: base.shape,
-                objectType: base.objectType,
-                frameType: base.frameType,
-                borderType: base.borderType,
-                fillType: base.fillType,
-                cornerType: base.cornerType,
-                colors: base.colors,
-                width: base.width,
-                height: base.height,
-                name: base.name,
-                displayText: base.displayText,
-                appliedColor: color,
-                appliedTilt: tilt,
-                appliedTexture: textureId
-              });
-            } catch (err) {
-              console.warn('Failed to apply texture, using tilted version:', err);
-              variants.push({
-                templateId: base.templateId,
-                svgString: tilted,
-                shape: base.shape,
-                objectType: base.objectType,
-                frameType: base.frameType,
-                borderType: base.borderType,
-                fillType: base.fillType,
-                cornerType: base.cornerType,
-                colors: base.colors,
-                width: base.width,
-                height: base.height,
-                name: base.name,
-                displayText: base.displayText,
-                appliedColor: color,
-                appliedTilt: tilt,
-                appliedTexture: null
-              });
             }
           }
         }
@@ -463,6 +571,7 @@ const Gallery = {
       var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
         '&text=' + encodeURIComponent(self.currentText) +
         '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
+        '&frame=' + encodeURIComponent(r.appliedFrame || r.frameType || 'single') +
         '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
         (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
 
@@ -470,7 +579,8 @@ const Gallery = {
       var description = self.buildDescription(
         r.displayText || self.currentText, colorName,
         r.borderType, r.fillType, r.cornerType,
-        r.objectType, r.appliedTilt, r.appliedTexture
+        r.objectType, r.appliedTilt, r.appliedTexture,
+        r.appliedFrame, r.svgString
       );
 
       var actionsDiv = document.createElement('a');
@@ -495,6 +605,7 @@ const Gallery = {
         return {
           t: r.templateId,
           c: r.appliedColor || '',
+          f: r.appliedFrame || r.frameType || 'single',
           i: r.appliedTilt || 0,
           x: r.appliedTexture || ''
         };
@@ -506,6 +617,117 @@ const Gallery = {
 
     // Scroll to the new batch
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+
+  /**
+   * Render grouped batch sections by border style family.
+   * Each family gets its own header + grid.
+   */
+  appendGroupedBatchSections(familyGroups, totalCount, isRestore) {
+    var container = document.getElementById('results-batches');
+    var self = this;
+    var userText = document.getElementById('stamp-input').value.trim();
+
+    // Overall header
+    var headerSection = document.createElement('div');
+    headerSection.className = 'stamp-batch-section';
+    var headerTitle = document.createElement('div');
+    headerTitle.className = 'stamp-results-title';
+    var timeLabel = isRestore ? 'Restored at' : 'Generated at';
+    var headerMsg = isRestore
+      ? 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong>. Use the filters to narrow down.'
+      : 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random colors. Use the filters to narrow down. Click on the image you like and play with color, font, tilt and texture.';
+    headerTitle.innerHTML = headerMsg + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
+    headerSection.appendChild(headerTitle);
+    container.appendChild(headerSection);
+
+    // Move filter bar into position right after the header
+    var filterBar = document.getElementById('stamp-filter-bar');
+    if (filterBar) {
+      container.insertBefore(filterBar, headerSection.nextSibling);
+    }
+
+    // Render each family group in order
+    var familyIds = Object.keys(familyGroups).sort(function(a, b) { return parseInt(a) - parseInt(b); });
+    for (var i = 0; i < familyIds.length; i++) {
+      var group = familyGroups[familyIds[i]];
+
+      var section = document.createElement('div');
+      section.className = 'stamp-batch-section';
+      section.dataset.family = familyIds[i];
+
+      // Family header
+      var familyHeader = document.createElement('div');
+      familyHeader.className = 'stamp-family-header';
+      familyHeader.textContent = group.name;
+      section.appendChild(familyHeader);
+
+      // Grid
+      var grid = document.createElement('div');
+      grid.className = 'stamp-results-grid';
+
+      group.results.forEach(function(r) {
+        var card = document.createElement('div');
+        card.className = 'stamp-card';
+        card.dataset.family = (self.BORDER_STYLE_FAMILIES[r.borderType || 'simple'] || { family: 1 }).family;
+        card.dataset.frame = r.appliedFrame || 'single';
+        card.dataset.corners = r.cornerType || 'straight';
+        card.dataset.fill = r.fillType || 'full';
+
+        var previewDiv = document.createElement('div');
+        previewDiv.className = 'stamp-card-preview';
+        var img = SvgRenderer.createSvgImage(r.svgString);
+        previewDiv.appendChild(img);
+
+        var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
+          '&text=' + encodeURIComponent(self.currentText) +
+          '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
+          '&frame=' + encodeURIComponent(r.appliedFrame || r.frameType || 'single') +
+          '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
+          (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
+
+        var colorName = self.getColorName(r.appliedColor);
+        var description = self.buildDescription(
+          r.displayText || self.currentText, colorName,
+          r.borderType, r.fillType, r.cornerType,
+          r.objectType, r.appliedTilt, r.appliedTexture,
+          r.appliedFrame, r.svgString
+        );
+
+        var actionsDiv = document.createElement('a');
+        actionsDiv.className = 'stamp-card-actions';
+        actionsDiv.href = productUrl;
+        actionsDiv.innerHTML = '<span class="stamp-card-name">' + description + '</span>';
+
+        card.appendChild(previewDiv);
+        card.appendChild(actionsDiv);
+        grid.appendChild(card);
+      });
+
+      section.appendChild(grid);
+      container.appendChild(section);
+    }
+
+    // Save variant params to localStorage
+    var allResults = [];
+    for (var j = 0; j < familyIds.length; j++) {
+      allResults = allResults.concat(familyGroups[familyIds[j]].results);
+    }
+    try {
+      localStorage.setItem('stx-gallery-text', this.currentText);
+      var variantParams = allResults.map(function(r) {
+        return {
+          t: r.templateId,
+          c: r.appliedColor || '',
+          f: r.appliedFrame || r.frameType || 'single',
+          i: r.appliedTilt || 0,
+          x: r.appliedTexture || ''
+        };
+      });
+      localStorage.setItem('stx-gallery-params', JSON.stringify(variantParams));
+    } catch (e) {
+      console.warn('[Gallery] localStorage save failed:', e.message);
+    }
   },
 
   /**
@@ -545,6 +767,70 @@ const Gallery = {
 
   showResultsUI() {
     document.getElementById('stamp-results').style.display = 'block';
+    var filterBar = document.getElementById('stamp-filter-bar');
+    if (filterBar) {
+      filterBar.style.display = 'flex';
+      this.initFilterBar();
+    }
+  },
+
+  /**
+   * Initialize filter bar event listeners (called once per stamp).
+   */
+  initFilterBar() {
+    var self = this;
+    var selects = ['filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
+    selects.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.bound) {
+        el.dataset.bound = '1';
+        el.addEventListener('change', function() { self.applyFilterBar(); });
+      }
+    });
+    var resetBtn = document.getElementById('filter-reset');
+    if (resetBtn && !resetBtn.dataset.bound) {
+      resetBtn.dataset.bound = '1';
+      resetBtn.addEventListener('click', function() {
+        selects.forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        self.applyFilterBar();
+      });
+    }
+  },
+
+  /**
+   * Apply filter bar dropdowns to show/hide cards and family sections.
+   */
+  applyFilterBar() {
+    var familyVal = document.getElementById('filter-border-style').value;
+    var frameVal = document.getElementById('filter-border-count').value;
+    var cornersVal = document.getElementById('filter-corners').value;
+    var fillVal = document.getElementById('filter-fill').value;
+
+    var cards = document.querySelectorAll('#results-batches .stamp-card');
+    var visibleCount = 0;
+    cards.forEach(function(card) {
+      var show = true;
+      if (familyVal && card.dataset.family !== familyVal) show = false;
+      if (frameVal && card.dataset.frame !== frameVal) show = false;
+      if (cornersVal && card.dataset.corners !== cornersVal) show = false;
+      if (fillVal && card.dataset.fill !== fillVal) show = false;
+      card.style.display = show ? '' : 'none';
+      if (show) visibleCount++;
+    });
+
+    // Hide family sections that have zero visible cards
+    var sections = document.querySelectorAll('#results-batches .stamp-batch-section[data-family]');
+    sections.forEach(function(section) {
+      var visibleCards = section.querySelectorAll('.stamp-card:not([style*="display: none"])');
+      section.style.display = visibleCards.length > 0 ? '' : 'none';
+    });
+
+    // Update count in header
+    var titleEl = document.querySelector('#results-batches .stamp-results-title strong');
+    if (titleEl) titleEl.textContent = visibleCount;
   },
 
   /**
@@ -637,8 +923,19 @@ const Gallery = {
 
       try {
         var colorized = SvgRenderer.colorize(base.svgString, vp.c);
+        colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
-        var tilted = vp.i !== 0 ? SvgRenderer.applyTilt(cropped, vp.i) : cropped;
+        var framed = cropped;
+        if (vp.f === 'double' || vp.f === 'split') {
+          var rbi = SvgRenderer.detectBorderType(base.svgString);
+          SvgRenderer.supplementBorderInfo(rbi, { border_type: base.borderType, fill_type: base.fillType });
+          if (vp.f === 'double') {
+            framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c);
+          } else {
+            framed = SvgRenderer.addSplitBorder(cropped, rbi);
+          }
+        }
+        var tilted = vp.i !== 0 ? SvgRenderer.applyTilt(framed, vp.i) : framed;
         var textured = vp.x ? await SvgRenderer.applyTexture(tilted, vp.x) : tilted;
 
         if (!textured || textured.indexOf('<svg') === -1) textured = tilted;
@@ -658,6 +955,7 @@ const Gallery = {
           name: base.name,
           displayText: base.displayText,
           appliedColor: vp.c,
+          appliedFrame: vp.f || base.frameType || 'single',
           appliedTilt: vp.i,
           appliedTexture: vp.x || null
         });
@@ -671,16 +969,29 @@ const Gallery = {
       return;
     }
 
-    // Clear and render
+    // Clear and render — group by family just like fresh generation
     var container = document.getElementById('results-batches');
     container.innerHTML = '';
     this.allResults = batch;
     this.displayedCount = 0;
 
-    var title = 'Showing <strong>' + batch.length + '</strong> results for <strong>\u201C' +
-      this.escapeHtml(userText) + '\u201D</strong>.<br><span class="stamp-results-timestamp">Restored at ' +
-      this.formatTime() + '</span>';
-    this.appendBatchSection(title, batch);
+    var familyGroups = {};
+    var self = this;
+    for (var i = 0; i < batch.length; i++) {
+      var r = batch[i];
+      var familyInfo = this.BORDER_STYLE_FAMILIES[r.borderType || 'simple'] || { family: 1, sub: 1 };
+      var familyId = familyInfo.family;
+      if (!familyGroups[familyId]) {
+        var shapeLabel = (r.shape || 'rectangle').replace(/_/g, '/');
+        familyGroups[familyId] = {
+          name: this.FAMILY_NAMES[familyId] + ' ' + shapeLabel + ' stamps',
+          results: []
+        };
+      }
+      familyGroups[familyId].results.push(r);
+    }
+
+    this.appendGroupedBatchSections(familyGroups, batch.length, true);
     this.updateBatchButtons('initial');
     this.showResultsUI();
   },

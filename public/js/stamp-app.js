@@ -4,7 +4,7 @@
  */
 (function () {
   // ---- Constants ----
-  var DEFAULT_PAGE_SIZE = 9;
+  var DEFAULT_PAGE_SIZE = 30;
 
   // ---- Custom color palette ----
   var PALETTE_COLORS = [
@@ -16,6 +16,11 @@
   var currentFilters = { colors: [], tilts: [], textures: [], shapes: [], objects: [], frames: [], borders: [], corners: [], fills: [] };
   var currentPageSize = DEFAULT_PAGE_SIZE;
   var isProcessing = false;
+
+  // ---- Save scroll position before unload ----
+  window.addEventListener('beforeunload', function () {
+    sessionStorage.setItem('stampScrollY', window.scrollY);
+  });
 
   // ---- Init ----
   document.addEventListener('DOMContentLoaded', function () {
@@ -161,6 +166,18 @@
 
     try {
       await Gallery.restoreVariants(text, params);
+
+      // Restore scroll position after browser paints the gallery
+      var savedY = sessionStorage.getItem('stampScrollY');
+      if (savedY) {
+        sessionStorage.removeItem('stampScrollY');
+        var y = parseInt(savedY, 10);
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            window.scrollTo(0, y);
+          });
+        });
+      }
 
       var newUrl = '/?text=' + encodeURIComponent(text);
       if (window.location.search !== '?text=' + encodeURIComponent(text)) {

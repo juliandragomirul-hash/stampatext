@@ -35,6 +35,7 @@
       <!-- Right: Preferences sidebar -->
       <div class="product-sidebar">
         <h3 class="product-sidebar-title">Customize</h3>
+        <div id="product-template-info" class="product-template-info" style="display:none; margin-bottom:12px; font-size:0.82rem; color:#666; line-height:1.6;"></div>
 
         <div class="filter-section">
           <div class="filter-section-header">
@@ -48,16 +49,6 @@
             <span class="filter-section-title">COLOR</span>
           </div>
           <div class="color-palette" id="product-color-palette"></div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <span class="filter-section-title">FRAME</span>
-          </div>
-          <div class="product-toggle-group" id="product-frame-toggle">
-            <button class="product-toggle-btn active" data-value="single">Single</button>
-            <button class="product-toggle-btn" data-value="double">Double</button>
-          </div>
         </div>
 
         <div class="filter-section">
@@ -149,7 +140,7 @@
   <script src="/js/supabase.umd.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/supabase-client.js"></script>
-  <script src="/js/svg-renderer.js?v=40"></script>
+  <script src="/js/svg-renderer.js?v=41"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -183,6 +174,13 @@
         'RobotoBlack': '900', 'PlayfairDisplay': '700',
         'Merriweather': '900', 'Bitter': '700',
         'Exo2': '900', 'Comfortaa': '700', 'Raleway': '900'
+      };
+
+      var BORDER_LABELS = {
+        wavy: 'wavy', brushstroke: 'brushstroke',
+        stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
+        torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
+        perforated: 'perforated', zigzag: 'zigzag'
       };
 
       // Stored for font switching — re-runs autoFit with new font
@@ -345,6 +343,21 @@
       templateObjectType = tpl.object_type || 'stamp';
       document.title = 'StampaText - ' + templateName;
 
+      // Show template properties
+      var infoEl = document.getElementById('product-template-info');
+      var borderLabel = {
+        wavy: 'Wavy', brushstroke: 'Brushstroke', stitch_line: 'Stitch Line',
+        stitch_square: 'Stitch Square', stitch_circle: 'Stitch Dot',
+        torn_edge: 'Torn Edge', perforated_spaced: 'Spaced Perforated',
+        perforated: 'Perforated', zigzag: 'Zigzag'
+      }[templateBorderType] || 'Plain';
+      var cornerLabel = {
+        medium_round: 'Medium Round', soft_round: 'Soft Round', strong_round: 'Strong Round'
+      }[templateCornerType] || 'Straight';
+      var fillLabel = templateFillType === 'full' ? 'Filled' : 'Outlined';
+      var frameLabel = (tpl.frame_type || 'single') === 'double' ? 'Double' : 'Single';
+      infoEl.style.display = 'none';
+
       // ---- Fetch SVG from storage ----
       var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
       var svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
@@ -398,23 +411,19 @@
       // ---- Build UI ----
       buildFontPicker();
       buildColorPalette();
-      setToggleState('product-frame-toggle', currentFrame);
       setToggleState('product-tilt-toggle', String(currentTilt));
       setToggleState('product-texture-toggle', currentTexture);
       await renderPreview();
 
       // ---- Event listeners ----
 
-      // Font picker
-      document.getElementById('product-font-picker').addEventListener('click', function(e) {
-        var btn = e.target.closest('.font-picker-btn');
-        if (!btn) return;
-        this.querySelectorAll('.font-picker-btn').forEach(function(b) {
-          b.classList.remove('active');
-        });
-        btn.classList.add('active');
-        currentFont = btn.dataset.font;
-        renderPreview();
+      // Font picker arrows
+      document.getElementById('font-arrow-up').addEventListener('click', function() { cycleFont(-1); });
+      document.getElementById('font-arrow-down').addEventListener('click', function() { cycleFont(1); });
+      // Keyboard: up/down arrows when font display is focused
+      document.getElementById('font-display').addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowUp') { e.preventDefault(); cycleFont(-1); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); cycleFont(1); }
       });
 
       // Color palette: single-select
@@ -430,17 +439,6 @@
       });
 
       // Frame toggle
-      document.getElementById('product-frame-toggle').addEventListener('click', function(e) {
-        var btn = e.target.closest('.product-toggle-btn');
-        if (!btn) return;
-        this.querySelectorAll('.product-toggle-btn').forEach(function(b) {
-          b.classList.remove('active');
-        });
-        btn.classList.add('active');
-        currentFrame = btn.dataset.value || 'single';
-        renderPreview();
-      });
-
       // Tilt toggle
       document.getElementById('product-tilt-toggle').addEventListener('click', function(e) {
         var btn = e.target.closest('.product-toggle-btn');
@@ -495,15 +493,45 @@
 
       function buildFontPicker() {
         var picker = document.getElementById('product-font-picker');
-        AVAILABLE_FONTS.forEach(function(font) {
-          var btn = document.createElement('button');
-          btn.className = 'font-picker-btn';
-          btn.dataset.font = font.key;
-          btn.style.fontFamily = "'" + font.key + "', 'Arial Black', sans-serif";
-          btn.textContent = font.label.toUpperCase();
-          if (font.key === currentFont) btn.classList.add('active');
-          picker.appendChild(btn);
-        });
+        var btnUp = document.createElement('div');
+        btnUp.className = 'font-picker-arrow';
+        btnUp.id = 'font-arrow-up';
+        btnUp.innerHTML = '&#9650;';
+        var display = document.createElement('div');
+        display.className = 'font-picker-display';
+        display.id = 'font-display';
+        display.tabIndex = 0;
+        var btnDown = document.createElement('div');
+        btnDown.className = 'font-picker-arrow';
+        btnDown.id = 'font-arrow-down';
+        btnDown.innerHTML = '&#9660;';
+        picker.appendChild(btnUp);
+        picker.appendChild(display);
+        picker.appendChild(btnDown);
+        updateFontDisplay();
+      }
+
+      function getFontIndex() {
+        for (var i = 0; i < AVAILABLE_FONTS.length; i++) {
+          if (AVAILABLE_FONTS[i].key === currentFont) return i;
+        }
+        return 0;
+      }
+
+      function updateFontDisplay() {
+        var idx = getFontIndex();
+        var font = AVAILABLE_FONTS[idx];
+        var display = document.getElementById('font-display');
+        display.textContent = font.label.toUpperCase();
+        display.style.fontFamily = "'" + font.key + "', 'Arial Black', sans-serif";
+      }
+
+      function cycleFont(dir) {
+        var idx = getFontIndex();
+        idx = (idx + dir + AVAILABLE_FONTS.length) % AVAILABLE_FONTS.length;
+        currentFont = AVAILABLE_FONTS[idx].key;
+        updateFontDisplay();
+        renderPreview();
       }
 
       function buildColorPalette() {
@@ -581,104 +609,6 @@
         };
       }
 
-      function addDoubleFrame(svgStr, bi) {
-        bi = bi || {};
-        var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.border || bi.filter;
-        if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
-        var rects = [];
-        var re = /<rect([^>]*)\/?>/gi;
-        var m;
-        while ((m = re.exec(svgStr)) !== null) {
-          var attrs = m[1];
-          if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
-            var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
-            if (!hasColoredStroke) continue;
-          }
-          if (/display=["']none["']/i.test(attrs)) continue;
-          var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
-          var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
-          if (!wM || !hM) continue;
-          rects.push({ full: m[0], attrs: attrs, w: parseFloat(wM[1]), h: parseFloat(hM[1]), index: m.index });
-        }
-        if (rects.length === 0) return svgStr;
-        rects.sort(function(a, b) { return b.w - a.w; });
-        var outer = rects[0];
-        if (rects.length > 1 && rects[1].w > outer.w * 0.9) {
-          var second = rects[1];
-          if (/fill=["']none["']/i.test(second.attrs) && /stroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(second.attrs)) {
-            return svgStr;
-          }
-        }
-        var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
-        var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
-        var swM = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
-        var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
-        var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
-        var ox = xM ? parseFloat(xM[1]) : 0;
-        var oy = yM ? parseFloat(yM[1]) : 0;
-        var ow = outer.w, oh = outer.h;
-        var osw = swM ? parseFloat(swM[1]) : (bi.origStrokeWidth || 20);
-        if (osw === 0 && bi.origStrokeWidth) osw = bi.origStrokeWidth;
-        var orx = rxM ? parseFloat(rxM[1]) : 0;
-        var ory = ryM ? parseFloat(ryM[1]) : 0;
-        var fillM = outer.attrs.match(/\bfill=["']([^"']+)["']/);
-        var outerFill = fillM ? fillM[1] : 'none';
-        var strokeM = outer.attrs.match(/\bstroke=["']([^"']+)["']/);
-        var outerStroke = strokeM ? strokeM[1] : '#000000';
-        if (outerFill === 'none' && bi.wavy && bi.origFill && bi.origFill !== 'none') outerFill = bi.origFill;
-        if ((!strokeM || outerStroke === 'none') && bi.origStroke) outerStroke = bi.origStroke;
-        var isFull = outerFill !== 'none' && !/^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(outerFill);
-        var innerColor;
-        if (isFull) {
-          var hex = outerFill.replace('#', '');
-          var r = parseInt(hex.substring(0, 2), 16);
-          var g = parseInt(hex.substring(2, 4), 16);
-          var b = parseInt(hex.substring(4, 6), 16);
-          var lum = 0.299 * r + 0.587 * g + 0.114 * b;
-          innerColor = lum > 160 ? '#000000' : '#FFFFFF';
-        } else {
-          innerColor = outerStroke;
-          if (!innerColor || innerColor === 'none' || /^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(innerColor)) {
-            innerColor = bi.origFill && bi.origFill !== 'none' ? bi.origFill : '#000000';
-          }
-        }
-        var innerSw = 12;
-        var inset = osw / 2;
-        if (bi.stitch && !isFull) inset = 12;
-        if (bi.brush) inset = Math.max(inset, Math.min(ow, oh) * 0.12);
-        if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
-        if (!isFull && !bi.wavy && !bi.brush && !bi.stitch && !bi.filter) {
-          inset = osw / 2 + innerSw / 2 + 12;
-        }
-        var ix = ox + inset, iy = oy + inset;
-        var iw = ow - inset * 2, ih = oh - inset * 2;
-        var irx = Math.max(0, orx - inset), iry = Math.max(0, ory - inset);
-        var innerRect;
-        if (bi.wavy) {
-          var wavyRe = /<path[^>]*stroke-linejoin="round"[^>]*\/?>/gi;
-          var wavyAll = svgStr.match(wavyRe);
-          if (wavyAll) {
-            innerRect = wavyAll[wavyAll.length - 1]
-              .replace(/fill="[^"]*"/, 'fill="none"')
-              .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
-              .replace(/stroke-width="[^"]*"/, 'stroke-width="12"');
-          } else {
-            return svgStr;
-          }
-        } else {
-          innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
-            '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
-            '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
-            '" stroke-miterlimit="10"';
-          if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
-          if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
-          innerRect += '/>';
-        }
-        var textPos = svgStr.search(/<text[\s>]/i);
-        if (textPos !== -1) return svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
-        return svgStr.replace(/<\/svg>/, innerRect + '</svg>');
-      }
-
       async function renderPreview() {
         if (isProcessing) return;
         isProcessing = true;
@@ -691,10 +621,18 @@
           baseSvg = await rebuildWithFont(currentFont);
           var svg = baseSvg;
           svg = SvgRenderer.colorize(svg, currentColor);
+          svg = SvgRenderer.applyCornerRadius(svg, templateCornerType);
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
           if (currentFrame === 'double') {
             if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
-            svg = addDoubleFrame(svg, borderInfo);
+            var dblBi = Object.assign({}, borderInfo);
+            SvgRenderer.supplementBorderInfo(dblBi, { border_type: templateBorderType, fill_type: templateFillType });
+            svg = SvgRenderer.addDoubleFrame(svg, dblBi, currentColor);
+          } else if (currentFrame === 'split') {
+            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
+            var ifBi = Object.assign({}, borderInfo);
+            SvgRenderer.supplementBorderInfo(ifBi, { border_type: templateBorderType, fill_type: templateFillType });
+            svg = SvgRenderer.addSplitBorder(svg, ifBi);
           }
           // Capture pre-tilt viewBox width for scale compensation
           var preTiltVbW = 0;
@@ -734,29 +672,34 @@
         }
       }
 
-      var BORDER_LABELS = {
-        wavy: 'wavy', brushstroke: 'brushstroke',
-        stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
-        torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
-        perforated: 'perforated', zigzag: 'zigzag'
-      };
-
       function updateDescription() {
         var colorName = getColorName(currentColor);
-        var border = BORDER_LABELS[templateBorderType] || 'simple';
-        var fill = (templateFillType === 'empty') ? 'outlined' : '';
+        var border = BORDER_LABELS[templateBorderType] || 'plain';
+        var fill = (templateFillType === 'empty') ? 'outlined' : 'filled';
         var texture = (currentTexture === 'grungy_texture') ? 'grungy' : '';
         var tilt = (currentTilt && currentTilt !== 0) ? 'tilted' : '';
-        var obj = (templateObjectType || 'stamp').replace(/_/g, ' ');
-        var corners = '';
-        if (templateCornerType === 'strong_round') corners = 'rounded corners';
-        else if (templateCornerType === 'soft_round') corners = 'soft corners';
-        var adjectives = [texture, tilt, border, fill].filter(Boolean).join(' ');
+        var frame = '';
+        if (currentFrame === 'double') frame = 'double border';
+        else if (currentFrame === 'split') frame = 'split border';
+        var shape = 'rectangle';
+        if (currentSvg) {
+          var vbM = currentSvg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+([\d.\-]+)/);
+          if (vbM) {
+            var ratio = parseFloat(vbM[1]) / parseFloat(vbM[2]);
+            if (ratio >= 0.85 && ratio <= 1.15) shape = 'square';
+          }
+        }
+        var obj = (shape + ' ' + (templateObjectType || 'stamp')).replace(/_/g, ' ');
+        var corners = 'straight corners';
+        if (templateCornerType === 'strong_round') corners = 'strong round corners';
+        else if (templateCornerType === 'medium_round') corners = 'medium round corners';
+        else if (templateCornerType === 'soft_round') corners = 'soft round corners';
+        var adjectives = [texture, tilt, border, frame].filter(Boolean).join(' ');
         var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
         var withParts = [corners].filter(Boolean);
         var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
         var desc = '\u201C' + displayText + '\u201D written on ' +
-          colorName.toLowerCase() + ' ' + objPhrase + withClause;
+          fill + ' ' + colorName.toLowerCase() + ' ' + objPhrase + withClause;
         document.getElementById('product-description').textContent = desc;
       }
 

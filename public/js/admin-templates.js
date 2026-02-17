@@ -316,22 +316,37 @@
     }
   }
 
-  // ---- Family ordering (matches all-templates-preview.html) ----
-  function getFamilyOrder(name) {
-    var n = name.toLowerCase();
-    if (n.indexOf('brushstroke') !== -1) return 1;
-    if (n.indexOf('wavy') !== -1) return 2;
-    if (n.indexOf('ripped') !== -1) return 3;
-    if (n.indexOf('stitch line') !== -1) return 4;
-    if (n.indexOf('stitch circle') !== -1) return 5;
-    if (n.indexOf('stitch square') !== -1) return 6;
-    if (n.indexOf('soft round') !== -1) return 7;
-    if (n.indexOf('strong round') !== -1) return 8;
-    if (n.indexOf('straight') !== -1) return 9;
-    if (n.indexOf('strong perforated') !== -1) return 10;
-    if (n.indexOf('spaced perforated') !== -1) return 11;
-    if (n.indexOf('zigzag') !== -1) return 12;
-    return 99;
+  // ---- Family ordering by border style ----
+  var BORDER_STYLE_FAMILIES = {
+    simple:            { family: 1, sub: 1 },
+    stitch_line:       { family: 2, sub: 1 },
+    stitch_square:     { family: 2, sub: 2 },
+    stitch_circle:     { family: 2, sub: 3 },
+    zigzag:            { family: 3, sub: 1 },
+    perforated:        { family: 3, sub: 2 },
+    perforated_spaced: { family: 3, sub: 3 },
+    wavy:              { family: 3, sub: 4 },
+    brushstroke:       { family: 4, sub: 1 },
+    torn_edge:         { family: 4, sub: 2 }
+  };
+
+  var FAMILY_NAMES = {
+    1: 'Plain',
+    2: 'Stitch',
+    3: 'Zigzag / Perforated',
+    4: 'Irregular'
+  };
+
+  function getBorderFamily(tpl) {
+    var bt = tpl.border_type || 'simple';
+    var entry = BORDER_STYLE_FAMILIES[bt];
+    return entry ? entry.family : 1;
+  }
+
+  function getBorderSubOrder(tpl) {
+    var bt = tpl.border_type || 'simple';
+    var entry = BORDER_STYLE_FAMILIES[bt];
+    return entry ? entry.sub : 99;
   }
 
   function getVariantOrder(name) {
@@ -350,17 +365,18 @@
 
     try {
       var result = await sb.from('templates')
-        .select('id, name, svg_path, shape, object_type, is_active, created_at')
+        .select('id, name, svg_path, shape, object_type, border_type, corner_type, fill_type, is_active, created_at')
         .order('created_at', { ascending: false });
 
       if (result.error) throw result.error;
       var templates = result.data || [];
 
-      // Sort by family, then Full before Empty
+      // Sort by border style family, then sub-type, then Full before Empty
       templates.sort(function (a, b) {
-        var fa = getFamilyOrder(a.name);
-        var fb = getFamilyOrder(b.name);
+        var fa = getBorderFamily(a), fb = getBorderFamily(b);
         if (fa !== fb) return fa - fb;
+        var sa = getBorderSubOrder(a), sb2 = getBorderSubOrder(b);
+        if (sa !== sb2) return sa - sb2;
         return getVariantOrder(a.name) - getVariantOrder(b.name);
       });
 
@@ -372,12 +388,11 @@
       var lastFamily = -1;
       listDiv.innerHTML = templates.map(function (tpl) {
         var publicUrl = tpl.svg_path ? sb.storage.from('templates').getPublicUrl(tpl.svg_path).data.publicUrl : '';
-        var family = getFamilyOrder(tpl.name);
+        var family = getBorderFamily(tpl);
         var header = '';
         if (family !== lastFamily) {
           lastFamily = family;
-          var familyNames = { 1: 'Brushstroke', 2: 'Wavy', 3: 'Ripped Paper', 4: 'Stitch Line', 5: 'Stitch Circle', 6: 'Stitch Square', 7: 'Soft Round Corners', 8: 'Strong Round Corners', 9: 'Straight Corners', 10: 'Strong Perforated', 11: 'Spaced Perforated', 12: 'Zigzag' };
-          header = '<div style="padding:0.6rem 0 0.3rem; margin-top:0.5rem; font-size:0.8rem; font-weight:700; color:#4f46e5; text-transform:uppercase; letter-spacing:0.05em; border-top:2px solid #e0e0e0;">' + (familyNames[family] || 'Other') + '</div>';
+          header = '<div style="padding:0.6rem 0 0.3rem; margin-top:0.5rem; font-size:0.8rem; font-weight:700; color:#4f46e5; text-transform:uppercase; letter-spacing:0.05em; border-top:2px solid #e0e0e0;">' + (FAMILY_NAMES[family] || 'Other') + '</div>';
         }
         return header + '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid #f0f0f0;">' +
           '<div class="tpl-name-hover" style="position:relative;cursor:pointer;" data-svg-url="' + escapeHtml(publicUrl) + '" data-tpl-id="' + tpl.id + '">' +

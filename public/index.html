@@ -35,6 +35,36 @@
 
   <!-- Results Section -->
   <section class="stamp-results" id="stamp-results" style="display:none;">
+    <!-- Filter Bar (inside results, right above the batches) -->
+    <div class="stamp-filter-bar" id="stamp-filter-bar" style="display:none;">
+      <span class="filter-bar-label">Filter:</span>
+      <select id="filter-border-style" class="filter-bar-select">
+        <option value="">All border styles</option>
+        <option value="1">Plain</option>
+        <option value="2">Stitch</option>
+        <option value="3">Zigzag / Perforated</option>
+        <option value="4">Irregular</option>
+      </select>
+      <select id="filter-border-count" class="filter-bar-select">
+        <option value="">All border counts</option>
+        <option value="single">Single</option>
+        <option value="double">Double</option>
+        <option value="split">Split</option>
+      </select>
+      <select id="filter-corners" class="filter-bar-select">
+        <option value="">All corners</option>
+        <option value="straight">Straight</option>
+        <option value="soft_round">Soft Round</option>
+        <option value="medium_round">Medium Round</option>
+        <option value="strong_round">Strong Round</option>
+      </select>
+      <select id="filter-fill" class="filter-bar-select">
+        <option value="">All fills</option>
+        <option value="full">Filled</option>
+        <option value="empty">Outlined</option>
+      </select>
+      <button class="btn btn-small filter-bar-reset" id="filter-reset">Reset</button>
+    </div>
     <div id="results-batches"></div>
   </section>
 
@@ -83,35 +113,40 @@
         </div>
       </div>
 
-      <!-- FRAME -->
+      <!-- BORDER COUNT -->
       <div class="filter-section">
         <div class="filter-section-header">
-          <span class="filter-section-title">FRAME</span>
+          <span class="filter-section-title">BORDER COUNT</span>
           <a href="#" class="filter-select-all" data-target="frame-filters">Select all</a>
         </div>
         <div class="filter-checkboxes" id="frame-filters">
           <label class="filter-checkbox-label"><input type="checkbox" value="single"> Single</label>
           <label class="filter-checkbox-label"><input type="checkbox" value="double"> Double</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="split"> Split</label>
         </div>
       </div>
 
-      <!-- BORDER -->
+      <!-- BORDER STYLE -->
       <div class="filter-section">
         <div class="filter-section-header">
-          <span class="filter-section-title">BORDER</span>
+          <span class="filter-section-title">BORDER STYLE</span>
           <a href="#" class="filter-select-all" data-target="border-filters">Select all</a>
         </div>
         <div class="filter-checkboxes" id="border-filters">
-          <label class="filter-checkbox-label"><input type="checkbox" value="simple"> Simple</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="wavy"> Wavy</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="brushstroke"> Brushstroke</label>
+          <span class="filter-group-label">Plain</span>
+          <label class="filter-checkbox-label"><input type="checkbox" value="simple"> Plain</label>
+          <span class="filter-group-label">Stitch</span>
           <label class="filter-checkbox-label"><input type="checkbox" value="stitch_line"> Stitch line</label>
           <label class="filter-checkbox-label"><input type="checkbox" value="stitch_square"> Stitch square</label>
           <label class="filter-checkbox-label"><input type="checkbox" value="stitch_circle"> Stitch dot</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="torn_edge"> Torn edge</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="perforated_spaced"> Spaced perforated</label>
-          <label class="filter-checkbox-label"><input type="checkbox" value="perforated"> Perforated</label>
+          <span class="filter-group-label">Zigzag / Perforated</span>
           <label class="filter-checkbox-label"><input type="checkbox" value="zigzag"> Zigzag</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="perforated"> Perforated</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="perforated_spaced"> Spaced perforated</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="wavy"> Wavy</label>
+          <span class="filter-group-label">Irregular</span>
+          <label class="filter-checkbox-label"><input type="checkbox" value="brushstroke"> Brushstroke</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="torn_edge"> Torn edge</label>
         </div>
       </div>
 
@@ -124,6 +159,7 @@
         <div class="filter-checkboxes" id="corner-filters">
           <label class="filter-checkbox-label"><input type="checkbox" value="straight"> Straight</label>
           <label class="filter-checkbox-label"><input type="checkbox" value="soft_round"> Soft round</label>
+          <label class="filter-checkbox-label"><input type="checkbox" value="medium_round"> Medium round</label>
           <label class="filter-checkbox-label"><input type="checkbox" value="strong_round"> Rounded</label>
         </div>
       </div>
@@ -230,8 +266,8 @@
   <script src="/js/supabase-client.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/router.js"></script>
-  <script src="/js/svg-renderer.js?v=40"></script>
-  <script src="/js/gallery.js?v=33"></script>
+  <script src="/js/svg-renderer.js?v=41"></script>
+  <script src="/js/gallery.js?v=35"></script>
   <script>
     // Inline restore check — runs BEFORE stamp-app.js, cannot be cached separately
     (function() {
