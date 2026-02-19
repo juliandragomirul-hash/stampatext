@@ -1355,6 +1355,9 @@ const SvgRenderer = {
             measuredWidth = textEl.getComputedTextLength();
           }
 
+          // Measure actual ink bounding box for precise height and centering
+          var bbox = textEl.getBBox();
+
           // Get actual rect width from SVG (more reliable than maxWidth from DB)
           var actualRectWidth = maxWidth;
           var rectWidthMatch = svgString.match(/<rect[^>]*\swidth=["']([\d.]+)["']/i);
@@ -1434,14 +1437,21 @@ const SvgRenderer = {
             // STEP 1: Calculate text dimensions
             var numLines = tspans.length > 1 ? tspans.length : 1;
             var lineHeight = newFontSize * 1.1; // 10% extra spacing between lines
-            var textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.8;
             var fontRatioCalc = newFontSize / originalFontSize;
+            // Single-line: use getBBox for actual ink height; multi-line: formula-based
+            var textBlockHeight;
+            if (numLines === 1) {
+              textBlockHeight = bbox.height * fontRatioCalc;
+            } else {
+              textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.8;
+            }
             var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX;
 
             // STEP 2: Calculate rect dimensions to wrap around text
-            var rectPadding = newFontSize * 0.5;
-            var newRectWidth = textBlockWidth + rectPadding * 2;
-            var newRectHeight = textBlockHeight + rectPadding * 2;
+            var hPadding = newFontSize * 0.35;
+            var vPadding = newFontSize * 0.25;
+            var newRectWidth = textBlockWidth + hPadding * 2;
+            var newRectHeight = textBlockHeight + vPadding * 2;
 
             // STEP 3: Position text at viewBox center (FIXED reference point)
             var viewBoxCenterX = vbX + vbW / 2;
@@ -1473,8 +1483,11 @@ const SvgRenderer = {
             if (curTransform) {
               var mMatch = curTransform.match(/matrix\(\s*([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)\s*\)/);
               if (mMatch) {
-                // For single-line, add baseline offset; for multi-line, tspan dy handles it
-                var baselineOffset = (tspans.length <= 1) ? newFontSize * 0.40 : 0;
+                // For single-line, compute baseline offset from actual ink center (getBBox)
+                // bbox.y is negative (top of caps above baseline), bbox.height is ink height
+                // bboxCenterY = visual center of ink relative to baseline (negative value)
+                var bboxCenterY = bbox.y + bbox.height / 2;
+                var baselineOffset = (tspans.length <= 1) ? -bboxCenterY * fontRatioCalc * 0.92 : 0;
                 var newTx = viewBoxCenterX;
                 var newTy = viewBoxCenterY + baselineOffset;
                 var newMat = 'matrix(' + mMatch[1] + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + mMatch[4] + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
