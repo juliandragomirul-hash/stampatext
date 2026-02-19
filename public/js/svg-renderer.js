@@ -127,6 +127,8 @@ const SvgRenderer = {
     // browsers can't use). We load fonts externally via Google Fonts instead.
     cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 
+
+
     // Map Adobe Illustrator font-family names to Google Fonts equivalents.
     // Adobe uses 'Oswald-Medium', 'Oswald-Regular', etc. but Google Fonts
     // uses 'Oswald' with font-weight to select the variant.
@@ -441,6 +443,26 @@ const SvgRenderer = {
    * @returns {string} - colorized SVG string
    */
   colorize(svgString, newColor) {
+    // Resolve <use href="#id"/> references by inlining <defs> content.
+    // Brush SVGs use <defs><g id="bbp">...paths...</g></defs> + <use href="#bbp"/>.
+    // <use> shadow clones don't reflect fill changes from string manipulation,
+    // so we inline BEFORE color replacement to ensure fills are directly hit.
+    var useRefMatch = svgString.match(/<use[^>]*href=["']#([^"']+)["'][^>]*\/?\s*>/i);
+    if (useRefMatch) {
+      var refId = useRefMatch[1];
+      // Match the <defs> block containing the referenced group (greedy inner match for nested </g>)
+      var defsRe = new RegExp('<defs>\\s*<g\\s+id=["\']' + refId + '["\']>([\\s\\S]*?)</g>\\s*</defs>', 'i');
+      var defsMatch = svgString.match(defsRe);
+      if (defsMatch) {
+        var inlinedContent = defsMatch[1].trim();
+        // Replace all <use> refs with inline content
+        var useRe = new RegExp('<use[^>]*href=["\']#' + refId + '["\'][^>]*/?>\\s*', 'gi');
+        svgString = svgString.replace(useRe, inlinedContent);
+        // Remove the resolved <defs> block
+        svgString = svgString.replace(defsRe, '');
+      }
+    }
+
     var detected = this.detectColors(svgString);
     if (detected.length === 0) return svgString;
 
@@ -487,13 +509,24 @@ const SvgRenderer = {
       return result;
     }
 
-    // Category 1: replace fill/stroke attributes directly (no raster image)
+    // Category 1: replace ALL non-white/non-black fill/stroke with newColor.
+    // Stamps are monochromatic — secondary colors (e.g. brushstroke paths in <defs>) must also recolor.
+    // Brute-force: replace ANY hex color (6-digit or 3-digit) that isn't white/black.
     var result = svgString;
-    var escapedDominant = dominant.replace('#', '\\#');
-    var fillRe = new RegExp('(fill=["\'])' + escapedDominant + '(["\'])', 'gi');
-    result = result.replace(fillRe, '$1' + newColor + '$2');
-    var strokeRe = new RegExp('(stroke=["\'])' + escapedDominant + '(["\'])', 'gi');
-    result = result.replace(strokeRe, '$1' + newColor + '$2');
+    function _isProtected(hex) {
+      var u = hex.toUpperCase();
+      // Expand 3-digit: #RGB → #RRGGBB
+      if (u.length === 4) u = '#' + u[1]+u[1] + u[2]+u[2] + u[3]+u[3];
+      return u === '#FFFFFF' || u === '#000000';
+    }
+    result = result.replace(/(fill=["'])(#[0-9A-Fa-f]{3,6})(["'])/gi, function(_m, pre, hex, post) {
+      if (_isProtected(hex)) return _m;
+      return pre + newColor + post;
+    });
+    result = result.replace(/(stroke=["'])(#[0-9A-Fa-f]{3,6})(["'])/gi, function(_m, pre, hex, post) {
+      if (_isProtected(hex)) return _m;
+      return pre + newColor + post;
+    });
 
     // "Full" template detection: text color differs from dominant (text is white/black
     // while frame/background uses the dominant color). Adjust text contrast automatically.
@@ -710,9 +743,9 @@ const SvgRenderer = {
    * @returns {number}
    */
   _getMaxCharsPerLine(len) {
-    // 1-60 chars: 12 chars per line
+    // 1-60 chars: 16 chars per line
     // 61+ chars: 20 chars per line
-    return len <= 60 ? 12 : 20;
+    return len <= 60 ? 16 : 20;
   },
 
   /**
@@ -1441,7 +1474,7 @@ const SvgRenderer = {
               var mMatch = curTransform.match(/matrix\(\s*([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)[,\s]+([\d.\-]+)\s*\)/);
               if (mMatch) {
                 // For single-line, add baseline offset; for multi-line, tspan dy handles it
-                var baselineOffset = (tspans.length <= 1) ? newFontSize * 0.39 : 0;
+                var baselineOffset = (tspans.length <= 1) ? newFontSize * 0.40 : 0;
                 var newTx = viewBoxCenterX;
                 var newTy = viewBoxCenterY + baselineOffset;
                 var newMat = 'matrix(' + mMatch[1] + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + mMatch[4] + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
@@ -2715,63 +2748,42 @@ const SvgRenderer = {
   // ---- Texture support ----
 
   /**
-   * Cache for loaded texture SVG content (keyed by textureId).
-   * @private
+   * Programmatic texture presets using SVG feTurbulence + feColorMatrix filters.
+   * Each preset produces white marks over the stamp via thresholded noise.
+   * RGB always white (1,1,1). Alpha = alphaSlope * noiseValue + alphaIntercept.
    */
-  _textureCache: {},
-
-  /**
-   * Apply a grungy texture overlay on top of an SVG stamp.
-   * Fetches the texture SVG, extracts its path/polygon elements,
-   * scales them to fit the stamp's viewBox, and injects them
-   * as white paths on top of the stamp content.
-   * @param {string} svgString - the stamp SVG string
-   * @param {string} textureId - texture identifier (e.g. 'grungy_texture_1')
-   * @returns {Promise<string>} - SVG string with texture overlay
-   */
-  /**
-   * Map of texture group IDs to their individual texture file IDs.
-   * When a group is selected, one variant is picked at random.
-   */
-  _textureGroups: {
-    'grungy_texture': ['grungy_texture_2', 'grungy_texture_3_light']
+  _texturePresets: {
+    'grungy':   { label: 'Grungy',   type: 'fractalNoise', baseFrequency: '0.04',      numOctaves: 4, alphaSlope: -10, alphaIntercept: 3.2 },
+    'worn':     { label: 'Worn',     type: 'turbulence',   baseFrequency: '0.012',     numOctaves: 3, alphaSlope: -6,  alphaIntercept: 0.75 },
+    'scratched':{ label: 'Scratched',type: 'fractalNoise', baseFrequency: '0.002 0.15',numOctaves: 2, alphaSlope: -12, alphaIntercept: 3.9 },
+    'speckled': { label: 'Speckled', type: 'fractalNoise', baseFrequency: '0.08',      numOctaves: 2, alphaSlope: -15, alphaIntercept: 4.5 },
+    'noise':    { label: 'Noise',    type: 'fractalNoise', baseFrequency: '0.15',      numOctaves: 1, alphaSlope: -8,  alphaIntercept: 2.9 }
   },
 
-  async applyTexture(svgString, textureId) {
+  /** Backward compatibility: map old texture IDs to new preset keys. */
+  _textureAliases: {
+    'grungy_texture': 'grungy',
+    'grungy_texture_2': 'grungy',
+    'grungy_texture_3_light': 'grungy'
+  },
+
+  /**
+   * Apply a texture overlay on top of an SVG stamp using SVG filters.
+   * Generates feTurbulence noise thresholded to white marks.
+   * Random seed per call ensures infinite visual variety.
+   * @param {string} svgString - the stamp SVG string
+   * @param {string} textureId - texture preset key (e.g. 'grungy', 'worn')
+   * @returns {string} - SVG string with texture overlay
+   */
+  applyTexture(svgString, textureId) {
     if (!textureId) return svgString;
 
-    // If textureId is a group, randomly pick one of its variants
-    if (this._textureGroups[textureId]) {
-      var variants = this._textureGroups[textureId];
-      textureId = variants[Math.floor(Math.random() * variants.length)];
-    }
+    // Resolve aliases for backward compatibility
+    var resolvedId = this._textureAliases[textureId] || textureId;
+    var preset = this._texturePresets[resolvedId];
+    if (!preset) return svgString;
 
-    // Fetch and cache texture content
-    if (!this._textureCache[textureId]) {
-      var textureUrl = '/textures/' + textureId + '.svg';
-      var textureSvg = await this.fetchSvg(textureUrl);
-
-      // Extract only path and polygon elements from the texture group
-      // (skip the background rect)
-      var paths = [];
-      var pathRegex = /<(path|polygon)\s[^>]*?\/>/gi;
-      var match;
-      while ((match = pathRegex.exec(textureSvg)) !== null) {
-        paths.push(match[0]);
-      }
-
-      this._textureCache[textureId] = {
-        paths: paths.join('\n'),
-        // Texture original dimensions (1441.201 x 1441.201)
-        width: 1441.201,
-        height: 1441.201
-      };
-    }
-
-    var texture = this._textureCache[textureId];
-    if (!texture.paths) return svgString;
-
-    // Parse the stamp's viewBox to know how to scale the texture
+    // Parse viewBox
     var vbMatch = svgString.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*["']/);
     if (!vbMatch) return svgString;
 
@@ -2780,32 +2792,34 @@ const SvgRenderer = {
     var vbW = parseFloat(vbMatch[3]);
     var vbH = parseFloat(vbMatch[4]);
 
-    // Scale texture to fit the stamp viewBox, oversized by √2 so rotation
-    // never leaves uncovered edges (worst case at 45° needs 1.414x)
-    var oversize = 1.42;
-    var scaleX = (vbW * oversize) / texture.width;
-    var scaleY = (vbH * oversize) / texture.height;
-    // Offset to keep the oversized texture centered on the stamp
-    var offsetX = vbX - (vbW * (oversize - 1) / 2);
-    var offsetY = vbY - (vbH * (oversize - 1) / 2);
+    // Random seed for variety (replaces old random rotation)
+    var seed = Math.floor(Math.random() * 99999) + 1;
+    var filterId = 'tex-' + resolvedId + '-' + seed;
 
-    // Random rotation (1–359 degrees) so each textured stamp looks unique
-    var texRotation = Math.floor(Math.random() * 359) + 1;
-    var texCx = (texture.width / 2).toFixed(4);
-    var texCy = (texture.height / 2).toFixed(4);
+    // Build SVG filter: feTurbulence → feColorMatrix (white output, thresholded alpha)
+    var filterDef = '<defs><filter id="' + filterId + '" ' +
+      'x="0" y="0" width="100%" height="100%" ' +
+      'color-interpolation-filters="sRGB">' +
+      '<feTurbulence type="' + preset.type + '" ' +
+      'baseFrequency="' + preset.baseFrequency + '" ' +
+      'numOctaves="' + preset.numOctaves + '" ' +
+      'seed="' + seed + '"/>' +
+      '<feColorMatrix type="matrix" values="' +
+      '0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ' +
+      '0 0 0 ' + preset.alphaSlope + ' ' + preset.alphaIntercept + '"/>' +
+      '</filter></defs>';
 
-    // Build a group that scales and positions the texture over the stamp,
-    // with a random rotation applied to the texture paths inside
-    var textureGroup = '<g transform="translate(' + offsetX.toFixed(4) + ',' + offsetY.toFixed(4) + ') scale(' + scaleX.toFixed(6) + ',' + scaleY.toFixed(6) + ')">' +
-      '<g transform="rotate(' + texRotation + ' ' + texCx + ' ' + texCy + ')">' +
-      texture.paths +
-      '</g></g>';
+    // Overlay rect covering full viewBox, filtered to show white texture marks
+    var overlayRect = '<rect x="' + vbX + '" y="' + vbY + '" ' +
+      'width="' + vbW + '" height="' + vbH + '" ' +
+      'fill="white" filter="url(#' + filterId + ')"/>';
 
-    // Inject before </svg>
-    var svgCloseIdx = svgString.lastIndexOf('</svg>');
-    if (svgCloseIdx === -1) return svgString;
+    // Inject filter def after <svg> tag, overlay rect before </svg>
+    var result = svgString.replace(/(<svg[^>]*>)/i, '$1' + filterDef);
+    var svgCloseIdx = result.lastIndexOf('</svg>');
+    if (svgCloseIdx === -1) return result;
 
-    return svgString.substring(0, svgCloseIdx) + textureGroup + svgString.substring(svgCloseIdx);
+    return result.substring(0, svgCloseIdx) + overlayRect + result.substring(svgCloseIdx);
   },
 
   /**

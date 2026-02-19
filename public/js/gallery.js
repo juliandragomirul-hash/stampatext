@@ -89,7 +89,12 @@ const Gallery = {
   buildDescription(text, colorName, borderType, fillType, cornerType, objectType, appliedTilt, appliedTexture, appliedFrame, svgString) {
     var border = this.BORDER_LABELS[borderType] || 'plain';
     var fill = (fillType === 'empty') ? 'outlined' : 'filled';
-    var texture = (appliedTexture === 'grungy_texture') ? 'grungy' : '';
+    var texture = '';
+    if (appliedTexture) {
+      var resolved = SvgRenderer._textureAliases[appliedTexture] || appliedTexture;
+      var preset = SvgRenderer._texturePresets[resolved];
+      texture = preset ? preset.label.toLowerCase() : '';
+    }
     var tilt = (appliedTilt && appliedTilt !== 0) ? 'tilted' : '';
     var frame = '';
     if (appliedFrame === 'double') frame = 'double border';
@@ -107,10 +112,10 @@ const Gallery = {
     if (cornerType === 'strong_round') corners = 'strong round corners';
     else if (cornerType === 'medium_round') corners = 'medium round corners';
     else if (cornerType === 'soft_round') corners = 'soft round corners';
-    // Build: "TEXT" written on [fill] [color] [texture?] [tilt?] [border style?] [frame?] [shape] [objectType] [with corners?]
-    var adjectives = [texture, tilt, border, frame].filter(Boolean).join(' ');
+    // Build: "TEXT" written on [fill] [color] [tilt?] [border style?] [frame?] [shape] [objectType] with [corners] [and texture?]
+    var adjectives = [tilt, border, frame].filter(Boolean).join(' ');
     var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
-    var withParts = [corners].filter(Boolean);
+    var withParts = [corners, texture ? texture + ' texture' : ''].filter(Boolean);
     var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
     return '\u201C' + this.escapeHtml(text) + '\u201D written on ' +
       fill + ' ' + colorName.toLowerCase() + ' ' + objPhrase + withClause;
@@ -876,8 +881,8 @@ const Gallery = {
     if (svgEl) {
       svgEl.removeAttribute('width');
       svgEl.removeAttribute('height');
-      // Cards are ~300px wide in the grid; zoom shows ~600px
-      svgEl.style.width = '600px';
+      // Cards are ~300px wide in the grid; zoom shows ~900px
+      svgEl.style.width = '900px';
       svgEl.style.height = 'auto';
     }
 
