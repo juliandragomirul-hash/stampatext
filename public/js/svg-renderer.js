@@ -1504,16 +1504,19 @@ const SvgRenderer = {
 
             // First pass: find the largest rect width (outer frame) to classify rects
             var rectInfos = [];
+            var hasDecorativeBorder = false;
             (result.match(/<rect[^>]*>/gi) || []).forEach(function(rectTag) {
               if (rectTag.match(/fill=["']#FFFFFF["']/i) || rectTag.match(/fill=["']white["']/i)) return;
               var wm = rectTag.match(/\swidth=["']([\d.]+)["']/);
               var swm = rectTag.match(/stroke-width=["']([\d.]+)["']/);
               if (wm) rectInfos.push({ w: parseFloat(wm[1]), sw: swm ? parseFloat(swm[1]) : 0 });
+              if (/data-(?:border|stitch|wavy|filter|brush-border)=/.test(rectTag)) hasDecorativeBorder = true;
             });
             rectInfos.sort(function(a, b) { return b.w - a.w; });
             var rectWidths = rectInfos.map(function(r) { return r.w; });
             var outerRectOrigW = rectWidths[0] || vbW;
-            var outerRectSw = rectInfos.length > 0 ? rectInfos[0].sw : 0;
+            var rawOuterSw = rectInfos.length > 0 ? rectInfos[0].sw : 0;
+            var outerRectSw = hasDecorativeBorder ? rawOuterSw : Math.min(rawOuterSw, 30);
             var mainRectThreshold = outerRectOrigW * 0.7;
             var decorScale = newRectWidth / outerRectOrigW;
             var innerPaddingX = outerRectSw > 0 ? outerRectSw * 0.22 : 11;
@@ -1568,17 +1571,26 @@ const SvgRenderer = {
                   na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
                   if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
                   if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
+                  // Set reference stroke-width on outer rect (only cap for plain borders)
+                  if (!hasDecorativeBorder) {
+                    na = na.replace(/stroke-width=["'][\d.]+["']/, 'stroke-width="' + outerRectSw + '"');
+                  }
                   // Capture border shape data from outer rect
                   var borderAttr = attrs.match(/data-border=["']([^"']+)["']/);
                   if (borderAttr) {
                     var swMatch = attrs.match(/stroke-width=["']([\d.]+)["']/);
                     var halfStroke = swMatch ? parseFloat(swMatch[1]) / 2 : 0;
+                    // Override legacy SVG attribute values with tuned params
+                    var borderType = borderAttr[1];
+                    if (borderType === 'circle-10') borderType = 'circle-6-3.5';
+                    if (borderType === 'circle-8-2') borderType = 'circle-6-2';
                     borderShapeData = {
-                      type: borderAttr[1],
+                      type: borderType,
                       x: newRectX - halfStroke,
                       y: newRectY - halfStroke,
                       w: newRectWidth + halfStroke * 2,
-                      h: newRectHeight + halfStroke * 2
+                      h: newRectHeight + halfStroke * 2,
+                      sw: swMatch ? parseFloat(swMatch[1]) : 50
                     };
                     na = na.replace(/\s*data-border=["'][^"']+["']/, '');
                   }
@@ -1654,9 +1666,13 @@ const SvgRenderer = {
               var bParts = borderShapeData.type.split('-');
               var bShape = bParts[0];
               var bRadius = parseFloat(bParts[1]) || 15;
-              // Double diamond size for zigzag only (don't affect circle/perforated)
-              if (bShape === 'diamond') bRadius = bRadius * 1.5;
-              var bSpacingMult = bParts[2] ? parseFloat(bParts[2]) : 2.5;
+              // Scale diamond to fit within stroke (halfStroke = outerRectSw/2)
+              if (bShape === 'diamond') {
+                var halfSw = borderShapeData.sw ? borderShapeData.sw / 2 : bRadius * 1.25;
+                bRadius = Math.min(bRadius * 1.5, halfSw);
+              }
+              // Diamonds: spacing = 2r for tangent side corners; circles keep 2.5r gap
+              var bSpacingMult = bParts[2] ? parseFloat(bParts[2]) : (bShape === 'diamond' ? 2 : 2.5);
               var shapesHtml = SvgRenderer._generateBorderShapes(
                 borderShapeData.x, borderShapeData.y,
                 borderShapeData.w, borderShapeData.h,
@@ -1809,6 +1825,11 @@ const SvgRenderer = {
                 if (brushMatch) {
                   var brushExtent = (overScale - 1) * Math.max(origBW, origBH) / 2 + 30;
                   strokePadding = Math.max(strokePadding, brushExtent);
+                }
+                // Zigzag/perforated: shapes carved into stroke, just need stroke edge + margin
+                if (borderShapeData) {
+                  var bpHalfSw = (borderShapeData.sw || 50) / 2;
+                  strokePadding = Math.max(strokePadding, bpHalfSw + 8);
                 }
                 // Stitch shapes extend beyond rect edge (offset + size/2)
                 if (stitchData) strokePadding = Math.max(strokePadding, 70);
@@ -2914,8 +2935,8 @@ const SvgRenderer = {
     if (!bi.stitch && tpl.border_type && tpl.border_type.indexOf('stitch_') === 0) {
       bi.stitch = tpl.border_type.replace('stitch_', '');
     }
-    if (!bi.border && tpl.border_type === 'perforated_spaced') bi.border = 'circle-10';
-    if (!bi.border && tpl.border_type === 'perforated') bi.border = 'circle-8-2';
+    if (tpl.border_type === 'perforated_spaced') bi.border = 'circle-6-3.5';
+    if (tpl.border_type === 'perforated') bi.border = 'circle-6-2';
     if (!bi.border && tpl.border_type === 'zigzag') bi.border = 'diamond-20';
     if (!bi.filter && tpl.border_type === 'torn_edge') bi.filter = 'ripped-20';
     if (!bi.wavy && tpl.border_type === 'wavy') bi.wavy = 'gentle';
@@ -2929,9 +2950,8 @@ const SvgRenderer = {
    */
   applyCornerRadius(svgStr, cornerType) {
     if (!cornerType || cornerType === 'straight') return svgStr;
-    // Must account for both stroke inner edge (rx - osw/2) AND double frame offset path (rx - inset).
-    // With osw=50, inset≈43: soft inner_rect_rx=70-43=27, medium=100-43=57, strong=160-43=117
-    var CORNER_RX = { soft_round: 70, medium_round: 100, strong_round: 160 };
+    // Offset path: inner_rx = rx - inset, outer inner edge = rx - sw/2. Stroke capped to 30 in autoFit.
+    var CORNER_RX = { soft_round: 35, medium_round: 80, strong_round: 120 };
     var targetRx = CORNER_RX[cornerType];
     if (!targetRx) return svgStr;
     // Find the main border rect (largest by width, skip white background rects)
@@ -2971,7 +2991,7 @@ const SvgRenderer = {
    * For full fills, inner color is contrast (white/black). For empty, inner color matches stroke.
    * Skips Cat 2 (image) templates unless they have a Cat1-style border.
    */
-  addDoubleFrame(svgStr, bi, appliedColor) {
+  addDoubleFrame(svgStr, bi, appliedColor, frameMode) {
     bi = bi || {};
     var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.border || bi.filter;
     if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
@@ -3043,9 +3063,11 @@ const SvgRenderer = {
         if (wswM) wavySw = parseFloat(wswM[1]);
       }
     }
+    // Filled stitch is already visually dense — skip double frame entirely
+    if (bi.stitch && isFull) return svgStr;
     var innerSw = Math.max(4, Math.round(osw * 0.24));
+    if (bi.border && !isFull) innerSw = Math.max(6, Math.round(osw * 0.3));
     if (bi.brush) innerSw = Math.max(6, Math.round(osw * 0.5));
-    if (bi.stitch && isFull) innerSw = Math.max(6, Math.round(osw * 0.5));
     if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.7));
     var inset;
     if (!bi.stitch && isFull) {
@@ -3054,7 +3076,8 @@ const SvgRenderer = {
     } else {
       inset = osw / 2 + innerSw * 1.5;
     }
-    if (bi.stitch) inset = osw + innerSw;
+    if (bi.stitch) inset = osw * 0.35;
+    if (bi.border) inset = osw * 0.3;
     if (bi.brush) inset = Math.max(inset, Math.min(ow, oh) * 0.12);
     if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
     if (bi.wavy) inset = Math.max(inset, wavySw * 1.15 + innerSw / 2);
@@ -3070,6 +3093,41 @@ const SvgRenderer = {
     if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
     if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
     innerRect += '/>';
+    // Outlined zigzag/perforated: add white hack rect (same as filled) + colored inner rect
+    if (bi.border && !isFull) {
+      var whiteHackSw = Math.max(4, Math.round(osw * 0.24));
+      var whiteRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
+        '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
+        '" fill="none" stroke="#FFFFFF" stroke-width="' + whiteHackSw +
+        '" stroke-miterlimit="10"';
+      if (irx > 0) whiteRect += ' rx="' + irx.toFixed(1) + '"';
+      if (iry > 0) whiteRect += ' ry="' + iry.toFixed(1) + '"';
+      whiteRect += '/>';
+      // Colored rect inset further inside the white rect
+      var colorInset = inset + whiteHackSw;
+      var cix = ox + colorInset, ciy = oy + colorInset;
+      var ciw = ow - colorInset * 2, cih = oh - colorInset * 2;
+      var cirx = Math.max(0, orx - colorInset);
+      var ciry = Math.max(0, ory - colorInset);
+      var colorRect = '<rect x="' + cix.toFixed(2) + '" y="' + ciy.toFixed(2) +
+        '" width="' + ciw.toFixed(2) + '" height="' + cih.toFixed(2) +
+        '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
+        '" stroke-miterlimit="10"';
+      if (cirx > 0) colorRect += ' rx="' + cirx.toFixed(1) + '"';
+      if (ciry > 0) colorRect += ' ry="' + ciry.toFixed(1) + '"';
+      colorRect += '/>';
+      if (frameMode === 'double') {
+        innerRect = whiteRect + colorRect;
+      } else {
+        // Single: white filled rect (no stroke) to mask inner portion of thick stroke
+        innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
+          '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
+          '" fill="#FFFFFF" stroke="none"';
+        if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
+        if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
+        innerRect += '/>';
+      }
+    }
     var textPos = svgStr.search(/<text[\s>]/i);
     if (textPos !== -1) return svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
     return svgStr.replace(/<\/svg>/, innerRect + '</svg>');

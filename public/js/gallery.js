@@ -293,6 +293,8 @@ const Gallery = {
       var allowedFrames = this.FRAME_COMPAT[base.borderType || 'simple'] || this.FRAME_ORDER;
       for (var f = 0; f < allowedFrames.length; f++) {
         var frameMode = allowedFrames[f];
+        // Skip double frame for filled stitch — too visually dense / redundant with single
+        if (frameMode === 'double' && bi.stitch && base.fillType === 'full') continue;
 
         // Random color per variant
         var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
@@ -310,9 +312,11 @@ const Gallery = {
         var framed = cropped;
         try {
           if (frameMode === 'double') {
-            framed = SvgRenderer.addDoubleFrame(cropped, bi, color);
+            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
           } else if (frameMode === 'split') {
             framed = SvgRenderer.addSplitBorder(cropped, bi);
+          } else if (frameMode === 'single' && bi.border && base.fillType !== 'full') {
+            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'single');
           }
         } catch (err) {
           console.warn('Failed to apply frame "' + frameMode + '" to:', base.name, err);
@@ -931,14 +935,14 @@ const Gallery = {
         colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
         var framed = cropped;
-        if (vp.f === 'double' || vp.f === 'split') {
-          var rbi = SvgRenderer.detectBorderType(base.svgString);
-          SvgRenderer.supplementBorderInfo(rbi, { border_type: base.borderType, fill_type: base.fillType });
-          if (vp.f === 'double') {
-            framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c);
-          } else {
-            framed = SvgRenderer.addSplitBorder(cropped, rbi);
-          }
+        var rbi = SvgRenderer.detectBorderType(base.svgString);
+        SvgRenderer.supplementBorderInfo(rbi, { border_type: base.borderType, fill_type: base.fillType });
+        if (vp.f === 'double') {
+          framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c, 'double');
+        } else if (vp.f === 'split') {
+          framed = SvgRenderer.addSplitBorder(cropped, rbi);
+        } else if (vp.f === 'single' && rbi.border && base.fillType !== 'full') {
+          framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c, 'single');
         }
         var tilted = vp.i !== 0 ? SvgRenderer.applyTilt(framed, vp.i) : framed;
         var textured = vp.x ? await SvgRenderer.applyTexture(tilted, vp.x) : tilted;
