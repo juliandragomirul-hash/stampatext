@@ -1582,8 +1582,8 @@ const SvgRenderer = {
                     var halfStroke = swMatch ? parseFloat(swMatch[1]) / 2 : 0;
                     // Override legacy SVG attribute values with tuned params
                     var borderType = borderAttr[1];
-                    if (borderType === 'circle-10') borderType = 'circle-6-3.5';
-                    if (borderType === 'circle-8-2') borderType = 'circle-6-2';
+                    if (borderType === 'circle-30-3') borderType = 'circle-25-4';
+                    if (borderType === 'circle-20') borderType = 'circle-20-2';
                     borderShapeData = {
                       type: borderType,
                       x: newRectX - halfStroke,
@@ -2935,8 +2935,8 @@ const SvgRenderer = {
     if (!bi.stitch && tpl.border_type && tpl.border_type.indexOf('stitch_') === 0) {
       bi.stitch = tpl.border_type.replace('stitch_', '');
     }
-    if (tpl.border_type === 'perforated_spaced') bi.border = 'circle-6-3.5';
-    if (tpl.border_type === 'perforated') bi.border = 'circle-6-2';
+    if (tpl.border_type === 'perforated_spaced') bi.border = 'circle-25-4';
+    if (tpl.border_type === 'perforated') bi.border = 'circle-20-2';
     if (!bi.border && tpl.border_type === 'zigzag') bi.border = 'diamond-20';
     if (!bi.filter && tpl.border_type === 'torn_edge') bi.filter = 'ripped-20';
     if (!bi.wavy && tpl.border_type === 'wavy') bi.wavy = 'gentle';
