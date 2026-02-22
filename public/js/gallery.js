@@ -185,6 +185,8 @@ const Gallery = {
 
         // Replace text in each editable zone (string-based, preserves fonts)
         var didAutoFit = false;
+        var preAutoFitSvg = null;
+        var autoFitZoneInfo = null;
         for (const zone of editableZones) {
           const idx = zone.svg_element_index || 0;
           cleanedSvg = SvgRenderer.replaceTextInString(cleanedSvg, idx, userText);
@@ -194,12 +196,17 @@ const Gallery = {
             const originalScaleX = zone.transform_matrix
               ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1
               : 1;
+            preAutoFitSvg = cleanedSvg;
+            autoFitZoneInfo = { idx: idx, boundingWidth: zone.bounding_width, fontSize: zone.font_size, originalScaleX: originalScaleX };
             cleanedSvg = await SvgRenderer.autoFitTextInString(
               cleanedSvg,
               idx,
               zone.bounding_width,
               zone.font_size,
-              originalScaleX
+              originalScaleX,
+              0,
+              tpl.fill_type || 'full',
+              tpl.corner_type || 'straight'
             );
             didAutoFit = true;
           }
@@ -210,9 +217,17 @@ const Gallery = {
           cleanedSvg = await SvgRenderer.autoFitTextInString(cleanedSvg, 0, 1, 128, 1);
         }
 
+        // Store measurements for per-variant re-sizing (avoids re-creating iframes)
+        var autoFitMeasurements = SvgRenderer._autoFitMeasureCache
+          ? { key: SvgRenderer._autoFitMeasureCache.key, measuredWidth: SvgRenderer._autoFitMeasureCache.measuredWidth, bbox: SvgRenderer._autoFitMeasureCache.bbox, numTspans: SvgRenderer._autoFitMeasureCache.numTspans, canvasAscent: SvgRenderer._autoFitMeasureCache.canvasAscent, canvasDescent: SvgRenderer._autoFitMeasureCache.canvasDescent, canvasMeasureFontSize: SvgRenderer._autoFitMeasureCache.canvasMeasureFontSize, canvasInkLeft: SvgRenderer._autoFitMeasureCache.canvasInkLeft, canvasInkRight: SvgRenderer._autoFitMeasureCache.canvasInkRight, canvasAdvanceWidth: SvgRenderer._autoFitMeasureCache.canvasAdvanceWidth }
+          : null;
+
         this.baseResults.push({
           templateId: tpl.id,
           svgString: cleanedSvg,
+          preAutoFitSvg: preAutoFitSvg,
+          autoFitZoneInfo: autoFitZoneInfo,
+          autoFitMeasurements: autoFitMeasurements,
           shape: tpl.shape,
           objectType: tpl.object_type,
           frameType: tpl.frame_type || 'single',
@@ -299,14 +314,38 @@ const Gallery = {
         // Random color per variant
         var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
 
+        // Per-variant font sizing: re-apply autoFit with frame-specific inset + corner compensation
+        var variantSvg = base.svgString;
+        var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
+        if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners)) {
+          var frameInset = (frameMode !== 'single') ? SvgRenderer.estimateFrameInset(frameMode, bi) : 0;
+          if (frameInset > 0 || hasRoundedCorners) {
+            try {
+              variantSvg = SvgRenderer._applyAutoFitSizing(
+                base.preAutoFitSvg,
+                base.autoFitZoneInfo.idx,
+                base.autoFitZoneInfo.boundingWidth,
+                base.autoFitZoneInfo.fontSize,
+                base.autoFitZoneInfo.originalScaleX,
+                frameInset,
+                base.autoFitMeasurements,
+                base.fillType,
+                base.cornerType
+              );
+            } catch (err) {
+              console.warn('Per-variant sizing failed for', base.name, frameMode, err);
+            }
+          }
+        }
+
         var colorized, cropped;
         try {
-          colorized = SvgRenderer.colorize(base.svgString, color);
+          colorized = SvgRenderer.colorize(variantSvg, color);
           colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
           cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
         } catch (err) {
           console.warn('Failed to process template:', base.name, err);
-          cropped = SvgRenderer.colorize(base.svgString, color);
+          cropped = SvgRenderer.colorize(variantSvg, color);
         }
 
         var framed = cropped;
@@ -931,12 +970,37 @@ const Gallery = {
       if (!base) continue;
 
       try {
-        var colorized = SvgRenderer.colorize(base.svgString, vp.c);
+        var rbi = SvgRenderer.detectBorderType(base.svgString);
+        SvgRenderer.supplementBorderInfo(rbi, { border_type: base.borderType, fill_type: base.fillType });
+
+        // Per-variant font sizing: re-apply autoFit with frame-specific inset + corner compensation
+        var variantSvg = base.svgString;
+        var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
+        if (base.autoFitZoneInfo && base.autoFitMeasurements && (vp.f !== 'single' || hasRoundedCorners)) {
+          var frameInset = (vp.f !== 'single') ? SvgRenderer.estimateFrameInset(vp.f, rbi) : 0;
+          if (frameInset > 0 || hasRoundedCorners) {
+            try {
+              variantSvg = SvgRenderer._applyAutoFitSizing(
+                base.preAutoFitSvg,
+                base.autoFitZoneInfo.idx,
+                base.autoFitZoneInfo.boundingWidth,
+                base.autoFitZoneInfo.fontSize,
+                base.autoFitZoneInfo.originalScaleX,
+                frameInset,
+                base.autoFitMeasurements,
+                base.fillType,
+                base.cornerType
+              );
+            } catch (err2) {
+              console.warn('Per-variant sizing failed (restore):', base.name, vp.f, err2);
+            }
+          }
+        }
+
+        var colorized = SvgRenderer.colorize(variantSvg, vp.c);
         colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
         var framed = cropped;
-        var rbi = SvgRenderer.detectBorderType(base.svgString);
-        SvgRenderer.supplementBorderInfo(rbi, { border_type: base.borderType, fill_type: base.fillType });
         if (vp.f === 'double') {
           framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c, 'double');
         } else if (vp.f === 'split') {
