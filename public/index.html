@@ -380,6 +380,13 @@
         submitBtn.textContent = 'Create Account';
       }
     }
+
+    // Auto-open login/signup modal from URL param (e.g. ?login=1 from product page)
+    (function() {
+      var p = new URLSearchParams(window.location.search);
+      if (p.get('login')) openModal('login');
+      else if (p.get('signup')) openModal('signup');
+    })();
   </script>
 
 </body>

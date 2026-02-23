@@ -407,23 +407,37 @@
   });
 
   // ---- Auth state for header ----
-  async function initAuthState() {
-    var session = await getSession();
-    if (session) {
-      document.getElementById('btn-login').style.display = 'none';
-      document.getElementById('btn-signup').style.display = 'none';
-      var goApp = document.getElementById('btn-go-app');
-      if (goApp) goApp.style.display = 'inline-block';
+  function initAuthState() {
+    // Use onAuthStateChange — fires reliably once session is restored from localStorage
+    sb.auth.onAuthStateChange(async function (event, session) {
+      if (session) {
+        document.getElementById('btn-login').style.display = 'none';
+        document.getElementById('btn-signup').style.display = 'none';
+        var goApp = document.getElementById('btn-go-app');
+        if (goApp) goApp.style.display = 'inline-block';
 
-      // Show credits in header if logged in
-      var profile = await getProfile();
-      if (profile) {
-        var creditsEl = document.getElementById('user-credits');
-        if (creditsEl) {
-          creditsEl.textContent = profile.credits + ' credits';
-          creditsEl.style.display = 'inline-block';
+        // Show credits in header
+        try {
+          var profile = await getProfile();
+          if (profile) {
+            var creditsEl = document.getElementById('user-credits');
+            if (creditsEl) {
+              creditsEl.textContent = profile.credits + ' credits';
+              creditsEl.style.display = 'inline-block';
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load profile:', e);
         }
+      } else {
+        // Signed out — reset header
+        document.getElementById('btn-login').style.display = '';
+        document.getElementById('btn-signup').style.display = '';
+        var goApp = document.getElementById('btn-go-app');
+        if (goApp) goApp.style.display = 'none';
+        var creditsEl = document.getElementById('user-credits');
+        if (creditsEl) creditsEl.style.display = 'none';
       }
-    }
+    });
   }
 })();

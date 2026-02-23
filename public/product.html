@@ -16,8 +16,8 @@
     <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
     <div class="header-actions" id="header-actions">
       <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
-      <button class="btn btn-secondary btn-small" id="btn-login">Login</button>
-      <button class="btn btn-primary btn-small" id="btn-signup">Sign Up</button>
+      <button class="btn btn-secondary btn-small" id="btn-login" onclick="window.location.href='/?login=1'">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup" onclick="window.location.href='/?signup=1'">Sign Up</button>
       <a href="/app" class="btn btn-primary btn-small" id="btn-go-app" style="display:none;">Go to App</a>
     </div>
   </header>
@@ -137,7 +137,8 @@
   <script src="/js/supabase.umd.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/supabase-client.js"></script>
-  <script src="/js/svg-renderer.js?v=41"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/svg-renderer.js?v=71"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -777,6 +778,21 @@
           return;
         }
 
+        // Check auth
+        var session = await getSession();
+        if (!session) {
+          alert('Please log in to download. Redirecting...');
+          window.location.href = '/?login=1';
+          return;
+        }
+
+        // Check credits
+        var profile = await getProfile();
+        if (!profile || profile.credits < 1) {
+          alert('You need at least 1 credit to download. Please purchase credits.');
+          return;
+        }
+
         var choice = selected.value;
         var config = DOWNLOAD_SIZES[choice];
         if (!config || !currentSvg) return;
@@ -789,8 +805,36 @@
           var blob = await SvgRenderer.exportImage(
             currentSvg, config.maxSize, null, config.scale, config.format
           );
+
+          // Deduct credit via API
+          var token = session.access_token;
+          var params = new URLSearchParams(window.location.search);
+          var res = await fetch('/api/generations/record', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              template_id: params.get('id') || null,
+              input_data: { text: params.get('text') || '' }
+            })
+          });
+
+          if (!res.ok) {
+            var errData = await res.json().catch(function () { return {}; });
+            throw new Error(errData.error || 'Failed to record generation');
+          }
+
           var filename = 'stampatext-' + Date.now() + '.' + config.ext;
           SvgRenderer.downloadBlob(blob, filename);
+
+          // Update credits display
+          var updatedProfile = await getProfile();
+          if (updatedProfile) {
+            var creditsEl = document.getElementById('user-credits');
+            if (creditsEl) creditsEl.textContent = updatedProfile.credits + ' credits';
+          }
 
           document.getElementById('download-modal').classList.remove('active');
         } catch (err) {
@@ -801,6 +845,25 @@
           btn.textContent = 'Download';
         }
       }
+
+      // ---- Auth state for header (runs after page is fully rendered) ----
+      try {
+        var session = await getSession();
+        if (session) {
+          document.getElementById('btn-login').style.display = 'none';
+          document.getElementById('btn-signup').style.display = 'none';
+          var goApp = document.getElementById('btn-go-app');
+          if (goApp) goApp.style.display = 'inline-block';
+          var profile = await getProfile();
+          if (profile) {
+            var creditsEl = document.getElementById('user-credits');
+            if (creditsEl) {
+              creditsEl.textContent = profile.credits + ' credits';
+              creditsEl.style.display = 'inline-block';
+            }
+          }
+        }
+      } catch (e) { console.error('Auth state error:', e); }
 
     })();
   </script>
