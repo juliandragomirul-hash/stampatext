@@ -1412,6 +1412,11 @@ const SvgRenderer = {
                 canvasAdvanceWidth = met.width;
               }
             }
+            // Measure reference "H" for diacritic symmetrization
+            // (base cap metrics without diacritics, used to mirror diacritic space equally above/below)
+            var refMet = ctx.measureText('H');
+            var canvasRefAscent = (typeof refMet.actualBoundingBoxAscent === 'number') ? refMet.actualBoundingBoxAscent : canvasAscent;
+            var canvasRefDescent = (typeof refMet.actualBoundingBoxDescent === 'number') ? refMet.actualBoundingBoxDescent : canvasDescent;
           } catch (canvasErr) {
             console.warn('Canvas measureText failed, will use fontSize fallback:', canvasErr);
           }
@@ -1424,6 +1429,8 @@ const SvgRenderer = {
             numTspans: tspans.length,
             canvasAscent: canvasAscent,
             canvasDescent: canvasDescent,
+            canvasRefAscent: canvasRefAscent,
+            canvasRefDescent: canvasRefDescent,
             canvasMeasureFontSize: canvasMeasureFontSize,
             canvasInkLeft: canvasInkLeft,
             canvasInkRight: canvasInkRight,
@@ -1547,10 +1554,9 @@ const SvgRenderer = {
 
       // (stitch hack removed — widthFactor=0.95 handles it naturally)
 
-      // Proportional stroke + weight: thicker for short text, thinner for long text
+      // Proportional stroke: thicker for short text, thinner for long text
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var proportionalSw = Math.max(12, Math.min(50, fontRatioForProportional * 28));
-      var proportionalWeight = Math.round(Math.max(500, Math.min(700, 350 + fontRatioForProportional * 200)));
 
       // Recalculate frameInset using actual proportional stroke
       // (estimateFrameInset caps at 30, but proportionalSw can be up to 50)
@@ -1562,12 +1568,6 @@ const SvgRenderer = {
       // Apply font-size change in the string
       var result = svgString;
       result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', newFontSize.toFixed(2));
-
-      // Apply proportional font-weight for Oswald (variable font, 200-700 via Google Fonts)
-      var isOswald = /font-family=["'](?:')?Oswald/i.test(result);
-      if (isOswald) {
-        result = result.replace(/font-weight=["']\d+["']/g, 'font-weight="' + proportionalWeight + '"');
-      }
 
       // Apply transform scaleX change if needed
       if (newScaleX !== originalScaleX) {
@@ -1602,12 +1602,25 @@ const SvgRenderer = {
       var fontRatioCalc = newFontSize / originalFontSize;
       // STEP 1b: textBlockHeight from canvas ink measurements (accurate per-font, per-text)
       var hasCanvasMetrics = measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0;
-      var textBlockHeight;
 
+      // Symmetrize diacritic space: when diacritics extend in only one direction
+      // (e.g. cedilla below but nothing above), mirror the extension to both sides
+      // so the base text stays visually centered regardless of diacritic direction.
+      var symAscent = measurements.canvasAscent;
+      var symDescent = measurements.canvasDescent;
+      if (hasCanvasMetrics && measurements.canvasRefAscent > 0) {
+        var diacUp = Math.max(0, measurements.canvasAscent - measurements.canvasRefAscent);
+        var diacDown = Math.max(0, measurements.canvasDescent - measurements.canvasRefDescent);
+        var maxDiac = Math.max(diacUp, diacDown);
+        symAscent = measurements.canvasRefAscent + maxDiac;
+        symDescent = measurements.canvasRefDescent + maxDiac;
+      }
+
+      var textBlockHeight;
       if (numLines === 1) {
         if (hasCanvasMetrics) {
           var canvasScale = newFontSize / measurements.canvasMeasureFontSize;
-          textBlockHeight = (measurements.canvasAscent + measurements.canvasDescent) * canvasScale;
+          textBlockHeight = (symAscent + symDescent) * canvasScale;
         } else {
           // Fallback: generous fontSize ratio
           textBlockHeight = newFontSize * 0.85;
@@ -1615,7 +1628,7 @@ const SvgRenderer = {
       } else {
         if (hasCanvasMetrics) {
           var canvasScale = newFontSize / measurements.canvasMeasureFontSize;
-          var singleH = (measurements.canvasAscent + measurements.canvasDescent) * canvasScale;
+          var singleH = (symAscent + symDescent) * canvasScale;
           textBlockHeight = (numLines - 1) * lineHeight + singleH;
         } else {
           textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.85;
@@ -1731,8 +1744,8 @@ const SvgRenderer = {
           if (numTspans <= 1) {
             if (hasCanvasMetrics) {
               var canvasScale = newFontSize / measurements.canvasMeasureFontSize;
-              var scaledAscent = measurements.canvasAscent * canvasScale;
-              var scaledDescent = measurements.canvasDescent * canvasScale;
+              var scaledAscent = symAscent * canvasScale;
+              var scaledDescent = symDescent * canvasScale;
               baselineOffset = (scaledAscent - scaledDescent) / 2;
             } else {
               baselineOffset = newFontSize * 0.36;  // fallback: assume caps-like center

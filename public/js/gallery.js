@@ -219,7 +219,7 @@ const Gallery = {
 
         // Store measurements for per-variant re-sizing (avoids re-creating iframes)
         var autoFitMeasurements = SvgRenderer._autoFitMeasureCache
-          ? { key: SvgRenderer._autoFitMeasureCache.key, measuredWidth: SvgRenderer._autoFitMeasureCache.measuredWidth, bbox: SvgRenderer._autoFitMeasureCache.bbox, numTspans: SvgRenderer._autoFitMeasureCache.numTspans, canvasAscent: SvgRenderer._autoFitMeasureCache.canvasAscent, canvasDescent: SvgRenderer._autoFitMeasureCache.canvasDescent, canvasMeasureFontSize: SvgRenderer._autoFitMeasureCache.canvasMeasureFontSize, canvasInkLeft: SvgRenderer._autoFitMeasureCache.canvasInkLeft, canvasInkRight: SvgRenderer._autoFitMeasureCache.canvasInkRight, canvasAdvanceWidth: SvgRenderer._autoFitMeasureCache.canvasAdvanceWidth }
+          ? { key: SvgRenderer._autoFitMeasureCache.key, measuredWidth: SvgRenderer._autoFitMeasureCache.measuredWidth, bbox: SvgRenderer._autoFitMeasureCache.bbox, numTspans: SvgRenderer._autoFitMeasureCache.numTspans, canvasAscent: SvgRenderer._autoFitMeasureCache.canvasAscent, canvasDescent: SvgRenderer._autoFitMeasureCache.canvasDescent, canvasRefAscent: SvgRenderer._autoFitMeasureCache.canvasRefAscent, canvasRefDescent: SvgRenderer._autoFitMeasureCache.canvasRefDescent, canvasMeasureFontSize: SvgRenderer._autoFitMeasureCache.canvasMeasureFontSize, canvasInkLeft: SvgRenderer._autoFitMeasureCache.canvasInkLeft, canvasInkRight: SvgRenderer._autoFitMeasureCache.canvasInkRight, canvasAdvanceWidth: SvgRenderer._autoFitMeasureCache.canvasAdvanceWidth }
           : null;
 
         this.baseResults.push({
