@@ -16,6 +16,7 @@
     <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
     <div class="header-actions" id="header-actions">
       <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <button class="btn btn-secondary btn-small" id="btn-buy-credits" style="display:none;" onclick="openBuyCreditsModal()">Buy Credits</button>
       <button class="btn btn-secondary btn-small" id="btn-login" onclick="window.location.href='/?login=1'">Login</button>
       <button class="btn btn-primary btn-small" id="btn-signup" onclick="window.location.href='/?signup=1'">Sign Up</button>
       <a href="/app" class="btn btn-primary btn-small" id="btn-go-app" style="display:none;">Go to App</a>
@@ -138,6 +139,8 @@
   <script src="/js/config.js"></script>
   <script src="/js/supabase-client.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
+  <script src="/js/buy-credits.js"></script>
   <script src="/js/svg-renderer.js?v=71"></script>
   <script>
     (async function() {
@@ -697,7 +700,7 @@
           currentSvg = svg;
 
           previewEl.innerHTML = '';
-          var img = SvgRenderer.createSvgImage(svg);
+          var img = SvgRenderer.createSvgImage(SvgRenderer.addWatermark(svg));
 
           // Compensate for viewBox expansion from tilt so preview stays same visual size
           if (currentTilt !== 0 && preTiltVbW > 0) {
@@ -789,7 +792,8 @@
         // Check credits
         var profile = await getProfile();
         if (!profile || profile.credits < 1) {
-          alert('You need at least 1 credit to download. Please purchase credits.');
+          document.getElementById('download-modal').classList.remove('active');
+          openBuyCreditsModal();
           return;
         }
 
@@ -854,6 +858,8 @@
           document.getElementById('btn-signup').style.display = 'none';
           var goApp = document.getElementById('btn-go-app');
           if (goApp) goApp.style.display = 'inline-block';
+          var buyBtn = document.getElementById('btn-buy-credits');
+          if (buyBtn) buyBtn.style.display = 'inline-block';
           var profile = await getProfile();
           if (profile) {
             var creditsEl = document.getElementById('user-credits');

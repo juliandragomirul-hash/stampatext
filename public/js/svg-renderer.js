@@ -2739,6 +2739,82 @@ const SvgRenderer = {
   },
 
   /**
+   * Add a diagonal "stampatext" watermark overlay to an SVG string.
+   * Used for previews only — never for paid exports.
+   */
+  addWatermark(svgString) {
+    var vbMatch = svgString.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+    if (!vbMatch) return svgString;
+    var vbX = parseFloat(vbMatch[1]), vbY = parseFloat(vbMatch[2]);
+    var vbW = parseFloat(vbMatch[3]), vbH = parseFloat(vbMatch[4]);
+
+    // Find the outer stamp rect for tight clipping (skip white/transparent bg rects)
+    var clipX = vbX, clipY = vbY, clipW = vbW, clipH = vbH;
+    var whiteFills = ['#ffffff', '#fff', 'white', '#fefefe', '#fdfdfd', '#fcfcfc',
+      '#fbfbfb', '#fafafa', '#f9f9f9', '#f8f8f8', 'none', ''];
+    var rectRe = /<rect\s([^>]*)\/?>|<rect\s([^>]*)>[^<]*<\/rect>/gi;
+    var rm, bestArea = 0;
+    while ((rm = rectRe.exec(svgString)) !== null) {
+      var attrs = ' ' + (rm[1] || rm[2] || '');
+      // Skip rects with white, transparent, or no fill (background rects)
+      var fillM = attrs.match(/\sfill=["']([^"']*)["']/);
+      var fill = fillM ? fillM[1].trim().toLowerCase() : 'black'; // SVG default fill is black
+      if (whiteFills.indexOf(fill) !== -1) continue;
+      var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+      var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
+      if (!wM || !hM) continue;
+      var rw = parseFloat(wM[1]), rh = parseFloat(hM[1]);
+      if (rw * rh > bestArea) {
+        bestArea = rw * rh;
+        var xM = attrs.match(/\sx=["']([\d.\-]+)["']/);
+        var yM = attrs.match(/\sy=["']([\d.\-]+)["']/);
+        clipX = xM ? parseFloat(xM[1]) : 0;
+        clipY = yM ? parseFloat(yM[1]) : 0;
+        clipW = rw;
+        clipH = rh;
+      }
+    }
+
+    // Logo tiling params
+    var logoW = Math.min(clipW, clipH) * 0.55;
+    var logoH = logoW / 4.3;
+    var spacingX = logoW * 1.4;
+    var spacingY = logoH * 2.5;
+    var wmId = 'wm-' + Math.random().toString(36).slice(2, 8);
+
+    // Nested <svg> at stamp rect bounds = bulletproof clipping
+    var watermark = '<svg x="' + clipX.toFixed(2) + '" y="' + clipY.toFixed(2) + '" ' +
+      'width="' + clipW.toFixed(2) + '" height="' + clipH.toFixed(2) + '" ' +
+      'overflow="hidden" pointer-events="none">';
+
+    watermark += '<defs><filter id="' + wmId + '">' +
+      '<feColorMatrix type="saturate" values="0"/>' +
+      '</filter></defs>';
+
+    var cx = clipW / 2, cy = clipH / 2;
+    watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
+      'opacity="0.12" filter="url(#' + wmId + ')">';
+
+    var cols = Math.ceil(clipW / spacingX) + 4;
+    var rows = Math.ceil(clipH / spacingY) + 4;
+    var startX = cx - (cols / 2) * spacingX;
+    var startY = cy - (rows / 2) * spacingY;
+
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var x = startX + c * spacingX + (r % 2 === 1 ? spacingX * 0.5 : 0);
+        var y = startY + r * spacingY;
+        watermark += '<image href="/logo.png" x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" ' +
+          'width="' + logoW.toFixed(2) + '" height="' + logoH.toFixed(2) + '"/>';
+      }
+    }
+
+    watermark += '</g></svg>';
+
+    return svgString.replace(/<\/svg>\s*$/, watermark + '</svg>');
+  },
+
+  /**
    * Render SVG string to PNG Blob.
    * Uses a hidden iframe with Google Fonts loaded, waits for fonts,
    * then uses html2canvas-style rendering via foreignObject or

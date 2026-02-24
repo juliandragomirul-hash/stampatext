@@ -346,7 +346,7 @@
     // Check credits
     var profile = await getProfile();
     if (!profile || profile.credits < 1) {
-      alert('You need at least 1 credit to download. Please purchase credits.');
+      openBuyCreditsModal();
       return;
     }
 
@@ -415,6 +415,8 @@
         document.getElementById('btn-signup').style.display = 'none';
         var goApp = document.getElementById('btn-go-app');
         if (goApp) goApp.style.display = 'inline-block';
+        var buyBtn = document.getElementById('btn-buy-credits');
+        if (buyBtn) buyBtn.style.display = 'inline-block';
 
         // Show credits in header
         try {
@@ -437,6 +439,8 @@
         if (goApp) goApp.style.display = 'none';
         var creditsEl = document.getElementById('user-credits');
         if (creditsEl) creditsEl.style.display = 'none';
+        var buyBtn = document.getElementById('btn-buy-credits');
+        if (buyBtn) buyBtn.style.display = 'none';
       }
     });
   }

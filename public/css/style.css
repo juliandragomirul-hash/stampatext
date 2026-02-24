@@ -1171,6 +1171,12 @@ a:hover {
   color: #888;
 }
 
+/* ========== BUY CREDITS MODAL ========== */
+#buy-credits-packages .download-option-size {
+  color: #16a34a;
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .product-layout {
     grid-template-columns: 1fr;

@@ -613,7 +613,7 @@ const Gallery = {
       // Create preview with inline SVG
       var previewDiv = document.createElement('div');
       previewDiv.className = 'stamp-card-preview';
-      var img = SvgRenderer.createSvgImage(r.svgString);
+      var img = SvgRenderer.createSvgImage(SvgRenderer.addWatermark(r.svgString));
       previewDiv.appendChild(img);
 
       var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
@@ -724,7 +724,7 @@ const Gallery = {
 
         var previewDiv = document.createElement('div');
         previewDiv.className = 'stamp-card-preview';
-        var img = SvgRenderer.createSvgImage(r.svgString);
+        var img = SvgRenderer.createSvgImage(SvgRenderer.addWatermark(r.svgString));
         previewDiv.appendChild(img);
 
         var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
@@ -917,7 +917,7 @@ const Gallery = {
 
     var content = document.createElement('div');
     content.className = 'stamp-zoom-content';
-    content.innerHTML = svgString;
+    content.innerHTML = SvgRenderer.addWatermark(svgString);
 
     // Make the SVG inside responsive at 2x the card width
     var svgEl = content.querySelector('svg');

@@ -85,6 +85,183 @@ app.post('/api/generations/record', async (req, res) => {
   }
 });
 
+// ---- Credit Packages (hardcoded for MVP) ----
+const CREDIT_PACKAGES = {
+  pack_10:  { credits: 10,  price: '5.00',  name: '10 Credits' },
+  pack_50:  { credits: 50,  price: '20.00', name: '50 Credits' },
+  pack_100: { credits: 100, price: '35.00', name: '100 Credits' }
+};
+
+// ---- PayPal Helpers ----
+async function getPayPalAccessToken() {
+  const auth = Buffer.from(
+    process.env.PAYPAL_CLIENT_ID + ':' + process.env.PAYPAL_CLIENT_SECRET
+  ).toString('base64');
+
+  const res = await fetch(process.env.PAYPAL_API_BASE + '/v1/oauth2/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + auth,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: 'grant_type=client_credentials'
+  });
+
+  if (!res.ok) throw new Error('PayPal auth failed: ' + await res.text());
+  return (await res.json()).access_token;
+}
+
+async function authenticateRequest(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const { data: { user }, error } = await supabase.auth.getUser(authHeader.split(' ')[1]);
+  if (error || !user) return null;
+  return user;
+}
+
+// ---- API: Create PayPal Order ----
+app.post('/api/payments/paypal-create-order', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+
+    const pkg = CREDIT_PACKAGES[req.body.package_id];
+    if (!pkg) return res.status(400).json({ error: 'Invalid package' });
+
+    const accessToken = await getPayPalAccessToken();
+    const orderRes = await fetch(process.env.PAYPAL_API_BASE + '/v2/checkout/orders', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + accessToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        intent: 'CAPTURE',
+        purchase_units: [{
+          amount: { currency_code: 'USD', value: pkg.price },
+          description: pkg.name + ' - StampaText',
+          custom_id: user.id + '|' + req.body.package_id
+        }]
+      })
+    });
+
+    if (!orderRes.ok) {
+      console.error('PayPal create order failed:', await orderRes.text());
+      return res.status(500).json({ error: 'Failed to create PayPal order' });
+    }
+
+    const order = await orderRes.json();
+    return res.json({ order_id: order.id });
+  } catch (err) {
+    console.error('PayPal create order error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- API: Capture PayPal Order ----
+app.post('/api/payments/paypal-capture-order', async (req, res) => {
+  try {
+    const user = await authenticateRequest(req);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { order_id } = req.body;
+    if (!order_id) return res.status(400).json({ error: 'Missing order_id' });
+
+    // Idempotency: check if already captured
+    const { data: existingTx } = await supabase
+      .from('credit_transactions')
+      .select('id')
+      .eq('reference_id', order_id)
+      .eq('reason', 'paypal_purchase')
+      .limit(1);
+
+    if (existingTx && existingTx.length > 0) {
+      const { data: profile } = await supabase
+        .from('profiles').select('credits').eq('id', user.id).single();
+      return res.json({
+        success: true, credits_added: 0,
+        new_balance: profile ? profile.credits : 0,
+        message: 'Order already captured'
+      });
+    }
+
+    // Capture payment
+    const accessToken = await getPayPalAccessToken();
+    const captureRes = await fetch(
+      process.env.PAYPAL_API_BASE + '/v2/checkout/orders/' + order_id + '/capture',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + accessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!captureRes.ok) {
+      console.error('PayPal capture failed:', await captureRes.text());
+      return res.status(500).json({ error: 'Payment capture failed' });
+    }
+
+    const captureData = await captureRes.json();
+    if (captureData.status !== 'COMPLETED') {
+      return res.status(400).json({ error: 'Payment not completed: ' + captureData.status });
+    }
+
+    // Verify user + package from custom_id
+    const purchaseUnit = captureData.purchase_units[0];
+    const capture = purchaseUnit.payments.captures[0];
+    const customId = capture.custom_id || purchaseUnit.custom_id || '';
+    const [capturedUserId, capturedPackageId] = customId.split('|');
+
+    if (capturedUserId !== user.id) {
+      console.error('User mismatch: token=' + user.id + ', order=' + capturedUserId);
+      return res.status(403).json({ error: 'User mismatch' });
+    }
+
+    const pkg = CREDIT_PACKAGES[capturedPackageId];
+    if (!pkg) return res.status(400).json({ error: 'Invalid package in order' });
+
+    if (capture.amount.value !== pkg.price) {
+      console.error('Amount mismatch: expected=' + pkg.price + ', captured=' + capture.amount.value);
+      return res.status(400).json({ error: 'Amount mismatch' });
+    }
+
+    // Grant credits
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles').select('credits').eq('id', user.id).single();
+
+    if (profileError || !profile) {
+      console.error('MANUAL RESOLUTION NEEDED: order_id=' + order_id +
+        ', user_id=' + user.id + ', credits=' + pkg.credits);
+      return res.status(500).json({ error: 'Credits could not be granted. Contact support.' });
+    }
+
+    const newBalance = profile.credits + pkg.credits;
+    const { error: updateError } = await supabase
+      .from('profiles').update({ credits: newBalance }).eq('id', user.id);
+
+    if (updateError) {
+      console.error('MANUAL RESOLUTION NEEDED: order_id=' + order_id +
+        ', user_id=' + user.id + ', credits=' + pkg.credits);
+      return res.status(500).json({ error: 'Credits could not be granted. Contact support.' });
+    }
+
+    // Log transaction
+    await supabase.from('credit_transactions').insert({
+      user_id: user.id,
+      amount: pkg.credits,
+      reason: 'paypal_purchase',
+      reference_id: order_id
+    });
+
+    return res.json({ success: true, credits_added: pkg.credits, new_balance: newBalance });
+  } catch (err) {
+    console.error('PayPal capture error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ---- HTML routes ----
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'index.html'));
