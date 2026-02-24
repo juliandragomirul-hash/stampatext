@@ -141,7 +141,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=71"></script>
+  <script src="/js/svg-renderer.js?v=91"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -197,10 +197,11 @@
       var rawCleanedSvg = null;
       var storedZones = [];
       var storedDisplayText = '';
-      var initialBaseSvg = null; // First render's SVG — preserves stamp shape
-
-      async function rebuildWithFont(fontKey) {
+      async function rebuildWithFont(fontKey, frameInset) {
         if (!rawCleanedSvg) return baseSvg;
+        // Clear measurement cache — each font needs fresh iframe measurement
+        SvgRenderer._autoFitMeasureCache = null;
+        frameInset = frameInset || 0;
         var weight = FONT_WEIGHTS[fontKey] || '400';
 
         // Start from raw template, replace font-family + weight
@@ -222,7 +223,8 @@
               : 1;
             svg = await SvgRenderer.autoFitTextInString(
               svg, idx, zone.bounding_width,
-              zone.font_size, originalScaleX
+              zone.font_size, originalScaleX,
+              frameInset, templateFillType || 'full', templateCornerType || 'straight'
             );
             didAutoFit = true;
           }
@@ -231,56 +233,6 @@
         // Category 2 (Fixed Frame): always auto-fit using container rect
         if (!didAutoFit && /<image[\s>]/i.test(svg)) {
           svg = await SvgRenderer.autoFitTextInString(svg, 0, 1, 128, 1);
-        }
-
-        // Category 1 (Dynamic Frame): preserve initial stamp shape
-        var isCat1 = !/<image[\s>]/i.test(svg);
-        if (isCat1) {
-          if (!initialBaseSvg) {
-            // First render — store as the reference shape
-            initialBaseSvg = svg;
-          } else {
-            // Transplant autoFit text into initial stamp shape
-            var autoFitTexts = [];
-            svg.replace(/<text[\s\S]*?<\/text>/gi, function(m) {
-              autoFitTexts.push(m);
-            });
-
-            // Calculate Y offset to re-center text in the (taller) initial viewBox
-            function vbCenter(s) {
-              var m = s.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
-              if (!m) return null;
-              return {
-                x: parseFloat(m[1]) + parseFloat(m[3]) / 2,
-                y: parseFloat(m[2]) + parseFloat(m[4]) / 2
-              };
-            }
-            var cAuto = vbCenter(svg);
-            var cInit = vbCenter(initialBaseSvg);
-
-            if (cAuto && cInit) {
-              var dx = cInit.x - cAuto.x;
-              var dy = cInit.y - cAuto.y;
-              if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-                for (var j = 0; j < autoFitTexts.length; j++) {
-                  autoFitTexts[j] = autoFitTexts[j].replace(
-                    /transform=["']translate\(\s*([\d.\-]+)[,\s]+([\d.\-]+)\s*\)["']/,
-                    function(_, tx, ty) {
-                      return 'transform="translate(' +
-                        (parseFloat(tx) + dx).toFixed(2) + ', ' +
-                        (parseFloat(ty) + dy).toFixed(2) + ')"';
-                    }
-                  );
-                }
-              }
-            }
-
-            // Splice autoFit text into the initial stamp shape
-            var ti = 0;
-            svg = initialBaseSvg.replace(/<text[\s\S]*?<\/text>/gi, function() {
-              return autoFitTexts[ti++] || '';
-            });
-          }
         }
 
         return svg;
@@ -365,7 +317,9 @@
         perforated: 'Perforated', zigzag: 'Zigzag'
       }[templateBorderType] || 'Plain';
       var cornerLabel = {
-        medium_round: 'Medium Round', soft_round: 'Soft Round', strong_round: 'Strong Round'
+        medium_round: 'Medium Round', soft_round: 'Soft Round', strong_round: 'Strong Round',
+        mixed_top_straight: 'Mixed (Top Straight)', mixed_top_round: 'Mixed (Top Round)',
+        mixed_diag_down: 'Mixed (Diagonal Down)', mixed_diag_up: 'Mixed (Diagonal Up)'
       }[templateCornerType] || 'Straight';
       var fillLabel = templateFillType === 'full' ? 'Filled' : 'Outlined';
       var frameLabel = (tpl.frame_type || 'single') === 'double' ? 'Double' : 'Single';
@@ -668,8 +622,16 @@
         previewEl.style.opacity = '0.5';
 
         try {
+          // Calculate frame inset so autoFit leaves room for double/split borders
+          var frameInset = 0;
+          if (currentFrame === 'double' || currentFrame === 'split') {
+            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
+            var fiBi = Object.assign({}, borderInfo);
+            SvgRenderer.supplementBorderInfo(fiBi, { border_type: templateBorderType, fill_type: templateFillType });
+            frameInset = SvgRenderer.estimateFrameInset(currentFrame, fiBi);
+          }
           // Rebuild from raw template with current font (autoFit handles sizing)
-          baseSvg = await rebuildWithFont(currentFont);
+          baseSvg = await rebuildWithFont(currentFont, frameInset);
           var svg = baseSvg;
           svg = SvgRenderer.colorize(svg, currentColor);
           svg = SvgRenderer.applyCornerRadius(svg, templateCornerType);
@@ -684,6 +646,13 @@
             var ifBi = Object.assign({}, borderInfo);
             SvgRenderer.supplementBorderInfo(ifBi, { border_type: templateBorderType, fill_type: templateFillType });
             svg = SvgRenderer.addSplitBorder(svg, ifBi);
+          } else if (currentFrame === 'single' && templateFillType !== 'full') {
+            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
+            var siBi = Object.assign({}, borderInfo);
+            SvgRenderer.supplementBorderInfo(siBi, { border_type: templateBorderType, fill_type: templateFillType });
+            if (siBi.border) {
+              svg = SvgRenderer.addDoubleFrame(svg, siBi, currentColor, 'single');
+            }
           }
           // Capture pre-tilt viewBox width for scale compensation
           var preTiltVbW = 0;
@@ -750,6 +719,10 @@
         if (templateCornerType === 'strong_round') corners = 'strong round corners';
         else if (templateCornerType === 'medium_round') corners = 'medium round corners';
         else if (templateCornerType === 'soft_round') corners = 'soft round corners';
+        else if (templateCornerType === 'mixed_top_straight') corners = 'mixed corners (top straight)';
+        else if (templateCornerType === 'mixed_top_round') corners = 'mixed corners (top round)';
+        else if (templateCornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
+        else if (templateCornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
         var adjectives = [tilt, border, frame].filter(Boolean).join(' ');
         var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
         var withParts = [corners, texture ? texture + ' texture' : ''].filter(Boolean);

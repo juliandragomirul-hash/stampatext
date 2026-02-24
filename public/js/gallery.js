@@ -68,7 +68,8 @@ const Gallery = {
     4: 'Irregular border'
   },
 
-  CORNER_ORDER: { straight: 1, soft_round: 2, medium_round: 3, strong_round: 4 },
+  CORNER_ORDER: { straight: 1, soft_round: 2, medium_round: 3, strong_round: 4,
+    mixed_top_straight: 5, mixed_top_round: 6, mixed_diag_down: 7, mixed_diag_up: 8 },
 
   FRAME_ORDER: ['single', 'double', 'split'],
 
@@ -112,6 +113,10 @@ const Gallery = {
     if (cornerType === 'strong_round') corners = 'strong round corners';
     else if (cornerType === 'medium_round') corners = 'medium round corners';
     else if (cornerType === 'soft_round') corners = 'soft round corners';
+    else if (cornerType === 'mixed_top_straight') corners = 'mixed corners (top straight)';
+    else if (cornerType === 'mixed_top_round') corners = 'mixed corners (top round)';
+    else if (cornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
+    else if (cornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
     // Build: "TEXT" written on [fill] [color] [tilt?] [border style?] [frame?] [shape] [objectType] with [corners] [and texture?]
     var adjectives = [tilt, border, frame].filter(Boolean).join(' ');
     var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
@@ -426,7 +431,10 @@ const Gallery = {
       }
       if (filters.corners && filters.corners.length > 0) {
         var cornerVal = r.cornerType || 'straight';
-        if (filters.corners.indexOf(cornerVal) === -1) return false;
+        var cornerMatch = filters.corners.indexOf(cornerVal) !== -1 ||
+          (filters.corners.indexOf('round') !== -1 && cornerVal.indexOf('_round') !== -1) ||
+          (filters.corners.indexOf('mixed') !== -1 && cornerVal.indexOf('mixed') === 0);
+        if (!cornerMatch) return false;
       }
       if (filters.fills && filters.fills.length > 0) {
         if (filters.fills.indexOf(r.fillType) === -1) return false;
@@ -483,13 +491,18 @@ const Gallery = {
       for (var j = 0; j < colorsToApply.length; j++) {
         var color = colorsToApply[j];
         var colorized = SvgRenderer.colorize(base.svgString, color);
+        colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
 
         for (var f = 0; f < frameRenderings.length; f++) {
           var frameMode = frameRenderings[f];
           var framed = cropped;
-          if (frameMode === 'split') {
+          if (frameMode === 'double') {
+            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
+          } else if (frameMode === 'split') {
             framed = SvgRenderer.addSplitBorder(cropped, bi);
+          } else if (frameMode === 'single' && bi.border && base.fillType !== 'full') {
+            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'single');
           }
 
           for (var k = 0; k < tiltsToApply.length; k++) {
@@ -863,7 +876,13 @@ const Gallery = {
       var show = true;
       if (familyVal && card.dataset.family !== familyVal) show = false;
       if (frameVal && card.dataset.frame !== frameVal) show = false;
-      if (cornersVal && card.dataset.corners !== cornersVal) show = false;
+      if (cornersVal) {
+        if (cornersVal === 'round') {
+          if (!card.dataset.corners || card.dataset.corners === 'straight' || card.dataset.corners.indexOf('mixed') === 0) show = false;
+        } else if (cornersVal === 'mixed') {
+          if (!card.dataset.corners || card.dataset.corners.indexOf('mixed') !== 0) show = false;
+        } else if (card.dataset.corners !== cornersVal) show = false;
+      }
       if (fillVal && card.dataset.fill !== fillVal) show = false;
       card.style.display = show ? '' : 'none';
       if (show) visibleCount++;
@@ -879,6 +898,45 @@ const Gallery = {
     // Update count in header
     var titleEl = document.querySelector('#results-batches .stamp-results-title strong');
     if (titleEl) titleEl.textContent = visibleCount;
+
+    // Cascading filters: disable options that would produce 0 results
+    var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
+    var filterIds = ['filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
+    var dataKeys = ['family', 'frame', 'corners', 'fill'];
+
+    for (var fi = 0; fi < filterIds.length; fi++) {
+      var sel = document.getElementById(filterIds[fi]);
+      if (!sel) continue;
+      var key = dataKeys[fi];
+      // Find values that would have results if ONLY this filter were cleared
+      var available = {};
+      allCards.forEach(function(c) {
+        var ok = true;
+        for (var oi = 0; oi < filterIds.length; oi++) {
+          if (oi === fi) continue; // skip current filter dimension
+          var ov = document.getElementById(filterIds[oi]).value;
+          if (!ov) continue;
+          var dk = dataKeys[oi];
+          if (dk === 'corners' && ov === 'round') {
+            if (!c.dataset.corners || c.dataset.corners === 'straight' || c.dataset.corners.indexOf('mixed') === 0) { ok = false; break; }
+          } else if (dk === 'corners' && ov === 'mixed') {
+            if (!c.dataset.corners || c.dataset.corners.indexOf('mixed') !== 0) { ok = false; break; }
+          } else if (c.dataset[dk] !== ov) { ok = false; break; }
+        }
+        if (ok) {
+          var val = c.dataset[key] || '';
+          available[val] = true;
+          // For corners: mark group options available when any member exists
+          if (key === 'corners' && val.indexOf('_round') !== -1) available['round'] = true;
+          if (key === 'corners' && val.indexOf('mixed') === 0) available['mixed'] = true;
+        }
+      });
+      // Enable/disable options
+      Array.from(sel.options).forEach(function(opt) {
+        if (!opt.value) return; // "All" option always enabled
+        opt.disabled = !available[opt.value];
+      });
+    }
   },
 
   /**

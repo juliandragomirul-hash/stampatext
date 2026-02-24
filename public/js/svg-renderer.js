@@ -14,6 +14,10 @@ const SvgRenderer = {
   // when multiple inline SVGs share the same page)
   _svgIdCounter: 0,
 
+  // In-memory cache of fetched SVG strings (keyed by base URL without cache-buster).
+  // Prevents re-downloading the same SVGs when user presses Stamp multiple times.
+  _svgFetchCache: {},
+
   // Map of font names to local font files and their format
   _fontMap: {
     'Oswald':          { url: '/fonts/Oswald-Medium.ttf',         format: 'truetype' },
@@ -80,10 +84,15 @@ const SvgRenderer = {
    * @returns {Promise<string>}
    */
   async fetchSvg(svgUrl) {
+    // Return from in-memory cache if available (same session, same URL)
+    if (this._svgFetchCache[svgUrl]) return this._svgFetchCache[svgUrl];
+
     var bustUrl = svgUrl + (svgUrl.indexOf('?') === -1 ? '?' : '&') + '_cb=' + Date.now();
     const res = await fetch(bustUrl);
     if (!res.ok) throw new Error('Failed to fetch SVG: ' + res.status);
-    return await res.text();
+    var text = await res.text();
+    this._svgFetchCache[svgUrl] = text;
+    return text;
   },
 
   /**
@@ -661,7 +670,7 @@ const SvgRenderer = {
   _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color) {
     var shapes = '';
     var half = size / 2;
-    var dashLen = (shapeType === 'line') ? size * 2 : size;
+    var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
 
     function addShape(cx, cy, angle) {
@@ -1339,6 +1348,29 @@ const SvgRenderer = {
     document.body.appendChild(iframe);
 
     return new Promise(function (resolve) {
+      var resolved = false;
+      function safeResolve(val) {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
+        resolve(val);
+      }
+
+      // Safety timeout: if iframe/fonts never load, resolve with original SVG after 10s
+      var timeoutId = setTimeout(function () {
+        console.warn('autoFitTextInString timed out after 10s — returning original SVG');
+        try { document.body.removeChild(iframe); } catch (e) {}
+        URL.revokeObjectURL(url);
+        safeResolve(svgString);
+      }, 10000);
+
+      iframe.onerror = function () {
+        console.warn('autoFitTextInString iframe failed to load');
+        try { document.body.removeChild(iframe); } catch (e) {}
+        URL.revokeObjectURL(url);
+        safeResolve(svgString);
+      };
+
       iframe.onload = function () {
         // Wait for fonts to load before measuring
         function doMeasure() {
@@ -1348,7 +1380,7 @@ const SvgRenderer = {
           var textEl = textEls[textIndex];
 
           if (!textEl) {
-            resolve(svgString);
+            safeResolve(svgString);
             return;
           }
 
@@ -1437,12 +1469,12 @@ const SvgRenderer = {
             canvasAdvanceWidth: canvasAdvanceWidth
           };
 
-          resolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameInset, SvgRenderer._autoFitMeasureCache, fillType, cornerType));
+          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameInset, SvgRenderer._autoFitMeasureCache, fillType, cornerType));
           return;
 
         } catch (e) {
           console.error('autoFitText measurement failed:', e, e.stack);
-          resolve(svgString);
+          safeResolve(svgString);
         } finally {
           document.body.removeChild(iframe);
           URL.revokeObjectURL(url);
@@ -1518,7 +1550,7 @@ const SvgRenderer = {
 
     // Border-aware width factor (different borders consume different visual space)
     var widthFactor = 0.85;  // default for plain borders
-    if (/data-stitch=/i.test(svgString))        widthFactor = 0.95;  // extends outward, no intrusion
+    if (/data-stitch=/i.test(svgString))        widthFactor = 0.88;  // extends outward, but needs breathing room
     if (/data-border=/i.test(svgString))        widthFactor = 0.78;  // thick stroke (50px) eats space
     if (/data-wavy=/i.test(svgString))          widthFactor = 0.75;  // inward depth + thick stroke
     if (/data-brush-border=/i.test(svgString))  widthFactor = 0.70;  // large padding around brush
@@ -1556,7 +1588,7 @@ const SvgRenderer = {
 
       // Proportional stroke: thicker for short text, thinner for long text
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
-      var proportionalSw = Math.max(12, Math.min(50, fontRatioForProportional * 28));
+      var proportionalSw = Math.max(25, Math.min(50, fontRatioForProportional * 50));
 
       // Recalculate frameInset using actual proportional stroke
       // (estimateFrameInset caps at 30, but proportionalSw can be up to 50)
@@ -1598,7 +1630,17 @@ const SvgRenderer = {
 
       // STEP 1: Calculate text dimensions
       var numLines = numTspans > 1 ? numTspans : 1;
-      var lineHeight = newFontSize * 1.1; // 10% extra spacing between lines
+      // Line height: use actual ink bounds (ascent+descent) when available,
+      // so diacritics (cedilla ș/ț, accents) don't overlap between rows
+      var lineHeight;
+      if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
+        var lhScale = newFontSize / measurements.canvasMeasureFontSize;
+        var inkLineHeight = (measurements.canvasAscent + measurements.canvasDescent) * lhScale * 1.05;
+        // Ensure minimum spacing for non-diacritic text (where ink bounds are compact)
+        lineHeight = Math.max(inkLineHeight, newFontSize * 1.15);
+      } else {
+        lineHeight = newFontSize * 1.15;
+      }
       var fontRatioCalc = newFontSize / originalFontSize;
       // STEP 1b: textBlockHeight from canvas ink measurements (accurate per-font, per-text)
       var hasCanvasMetrics = measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0;
@@ -1690,7 +1732,11 @@ const SvgRenderer = {
       // Geometry: (ir - gap)² × 2 ≤ ir² → gap ≥ ir × 0.293
       var cornerComp = 0;
       if (cornerType && cornerType !== 'straight') {
-        var CORNER_RX = { soft_round: 35, medium_round: 80, strong_round: 120 };
+        var CORNER_RX = {
+          soft_round: 35, medium_round: 80, strong_round: 120,
+          mixed_top_straight: 120, mixed_top_round: 120,
+          mixed_diag_down: 120, mixed_diag_up: 120
+        };
         var outerRx = CORNER_RX[cornerType] || 0;
         var innerRx;
         if (frameInset > 0) {
@@ -1961,7 +2007,7 @@ const SvgRenderer = {
       if (stitchData) {
         var sType = stitchData.type;
         var sSize = (sType === 'circle') ? 50 : 40;
-        var sSpacing = (sType === 'circle') ? 20 : (sType === 'line') ? 30 : 20;
+        var sSpacing = (sType === 'circle') ? 20 : (sType === 'line') ? 50 : 20;
         // Offset shapes outward so they're clearly outside the fill
         var sOffset = sSize * 0.75;
         var stitchHtml = SvgRenderer._generateStitchShapes(
@@ -2062,11 +2108,16 @@ const SvgRenderer = {
         rectMatches.forEach(function(rectTag) {
           // Skip display:none
           if (rectTag.match(/display\s*[:=]\s*["']?none/i)) return;
-          // Skip small generated stitch shape rects (fill-only, no stroke)
-          // But keep large fill-only rects (e.g. brushstroke main rect)
+          // Skip tiny generated shape rects (fill-only, no stroke, both dimensions small)
+          // But keep stitch dashes (one dimension is large) and brushstroke main rects
           if (!rectTag.match(/\bstroke=/i)) {
             var swCheck = rectTag.match(/\swidth=["']([\d.]+)["']/);
-            if (!swCheck || parseFloat(swCheck[1]) < 100) return;
+            var shCheck = rectTag.match(/\sheight=["']([\d.]+)["']/);
+            var maxDim = Math.max(
+              swCheck ? parseFloat(swCheck[1]) : 0,
+              shCheck ? parseFloat(shCheck[1]) : 0
+            );
+            if (maxDim < 100) return;
           }
           // Skip background rects (white fill at origin)
           var isWhiteFill = rectTag.match(/fill=["']#FFFFFF["']/i) || rectTag.match(/fill=["']white["']/i);
@@ -2107,8 +2158,12 @@ const SvgRenderer = {
             var bpHalfSw = (borderShapeData.sw || 50) / 2;
             strokePadding = Math.max(strokePadding, bpHalfSw + 8);
           }
-          // Stitch shapes extend beyond rect edge (offset + size/2)
-          if (stitchData) strokePadding = Math.max(strokePadding, 70);
+          // Stitch line dashes (140px) are in contentBounds — minimal padding.
+          // Square/circle shapes (40px) are NOT in contentBounds — need full padding.
+          if (stitchData) {
+            var stitchPad = (stitchData.type === 'line') ? 25 : 70;
+            strokePadding = Math.max(strokePadding, stitchPad);
+          }
           // Wavy border arcs extend beyond rect edge (depth + strokeW/2)
           if (wavyData) strokePadding = Math.max(strokePadding, 35);
 
@@ -2748,68 +2803,53 @@ const SvgRenderer = {
     var vbX = parseFloat(vbMatch[1]), vbY = parseFloat(vbMatch[2]);
     var vbW = parseFloat(vbMatch[3]), vbH = parseFloat(vbMatch[4]);
 
-    // Find the outer stamp rect for tight clipping (skip white/transparent bg rects)
-    var clipX = vbX, clipY = vbY, clipW = vbW, clipH = vbH;
-    var whiteFills = ['#ffffff', '#fff', 'white', '#fefefe', '#fdfdfd', '#fcfcfc',
-      '#fbfbfb', '#fafafa', '#f9f9f9', '#f8f8f8', 'none', ''];
-    var rectRe = /<rect\s([^>]*)\/?>|<rect\s([^>]*)>[^<]*<\/rect>/gi;
-    var rm, bestArea = 0;
-    while ((rm = rectRe.exec(svgString)) !== null) {
-      var attrs = ' ' + (rm[1] || rm[2] || '');
-      // Skip rects with white, transparent, or no fill (background rects)
-      var fillM = attrs.match(/\sfill=["']([^"']*)["']/);
-      var fill = fillM ? fillM[1].trim().toLowerCase() : 'black'; // SVG default fill is black
-      if (whiteFills.indexOf(fill) !== -1) continue;
-      var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
-      var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
-      if (!wM || !hM) continue;
-      var rw = parseFloat(wM[1]), rh = parseFloat(hM[1]);
-      if (rw * rh > bestArea) {
-        bestArea = rw * rh;
-        var xM = attrs.match(/\sx=["']([\d.\-]+)["']/);
-        var yM = attrs.match(/\sy=["']([\d.\-]+)["']/);
-        clipX = xM ? parseFloat(xM[1]) : 0;
-        clipY = yM ? parseFloat(yM[1]) : 0;
-        clipW = rw;
-        clipH = rh;
-      }
-    }
+    // Full viewBox coverage — no inset
+    var clipX = vbX;
+    var clipY = vbY;
+    var clipW = vbW;
+    var clipH = vbH;
 
-    // Logo tiling params
-    var logoW = Math.min(clipW, clipH) * 0.55;
+    // Logo watermark — dual layer (dark shadow + white logo) for universal visibility
+    var logoW = Math.min(clipW, clipH) * 0.6;
     var logoH = logoW / 4.3;
-    var spacingX = logoW * 1.4;
-    var spacingY = logoH * 2.5;
+    var spacingX = logoW * 1.3;
+    var spacingY = logoH * 2.2;
     var wmId = 'wm-' + Math.random().toString(36).slice(2, 8);
 
-    // Nested <svg> at stamp rect bounds = bulletproof clipping
     var watermark = '<svg x="' + clipX.toFixed(2) + '" y="' + clipY.toFixed(2) + '" ' +
       'width="' + clipW.toFixed(2) + '" height="' + clipH.toFixed(2) + '" ' +
       'overflow="hidden" pointer-events="none">';
 
-    watermark += '<defs><filter id="' + wmId + '">' +
-      '<feColorMatrix type="saturate" values="0"/>' +
-      '</filter></defs>';
+    // Filters: invert for white version, darken for shadow version
+    watermark += '<defs>' +
+      '<filter id="' + wmId + '-w"><feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0"/></filter>' +
+      '<filter id="' + wmId + '-d"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter>' +
+      '</defs>';
 
     var cx = clipW / 2, cy = clipH / 2;
-    watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
-      'opacity="0.12" filter="url(#' + wmId + ')">';
-
     var cols = Math.ceil(clipW / spacingX) + 4;
     var rows = Math.ceil(clipH / spacingY) + 4;
     var startX = cx - (cols / 2) * spacingX;
     var startY = cy - (rows / 2) * spacingY;
 
+    var tiles = '';
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         var x = startX + c * spacingX + (r % 2 === 1 ? spacingX * 0.5 : 0);
         var y = startY + r * spacingY;
-        watermark += '<image href="/logo.png" x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" ' +
+        tiles += '<image href="/logo.png" x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" ' +
           'width="' + logoW.toFixed(2) + '" height="' + logoH.toFixed(2) + '"/>';
       }
     }
 
-    watermark += '</g></svg>';
+    // Dark shadow layer (shows on light/outlined stamps)
+    watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
+      'opacity="0.22" filter="url(#' + wmId + '-d)">' + tiles + '</g>';
+    // White layer on top (shows on dark/filled stamps)
+    watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
+      'opacity="0.25" filter="url(#' + wmId + '-w)">' + tiles + '</g>';
+
+    watermark += '</svg>';
 
     return svgString.replace(/<\/svg>\s*$/, watermark + '</svg>');
   },
@@ -3274,15 +3314,66 @@ const SvgRenderer = {
   },
 
   /**
+   * Per-corner radius definitions for mixed corner types.
+   * Returns {tl, tr, br, bl} or null if not a mixed type.
+   */
+  _getMixedCorners(cornerType) {
+    var MIXED = {
+      mixed_top_straight: { tl: 0, tr: 0, br: 120, bl: 120 },
+      mixed_top_round:    { tl: 120, tr: 120, br: 0, bl: 0 },
+      mixed_diag_down:    { tl: 0, tr: 120, br: 0, bl: 120 },
+      mixed_diag_up:      { tl: 120, tr: 0, br: 120, bl: 0 }
+    };
+    return MIXED[cornerType] || null;
+  },
+
+  /**
+   * Build an SVG <path> d-attribute that draws a rectangle with per-corner radii.
+   * tl/tr/br/bl = top-left, top-right, bottom-right, bottom-left corner radius.
+   * When a radius is 0, a sharp corner is drawn (no arc).
+   */
+  _rectToPath(x, y, w, h, tl, tr, br, bl) {
+    var d = 'M' + (x + tl).toFixed(2) + ' ' + y.toFixed(2);
+    d += ' L' + (x + w - tr).toFixed(2) + ' ' + y.toFixed(2);
+    if (tr > 0) {
+      d += ' A' + tr.toFixed(2) + ' ' + tr.toFixed(2) + ' 0 0 1 ' + (x + w).toFixed(2) + ' ' + (y + tr).toFixed(2);
+    }
+    d += ' L' + (x + w).toFixed(2) + ' ' + (y + h - br).toFixed(2);
+    if (br > 0) {
+      d += ' A' + br.toFixed(2) + ' ' + br.toFixed(2) + ' 0 0 1 ' + (x + w - br).toFixed(2) + ' ' + (y + h).toFixed(2);
+    }
+    d += ' L' + (x + bl).toFixed(2) + ' ' + (y + h).toFixed(2);
+    if (bl > 0) {
+      d += ' A' + bl.toFixed(2) + ' ' + bl.toFixed(2) + ' 0 0 1 ' + x.toFixed(2) + ' ' + (y + h - bl).toFixed(2);
+    }
+    d += ' L' + x.toFixed(2) + ' ' + (y + tl).toFixed(2);
+    if (tl > 0) {
+      d += ' A' + tl.toFixed(2) + ' ' + tl.toFixed(2) + ' 0 0 1 ' + (x + tl).toFixed(2) + ' ' + y.toFixed(2);
+    }
+    d += ' Z';
+    return d;
+  },
+
+  /**
+   * Build a <path> tag from per-corner radii, carrying over extra attributes (fill, stroke, etc).
+   * Also stamps data-rect-x/y/w/h and data-mixed-type for downstream functions.
+   */
+  _buildMixedPath(x, y, w, h, tl, tr, br, bl, extraAttrs, cornerType) {
+    var d = this._rectToPath(x, y, w, h, tl, tr, br, bl);
+    return '<path d="' + d + '"' + extraAttrs +
+      ' data-rect-x="' + x + '" data-rect-y="' + y +
+      '" data-rect-w="' + w + '" data-rect-h="' + h +
+      '" data-mixed-type="' + cornerType + '"/>';
+  },
+
+  /**
    * Override rx/ry on the main border rect based on corner_type.
    * Gives programmatic control over corner radius independent of SVG template values.
+   * For mixed types, converts the <rect> to a <path> with per-corner arcs.
    */
   applyCornerRadius(svgStr, cornerType) {
     if (!cornerType || cornerType === 'straight') return svgStr;
-    // Offset path: inner_rx = rx - inset, outer inner edge = rx - sw/2. Stroke capped to 30 in autoFit.
-    var CORNER_RX = { soft_round: 35, medium_round: 80, strong_round: 120 };
-    var targetRx = CORNER_RX[cornerType];
-    if (!targetRx) return svgStr;
+
     // Find the main border rect (largest by width, skip white background rects)
     var rects = [];
     var re = /<rect([^>]*)\/?>/gi;
@@ -3300,10 +3391,46 @@ const SvgRenderer = {
     if (rects.length === 0) return svgStr;
     rects.sort(function(a, b) { return b.w - a.w; });
     var outer = rects[0];
-    // Cap rx to prevent capsule/pill shape on wide stamps:
-    // ensure at least a short straight segment on each short side
+
     var hM = outer.attrs.match(/\sheight=["']([\d.]+)["']/);
     var rectH = hM ? parseFloat(hM[1]) : 0;
+
+    // === Mixed corners: convert rect to path with per-corner radii ===
+    var mc = this._getMixedCorners(cornerType);
+    if (mc) {
+      var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+      var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+      var wMatch = outer.attrs.match(/\swidth=["']([\d.]+)["']/);
+      var rectX = xM ? parseFloat(xM[1]) : 0;
+      var rectY = yM ? parseFloat(yM[1]) : 0;
+      var rectW = wMatch ? parseFloat(wMatch[1]) : 0;
+      // Cap each radius: no larger than half the short side minus a safety margin
+      var maxR = Math.max(0, (Math.min(rectW, rectH) - 10) / 2);
+      var tl = Math.min(mc.tl, maxR);
+      var tr = Math.min(mc.tr, maxR);
+      var br = Math.min(mc.br, maxR);
+      var bl = Math.min(mc.bl, maxR);
+      // Strip geometry attrs from original rect, keep everything else (fill, stroke, data-*, etc.)
+      // Use \s+ (not \b) to avoid matching compound attrs like stroke-width when stripping width
+      var extraAttrs = outer.attrs
+        .replace(/\s+x=["'][^"']*["']/g, '')
+        .replace(/\s+y=["'][^"']*["']/g, '')
+        .replace(/\s+width=["'][^"']*["']/g, '')
+        .replace(/\s+height=["'][^"']*["']/g, '')
+        .replace(/\s+rx=["'][^"']*["']/g, '')
+        .replace(/\s+ry=["'][^"']*["']/g, '')
+        .replace(/\s*\/?$/, ''); // strip trailing / from self-closing tag
+      var pathTag = this._buildMixedPath(rectX, rectY, rectW, rectH, tl, tr, br, bl, extraAttrs, cornerType);
+      return svgStr.slice(0, outer.index) + pathTag + svgStr.slice(outer.index + outer.full.length);
+    }
+
+    // === Uniform corners: set rx/ry on the rect ===
+    // Offset path: inner_rx = rx - inset, outer inner edge = rx - sw/2. Stroke capped to 30 in autoFit.
+    var CORNER_RX = { soft_round: 35, medium_round: 80, strong_round: 120 };
+    var targetRx = CORNER_RX[cornerType];
+    if (!targetRx) return svgStr;
+    // Cap rx to prevent capsule/pill shape on wide stamps:
+    // ensure at least a short straight segment on each short side
     var rx = rectH > 0 ? Math.min(targetRx, (rectH - 10) / 2) : targetRx;
     rx = Math.max(rx, 0);
     // Replace or add rx/ry on the outer rect
@@ -3345,6 +3472,23 @@ const SvgRenderer = {
       if (!wM || !hM) continue;
       rects.push({ full: m[0], attrs: attrs, w: parseFloat(wM[1]), h: parseFloat(hM[1]), index: m.index });
     }
+    // Also detect mixed-corner path (outer rect converted by applyCornerRadius)
+    var mixedType = null;
+    var mixedPathM = svgStr.match(/<path([^>]*data-mixed-type="([^"]+)"[^>]*)\/?>/);
+    if (mixedPathM) {
+      mixedType = mixedPathM[2];
+      var mAttrs = mixedPathM[1];
+      var mxM = mAttrs.match(/data-rect-x="([\d.\-]+)"/);
+      var myM = mAttrs.match(/data-rect-y="([\d.\-]+)"/);
+      var mwM = mAttrs.match(/data-rect-w="([\d.]+)"/);
+      var mhM = mAttrs.match(/data-rect-h="([\d.]+)"/);
+      rects.push({
+        full: mixedPathM[0], attrs: mAttrs,
+        w: mwM ? parseFloat(mwM[1]) : 0, h: mhM ? parseFloat(mhM[1]) : 0,
+        index: svgStr.indexOf(mixedPathM[0]),
+        mixedX: mxM ? parseFloat(mxM[1]) : 0, mixedY: myM ? parseFloat(myM[1]) : 0
+      });
+    }
     if (rects.length === 0) return svgStr;
     rects.sort(function(a, b) { return b.w - a.w; });
     var outer = rects[0];
@@ -3354,18 +3498,26 @@ const SvgRenderer = {
         return svgStr;
       }
     }
-    var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
-    var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+    // Extract geometry: mixed path uses data-rect-* attrs, rect uses standard attrs
+    var ox, oy, ow, oh, orx, ory;
+    ow = outer.w; oh = outer.h;
+    if (outer.mixedX !== undefined) {
+      ox = outer.mixedX; oy = outer.mixedY;
+      orx = 0; ory = 0;
+    } else {
+      mixedType = null; // outer is a rect, not mixed
+      var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+      var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+      var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
+      var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
+      ox = xM ? parseFloat(xM[1]) : 0;
+      oy = yM ? parseFloat(yM[1]) : 0;
+      orx = rxM ? parseFloat(rxM[1]) : 0;
+      ory = ryM ? parseFloat(ryM[1]) : 0;
+    }
     var swM = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
-    var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
-    var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
-    var ox = xM ? parseFloat(xM[1]) : 0;
-    var oy = yM ? parseFloat(yM[1]) : 0;
-    var ow = outer.w, oh = outer.h;
     var osw = swM ? parseFloat(swM[1]) : (bi.origStrokeWidth || 20);
     if (osw === 0 && bi.origStrokeWidth) osw = bi.origStrokeWidth;
-    var orx = rxM ? parseFloat(rxM[1]) : 0;
-    var ory = ryM ? parseFloat(ryM[1]) : 0;
     var fillM2 = outer.attrs.match(/\bfill=["']([^"']+)["']/);
     var outerFill = fillM2 ? fillM2[1] : 'none';
     var strokeM2 = outer.attrs.match(/\bstroke=["']([^"']+)["']/);
@@ -3406,61 +3558,57 @@ const SvgRenderer = {
     if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.7));
     var inset;
     if (!bi.stitch && isFull) {
-      // Filled (all families except stitch): inner rect flush against outer stroke's inner edge
       inset = osw / 2 + innerSw / 2;
     } else {
       inset = osw / 2 + innerSw * 1.5;
     }
     if (bi.stitch) inset = osw * 0.35;
     if (bi.border) inset = osw * 0.3;
-    if (bi.brush) inset = Math.max(inset, Math.min(ow, oh) * 0.12);
+    if (bi.brush) inset = Math.max(inset, osw * 0.95);
     if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
     if (bi.wavy) inset = Math.max(inset, wavySw * 1.15 + innerSw / 2);
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
-    // Offset Path logic: inner rx = outer rx - inset distance (same as Illustrator's Offset Path)
-    var irx = Math.max(0, orx - inset);
-    var iry = Math.max(0, ory - inset);
-    var innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
-      '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
-      '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
-      '" stroke-miterlimit="10"';
-    if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
-    if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
-    innerRect += '/>';
+
+    // Helper: build inner shape (path for mixed corners, rect for uniform)
+    var self = this;
+    var _shape = function(sx, sy, sw2, sh2, fill, stroke, strokeW, shapeInset) {
+      if (mixedType) {
+        var mc = self._getMixedCorners(mixedType);
+        var maxR = Math.max(0, (Math.min(ow, oh) - 10) / 2);
+        var stl = Math.max(0, Math.min(mc.tl, maxR) - shapeInset);
+        var str = Math.max(0, Math.min(mc.tr, maxR) - shapeInset);
+        var sbr = Math.max(0, Math.min(mc.br, maxR) - shapeInset);
+        var sbl = Math.max(0, Math.min(mc.bl, maxR) - shapeInset);
+        var d = self._rectToPath(sx, sy, sw2, sh2, stl, str, sbr, sbl);
+        var tag = '<path d="' + d + '" fill="' + fill + '" stroke="' + stroke + '"';
+        if (strokeW > 0) tag += ' stroke-width="' + strokeW + '" stroke-miterlimit="10"';
+        return tag + '/>';
+      }
+      var srx = Math.max(0, orx - shapeInset);
+      var sry = Math.max(0, ory - shapeInset);
+      var tag = '<rect x="' + sx.toFixed(2) + '" y="' + sy.toFixed(2) +
+        '" width="' + sw2.toFixed(2) + '" height="' + sh2.toFixed(2) +
+        '" fill="' + fill + '" stroke="' + stroke + '"';
+      if (strokeW > 0) tag += ' stroke-width="' + strokeW + '" stroke-miterlimit="10"';
+      if (srx > 0) tag += ' rx="' + srx.toFixed(1) + '"';
+      if (sry > 0) tag += ' ry="' + sry.toFixed(1) + '"';
+      return tag + '/>';
+    };
+
+    var innerRect = _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, inset);
     // Outlined zigzag/perforated: add white hack rect (same as filled) + colored inner rect
     if (bi.border && !isFull) {
       var whiteHackSw = Math.max(4, Math.round(osw * 0.24));
-      var whiteRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
-        '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
-        '" fill="none" stroke="#FFFFFF" stroke-width="' + whiteHackSw +
-        '" stroke-miterlimit="10"';
-      if (irx > 0) whiteRect += ' rx="' + irx.toFixed(1) + '"';
-      if (iry > 0) whiteRect += ' ry="' + iry.toFixed(1) + '"';
-      whiteRect += '/>';
-      // Colored rect inset further inside the white rect
+      var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteHackSw, inset);
       var colorInset = inset + whiteHackSw;
       var cix = ox + colorInset, ciy = oy + colorInset;
       var ciw = ow - colorInset * 2, cih = oh - colorInset * 2;
-      var cirx = Math.max(0, orx - colorInset);
-      var ciry = Math.max(0, ory - colorInset);
-      var colorRect = '<rect x="' + cix.toFixed(2) + '" y="' + ciy.toFixed(2) +
-        '" width="' + ciw.toFixed(2) + '" height="' + cih.toFixed(2) +
-        '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
-        '" stroke-miterlimit="10"';
-      if (cirx > 0) colorRect += ' rx="' + cirx.toFixed(1) + '"';
-      if (ciry > 0) colorRect += ' ry="' + ciry.toFixed(1) + '"';
-      colorRect += '/>';
+      var colorRect = _shape(cix, ciy, ciw, cih, 'none', innerColor, innerSw, colorInset);
       if (frameMode === 'double') {
         innerRect = whiteRect + colorRect;
       } else {
-        // Single: white filled rect (no stroke) to mask inner portion of thick stroke
-        innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
-          '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
-          '" fill="#FFFFFF" stroke="none"';
-        if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
-        if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
-        innerRect += '/>';
+        innerRect = _shape(ix, iy, iw, ih, '#FFFFFF', 'none', 0, inset);
       }
     }
     var textPos = svgStr.search(/<text[\s>]/i);
@@ -3518,21 +3666,44 @@ const SvgRenderer = {
         if (!wM || !hM) continue;
         rects.push({ full: m[0], attrs: attrs, w: parseFloat(wM[1]), h: parseFloat(hM[1]) });
       }
+      // Also detect mixed-corner path
+      var mixedType = null;
+      var mixedPathM = svgStr.match(/<path([^>]*data-mixed-type="([^"]+)"[^>]*)\/?>/);
+      if (mixedPathM) {
+        mixedType = mixedPathM[2];
+        var mAttrs = mixedPathM[1];
+        var mwM = mAttrs.match(/data-rect-w="([\d.]+)"/);
+        var mhM = mAttrs.match(/data-rect-h="([\d.]+)"/);
+        var mxM = mAttrs.match(/data-rect-x="([\d.\-]+)"/);
+        var myM = mAttrs.match(/data-rect-y="([\d.\-]+)"/);
+        rects.push({
+          full: mixedPathM[0], attrs: mAttrs,
+          w: mwM ? parseFloat(mwM[1]) : 0, h: mhM ? parseFloat(mhM[1]) : 0,
+          mixedX: mxM ? parseFloat(mxM[1]) : 0, mixedY: myM ? parseFloat(myM[1]) : 0
+        });
+      }
       if (rects.length === 0) return svgStr;
       rects.sort(function(a, b) { return b.w - a.w; });
       var outer = rects[0];
 
-      var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
-      var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+      var ox, oy, ow, oh, orx, ory;
+      ow = outer.w; oh = outer.h;
+      if (outer.mixedX !== undefined) {
+        ox = outer.mixedX; oy = outer.mixedY;
+        orx = 0; ory = 0;
+      } else {
+        mixedType = null;
+        var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+        var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+        var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
+        var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
+        ox = xM ? parseFloat(xM[1]) : 0;
+        oy = yM ? parseFloat(yM[1]) : 0;
+        orx = rxM ? parseFloat(rxM[1]) : 0;
+        ory = ryM ? parseFloat(ryM[1]) : 0;
+      }
       var swM2 = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
-      var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
-      var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
-      var ox = xM ? parseFloat(xM[1]) : 0;
-      var oy = yM ? parseFloat(yM[1]) : 0;
-      var ow = outer.w, oh = outer.h;
       var osw2 = swM2 ? parseFloat(swM2[1]) : (bi.origStrokeWidth || 50);
-      var orx = rxM ? parseFloat(rxM[1]) : 0;
-      var ory = ryM ? parseFloat(ryM[1]) : 0;
       var whiteSw = Math.max(4, Math.round(osw2 * 0.24));
 
       // Copy filter from outer rect (e.g. ripped paper)
@@ -3566,7 +3737,17 @@ const SvgRenderer = {
         }
         innerHtml = '';
       }
-      // All other types: clone rect with white thin stroke
+      // All other types: clone shape with white thin stroke
+      else if (mixedType) {
+        var mc = this._getMixedCorners(mixedType);
+        var maxR = Math.max(0, (Math.min(ow, oh) - 10) / 2);
+        var stl = Math.min(mc.tl, maxR), str = Math.min(mc.tr, maxR);
+        var sbr = Math.min(mc.br, maxR), sbl = Math.min(mc.bl, maxR);
+        var d = this._rectToPath(ox, oy, ow, oh, stl, str, sbr, sbl);
+        innerHtml = '<path d="' + d + '" fill="none" stroke="#FFFFFF" stroke-width="' + whiteSw + '"';
+        if (filterAttr) innerHtml += ' filter="' + filterAttr[1] + '"';
+        innerHtml += '/>';
+      }
       else {
         innerHtml = '<rect x="' + ox.toFixed(2) + '" y="' + oy.toFixed(2) +
           '" width="' + ow.toFixed(2) + '" height="' + oh.toFixed(2) +
