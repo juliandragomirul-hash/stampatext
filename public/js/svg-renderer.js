@@ -20,16 +20,23 @@ const SvgRenderer = {
 
   // Map of font names to local font files and their format
   _fontMap: {
-    'Oswald':          { url: '/fonts/Oswald-Medium.ttf',         format: 'truetype' },
-    'Montserrat':      { url: '/fonts/Montserrat-Black.ttf',      format: 'truetype' },
-    'Nunito':          { url: '/fonts/Nunito-Black.ttf',           format: 'truetype' },
-    'RobotoBlack':     { url: '/fonts/Roboto-Black.ttf',          format: 'truetype' },
-    'PlayfairDisplay': { url: '/fonts/PlayfairDisplay-Bold.ttf',  format: 'truetype' },
-    'Merriweather':    { url: '/fonts/Merriweather-Black.ttf',    format: 'truetype' },
-    'Bitter':          { url: '/fonts/Bitter-Bold.ttf',            format: 'truetype' },
-    'Exo2':            { url: '/fonts/Exo2-Black.ttf',            format: 'truetype' },
-    'Comfortaa':       { url: '/fonts/Comfortaa-Bold.ttf',        format: 'truetype' },
-    'Raleway':         { url: '/fonts/Raleway-Black.ttf',         format: 'truetype' }
+    'Oswald':          { url: '/fonts/Oswald-Medium.ttf',                    format: 'truetype' },
+    'Montserrat':      { url: '/fonts/Montserrat-Bold.ttf',                  format: 'truetype' },
+    'Nunito':          { url: '/fonts/Nunito-Black.ttf',                      format: 'truetype' },
+    'BlackOpsOne':     { url: '/fonts/BlackOpsOne-Regular.ttf',              format: 'truetype' },
+    'CourierPrime':    { url: '/fonts/CourierPrime-Regular.ttf',           format: 'truetype' },
+    'Yomogi':          { url: '/fonts/Yomogi-Regular.ttf',                  format: 'truetype' },
+    'IBMPlexMono':     { url: '/fonts/IBMPlexMono-Medium.ttf',              format: 'truetype' },
+    'Bitter':          { url: '/fonts/Bitter-Medium.ttf',                    format: 'truetype' },
+    'Exo2':            { url: '/fonts/Exo2-Bold.ttf',                        format: 'truetype' },
+    'Comfortaa':       { url: '/fonts/Comfortaa-Bold.ttf',                   format: 'truetype' },
+    'PatrickHand':     { url: '/fonts/PatrickHand-Regular.ttf',              format: 'truetype' },
+    'FuzzyBubbles':    { url: '/fonts/FuzzyBubbles-Bold.ttf',               format: 'truetype' },
+    // Legacy (kept for backward compat with saved designs)
+    'RobotoBlack':     { url: '/fonts/Roboto-Bold.ttf',                      format: 'truetype' },
+    'PlayfairDisplay': { url: '/fonts/PlayfairDisplay-Bold.ttf',             format: 'truetype' },
+    'Merriweather':    { url: '/fonts/Merriweather-Black.ttf',               format: 'truetype' },
+    'Raleway':         { url: '/fonts/Raleway-Bold.ttf',                     format: 'truetype' }
   },
 
   /**
@@ -566,6 +573,131 @@ const SvgRenderer = {
     }
 
     return result;
+  },
+
+  /**
+   * Apply a background-colored stroke on text glyphs for specific fonts (e.g. BlackOpsOne)
+   * to visually thin heavy letterforms. Must be called AFTER colorize() so the stroke
+   * isn't overwritten by the contrast-color block.
+   * @param {string} svgString - SVG with text already colorized
+   * @returns {string} SVG with thinning stroke applied (or unchanged if not applicable)
+   */
+  applyThinStroke: function(svgString) {
+    var fontMatch = svgString.match(/font-family=["']'?([^"']+)'?["']/);
+    var fontName = fontMatch ? fontMatch[1] : '';
+
+    // Per-font stroke config: 'thin' = background-colored (visually thins), 'thick' = text-colored (visually thickens)
+    var strokeConfig = { 'BlackOpsOne': { mode: 'thin', width: 2 }, 'Yomogi': { mode: 'thick', width: 1 } }[fontName];
+    if (!strokeConfig) return svgString;
+
+    var strokeColor;
+    if (strokeConfig.mode === 'thin') {
+      // Thinning: stroke matches the background behind the text
+      var allRects = svgString.match(/<rect[^>]*>/gi) || [];
+      var stampRectFill = null;
+      for (var i = 0; i < allRects.length; i++) {
+        var fillM = allRects[i].match(/\sfill=["']([^"']+)["']/i);
+        if (!fillM) continue;
+        var f = fillM[1].toLowerCase();
+        if (f === '#ffffff' || f === 'white' || f === 'none') continue;
+        stampRectFill = fillM[1];
+        break;
+      }
+      strokeColor = stampRectFill || '#FFFFFF';
+    } else {
+      // Thickening: stroke matches the text fill color
+      var textFillMatch = svgString.match(/<text[^>]*\sfill=["']([^"']+)["']/i);
+      strokeColor = textFillMatch ? textFillMatch[1] : '#000000';
+    }
+
+    // Apply stroke + stroke-width to <text> element
+    var result = svgString.replace(/<text([^>]*)>/gi, function(match, attrs) {
+      if (/stroke=["'][^"']*["']/i.test(attrs)) {
+        attrs = attrs.replace(/stroke=["'][^"']*["']/i, 'stroke="' + strokeColor + '"');
+      } else {
+        attrs += ' stroke="' + strokeColor + '"';
+      }
+      if (/stroke-width=["'][^"']*["']/i.test(attrs)) {
+        attrs = attrs.replace(/stroke-width=["'][^"']*["']/i, 'stroke-width="' + strokeConfig.width + '"');
+      } else {
+        attrs += ' stroke-width="' + strokeConfig.width + '"';
+      }
+      return '<text' + attrs + '>';
+    });
+
+    return result;
+  },
+
+  /**
+   * Crop the SVG viewBox to tightly fit the stamp rect (outer frame).
+   * This ensures every font fills the viewBox equally, regardless of how big
+   * or small the computed rect is. Must run AFTER autoFit and applyThinStroke.
+   * @param {string} svgString - SVG with rects already sized by autoFit
+   * @returns {string} SVG with viewBox cropped to stamp bounds
+   */
+  cropViewBoxToStamp: function(svgString) {
+    // Find the outer stamp rect (largest non-white, non-none rect)
+    var allRects = svgString.match(/<rect[^>]*>/gi) || [];
+    var outerRect = null;
+    var outerW = 0;
+    for (var i = 0; i < allRects.length; i++) {
+      var tag = allRects[i];
+      var fillM = tag.match(/\sfill=["']([^"']+)["']/i);
+      if (fillM) {
+        var f = fillM[1].toLowerCase();
+        if (f === '#ffffff' || f === 'white' || f === 'none') continue;
+      } else {
+        continue; // no fill = skip
+      }
+      var wM = tag.match(/\swidth=["']([\d.]+)["']/);
+      if (wM && parseFloat(wM[1]) > outerW) {
+        outerW = parseFloat(wM[1]);
+        outerRect = tag;
+      }
+    }
+    if (!outerRect) return svgString; // no stamp rect found
+
+    // Extract rect geometry
+    var xM = outerRect.match(/\bx=["']([\d.\-]+)["']/);
+    var yM = outerRect.match(/\by=["']([\d.\-]+)["']/);
+    var wM = outerRect.match(/\swidth=["']([\d.]+)["']/);
+    var hM = outerRect.match(/\sheight=["']([\d.]+)["']/);
+    var swM = outerRect.match(/stroke-width=["']([\d.]+)["']/);
+    var rX = xM ? parseFloat(xM[1]) : 0;
+    var rY = yM ? parseFloat(yM[1]) : 0;
+    var rW = wM ? parseFloat(wM[1]) : 0;
+    var rH = hM ? parseFloat(hM[1]) : 0;
+    var sw = swM ? parseFloat(swM[1]) : 0;
+
+    // Decorative border intrusion (same values as autoFit)
+    var decoMargin = 0;
+    if (/data-brush-border=/i.test(svgString)) {
+      decoMargin = 30;
+    } else if (/data-filter=["']ripped/i.test(svgString)) {
+      var fMatch = svgString.match(/data-filter=["']ripped-(\d+)["']/i);
+      decoMargin = fMatch ? parseFloat(fMatch[1]) : 20;
+    } else if (/data-wavy=["']strong["']/i.test(svgString)) {
+      decoMargin = 20;
+    } else if (/data-wavy=/i.test(svgString)) {
+      decoMargin = 10;
+    } else if (/data-border=/i.test(svgString)) {
+      var bMatch = svgString.match(/data-border=["']\w+-(\d+)/i);
+      decoMargin = bMatch ? Math.max(0, parseFloat(bMatch[1])) : 10;
+    }
+
+    // Compute cropped viewBox: rect bounds + stroke/2 + decorative + breathing margin
+    var margin = 10; // breathing room
+    var strokeMargin = sw / 2;
+    var totalMargin = margin + strokeMargin + decoMargin;
+    var newVbX = rX - totalMargin;
+    var newVbY = rY - totalMargin;
+    var newVbW = rW + totalMargin * 2;
+    var newVbH = rH + totalMargin * 2;
+
+    // Replace viewBox attribute
+    svgString = svgString.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + newVbX.toFixed(2) + ' ' + newVbY.toFixed(2) + ' ' + newVbW.toFixed(2) + ' ' + newVbH.toFixed(2) + '"');
+
+    return svgString;
   },
 
   /**
@@ -1322,15 +1454,17 @@ const SvgRenderer = {
       '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
       '<style>' +
       '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
-      '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Bold.ttf") format("truetype");font-weight:700;}' +
       '@font-face{font-family:"Nunito";src:url("/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
-      '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
-      '@font-face{font-family:"PlayfairDisplay";src:url("/fonts/PlayfairDisplay-Bold.ttf") format("truetype");font-weight:700;}' +
-      '@font-face{font-family:"Merriweather";src:url("/fonts/Merriweather-Black.ttf") format("truetype");font-weight:900;}' +
-      '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Bold.ttf") format("truetype");font-weight:700;}' +
-      '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"BlackOpsOne";src:url("/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"CourierPrime";src:url("/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"Yomogi";src:url("/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"IBMPlexMono";src:url("/fonts/IBMPlexMono-Medium.ttf") format("truetype");font-weight:500;}' +
+      '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
+      '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
       '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
-      '@font-face{font-family:"Raleway";src:url("/fonts/Raleway-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"PatrickHand";src:url("/fonts/PatrickHand-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"FuzzyBubbles";src:url("/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
       '*{margin:0;padding:0;}' +
       '</style>' +
       '</head><body>' + svgString + '</body></html>';
@@ -1558,6 +1692,28 @@ const SvgRenderer = {
     var effectiveMaxWidth = Math.min(maxWidth, actualRectWidth * widthFactor);
     // Reduce available width by frame inset (double border inner rect)
     if (frameInset > 0) effectiveMaxWidth -= 2 * frameInset;
+    // Per-font adjustments: vertical scale, letter spacing, size boost, vertical nudge
+    var fontFamilyMatch = svgString.match(/font-family=["']'?([^"']+)'?["']/);
+    var detectedFont = fontFamilyMatch ? fontFamilyMatch[1] : '';
+    var fontScaleY = (detectedFont === 'BlackOpsOne') ? 1.10 : 1.0;
+    var fontLetterSpacing = { 'Oswald': 5, 'CourierPrime': 5, 'Yomogi': 10, 'Bitter': 2, 'Exo2': 5, 'PatrickHand': 15 }[detectedFont] || 0;
+    // Account for letter-spacing in measured width (canvas doesn't include it)
+    if (fontLetterSpacing > 0 && measuredWidth > 0) {
+      // Find longest tspan text to count characters
+      var tspanTexts = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi) || [];
+      var maxChars = 0;
+      tspanTexts.forEach(function(t) {
+        var inner = t.replace(/<[^>]+>/g, '');
+        if (inner.length > maxChars) maxChars = inner.length;
+      });
+      if (maxChars === 0) {
+        var textContentM = svgString.match(/<text[^>]*>([^<]*)<\/text>/i);
+        if (textContentM) maxChars = textContentM[1].length;
+      }
+      if (maxChars > 1) {
+        measuredWidth += fontLetterSpacing * (maxChars - 1);
+      }
+    }
 
     // Calculate ratio based on measured width vs effective max width
     if (measuredWidth > 0) {
@@ -1584,7 +1740,6 @@ const SvgRenderer = {
         }
       }
 
-      // (stitch hack removed — widthFactor=0.95 handles it naturally)
 
       // Proportional stroke: thicker for short text, thinner for long text
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
@@ -1602,14 +1757,18 @@ const SvgRenderer = {
       result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', newFontSize.toFixed(2));
 
       // Apply transform scaleX change if needed
-      if (newScaleX !== originalScaleX) {
+      if (newScaleX !== originalScaleX || fontScaleY !== 1) {
         var currentTransform = SvgRenderer._getTextAttribute(result, textIndex, 'transform');
-        if (currentTransform) {
+        if (currentTransform && /matrix\(/.test(currentTransform)) {
           var newTransform = currentTransform.replace(
             /matrix\(\s*[\d.]+/,
             'matrix(' + newScaleX.toFixed(4)
           );
           result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newTransform);
+        } else {
+          // No existing matrix transform — create one with scaleX + scaleY
+          result = SvgRenderer._setTextAttribute(result, textIndex, 'transform',
+            'matrix(' + newScaleX.toFixed(4) + ' 0 0 ' + fontScaleY.toFixed(4) + ' 0 0)');
         }
       }
 
@@ -1677,13 +1836,13 @@ const SvgRenderer = {
         }
       }
       var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX;
+      textBlockHeight *= fontScaleY;  // stretch rect for vertically scaled fonts
 
       // STEP 2: Inside-out rect wrapping
       // Inner gap: proportional breathing room — larger font (short text) gets more gap
       var baseGap = 10;
       var hInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
       var vInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
-
       // Border overhead: distance from rect edge to visual inner edge
       var swExtract = result.match(/<rect[^>]*stroke-width=["']([\d.]+)["']/i);
       var estStrokeW = swExtract ? parseFloat(swExtract[1]) : 0;
@@ -1755,6 +1914,26 @@ const SvgRenderer = {
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
 
+      // Aspect ratio enforcement: compress wide one-liners horizontally
+      // to produce less squat stamps. Without this, wide fonts (Patrick Hand,
+      // Montserrat) produce extreme landscape ratios that appear tiny in the
+      // fixed-ratio card. Max 15% compression.
+      var aspectCompressX = 1;
+      if (numLines <= 1) {
+        var stampAspect = newRectHeight / newRectWidth;
+        var minAspect = 0.22;
+        if (stampAspect < minAspect) {
+          var targetRectW = newRectHeight / minAspect;
+          var targetTextW = targetRectW - hPadding * 2;
+          if (targetTextW > 0 && textBlockWidth > 0) {
+            aspectCompressX = targetTextW / textBlockWidth;
+            aspectCompressX = Math.max(aspectCompressX, 0.85); // cap at 15%
+            textBlockWidth *= aspectCompressX;
+            newRectWidth = textBlockWidth + hPadding * 2;
+          }
+        }
+      }
+
       // STEP 3: Position text at viewBox center (FIXED reference point)
       var viewBoxCenterX = vbX + vbW / 2;
       var viewBoxCenterY = vbY + vbH / 2;
@@ -1808,17 +1987,24 @@ const SvgRenderer = {
             // Offset = how far ink center is LEFT of advance center (positive = shift right)
             var inkOffset = (measurements.canvasAdvanceWidth + measurements.canvasInkLeft - measurements.canvasInkRight) / 2;
             var matrixScaleX = parseFloat(mMatch[1]) || 1;
-            inkHorizCorrection = inkOffset * canvasScale * matrixScaleX;
+            inkHorizCorrection = inkOffset * canvasScale * matrixScaleX * aspectCompressX;
           }
           var newTx = viewBoxCenterX + inkHorizCorrection;
-          var newTy = viewBoxCenterY + baselineOffset;
-          var newMat = 'matrix(' + mMatch[1] + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + mMatch[4] + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
+          var newTy = viewBoxCenterY + baselineOffset * fontScaleY;
+          var finalSx = (parseFloat(mMatch[1]) * aspectCompressX).toFixed(4);
+          var sy = fontScaleY !== 1 ? fontScaleY.toFixed(4) : mMatch[4];
+          var newMat = 'matrix(' + finalSx + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + sy + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
           result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newMat);
         }
       }
 
       // Set text-anchor for horizontal centering
       result = SvgRenderer._setTextAttribute(result, textIndex, 'text-anchor', 'middle');
+
+      // Per-font letter-spacing
+      if (fontLetterSpacing > 0) {
+        result = SvgRenderer._setTextAttribute(result, textIndex, 'letter-spacing', String(fontLetterSpacing));
+      }
 
       // STEP 5: Resize/reposition rects to wrap around text (centered on viewBox center)
       var newRectX = viewBoxCenterX - newRectWidth / 2;
@@ -2967,15 +3153,17 @@ const SvgRenderer = {
         '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' +
         '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
-        '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Bold.ttf") format("truetype");font-weight:700;}' +
         '@font-face{font-family:"Nunito";src:url("/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
-        '@font-face{font-family:"RobotoBlack";src:url("/fonts/Roboto-Black.ttf") format("truetype");font-weight:900;}' +
-        '@font-face{font-family:"PlayfairDisplay";src:url("/fonts/PlayfairDisplay-Bold.ttf") format("truetype");font-weight:700;}' +
-        '@font-face{font-family:"Merriweather";src:url("/fonts/Merriweather-Black.ttf") format("truetype");font-weight:900;}' +
-        '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Bold.ttf") format("truetype");font-weight:700;}' +
-        '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"BlackOpsOne";src:url("/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"CourierPrime";src:url("/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"Yomogi";src:url("/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"IBMPlexMono";src:url("/fonts/IBMPlexMono-Medium.ttf") format("truetype");font-weight:500;}' +
+        '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
+        '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
         '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
-        '@font-face{font-family:"Raleway";src:url("/fonts/Raleway-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"PatrickHand";src:url("/fonts/PatrickHand-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"FuzzyBubbles";src:url("/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
         '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +
         '</head><body>' + svgString + '</body></html>';

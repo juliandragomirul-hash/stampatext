@@ -346,6 +346,8 @@ const Gallery = {
         var colorized, cropped;
         try {
           colorized = SvgRenderer.colorize(variantSvg, color);
+          colorized = SvgRenderer.applyThinStroke(colorized);
+          colorized = SvgRenderer.cropViewBoxToStamp(colorized);
           colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
           cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
         } catch (err) {
@@ -491,6 +493,8 @@ const Gallery = {
       for (var j = 0; j < colorsToApply.length; j++) {
         var color = colorsToApply[j];
         var colorized = SvgRenderer.colorize(base.svgString, color);
+        colorized = SvgRenderer.applyThinStroke(colorized);
+        colorized = SvgRenderer.cropViewBoxToStamp(colorized);
         colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
 
@@ -1056,6 +1060,8 @@ const Gallery = {
         }
 
         var colorized = SvgRenderer.colorize(variantSvg, vp.c);
+        colorized = SvgRenderer.applyThinStroke(colorized);
+        colorized = SvgRenderer.cropViewBoxToStamp(colorized);
         colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
         var framed = cropped;

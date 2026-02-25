@@ -4,10 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StampaText - Product Details</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=115">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Preload all 10 stamp fonts so switching is instant -->
+  <link rel="preload" href="/fonts/Oswald-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Montserrat-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Nunito-Black.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/BlackOpsOne-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/CourierPrime-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Yomogi-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/IBMPlexMono-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Bitter-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Exo2-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Comfortaa-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/PatrickHand-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/FuzzyBubbles-Bold.ttf" as="font" type="font/ttf" crossorigin>
 </head>
 <body>
 
@@ -141,7 +154,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=91"></script>
+  <script src="/js/svg-renderer.js?v=115"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -158,23 +171,26 @@
       };
 
       var AVAILABLE_FONTS = [
-        { key: 'Oswald',          label: 'Oswald' },
-        { key: 'Montserrat',      label: 'Montserrat' },
-        { key: 'Nunito',          label: 'Nunito' },
-        { key: 'RobotoBlack',     label: 'Roboto Black' },
-        { key: 'PlayfairDisplay', label: 'Playfair Display' },
-        { key: 'Merriweather',    label: 'Merriweather' },
-        { key: 'Bitter',          label: 'Bitter' },
-        { key: 'Exo2',            label: 'Exo 2' },
-        { key: 'Comfortaa',       label: 'Comfortaa' },
-        { key: 'Raleway',         label: 'Raleway' }
+        { key: 'Oswald',          label: 'Oswald' },           // thick condensed
+        { key: 'CourierPrime',    label: 'Courier Prime' },    // thin mono
+        { key: 'Montserrat',      label: 'Montserrat' },       // thick bold
+        { key: 'Yomogi',          label: 'Yomogi' },           // thin handwritten
+        { key: 'BlackOpsOne',     label: 'Black Ops One' },    // thick stencil
+        { key: 'PatrickHand',     label: 'Patrick Hand' },     // thin handwritten
+        { key: 'Nunito',          label: 'Nunito' },           // thick black
+        { key: 'IBMPlexMono',     label: 'IBM Plex Mono' },    // thin mono
+        { key: 'Exo2',            label: 'Exo 2' },            // thick bold
+        { key: 'Bitter',          label: 'Bitter' },           // thin slab
+        { key: 'Comfortaa',       label: 'Comfortaa' },        // thick rounded
+        { key: 'FuzzyBubbles',    label: 'Fuzzy Bubbles' }
       ];
 
       var FONT_WEIGHTS = {
-        'Oswald': '500', 'Montserrat': '900', 'Nunito': '900',
-        'RobotoBlack': '900', 'PlayfairDisplay': '700',
-        'Merriweather': '900', 'Bitter': '700',
-        'Exo2': '900', 'Comfortaa': '700', 'Raleway': '900'
+        'Oswald': '500', 'Montserrat': '700', 'Nunito': '900',
+        'BlackOpsOne': '400', 'CourierPrime': '400', 'Yomogi': '400',
+        'IBMPlexMono': '500', 'Bitter': '500',
+        'Exo2': '700', 'Comfortaa': '700',
+        'PatrickHand': '400', 'FuzzyBubbles': '700'
       };
 
       var BORDER_LABELS = {
@@ -634,6 +650,8 @@
           baseSvg = await rebuildWithFont(currentFont, frameInset);
           var svg = baseSvg;
           svg = SvgRenderer.colorize(svg, currentColor);
+          svg = SvgRenderer.applyThinStroke(svg);
+          svg = SvgRenderer.cropViewBoxToStamp(svg);
           svg = SvgRenderer.applyCornerRadius(svg, templateCornerType);
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
           if (currentFrame === 'double') {

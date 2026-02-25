@@ -1,14 +1,16 @@
 /* 10 worldwide fonts — Latin Extended + Cyrillic + Vietnamese */
 @font-face { font-family: 'Oswald'; src: url('/fonts/Oswald-Medium.ttf') format('truetype'); font-weight: 500; font-display: swap; }
-@font-face { font-family: 'Montserrat'; src: url('/fonts/Montserrat-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Montserrat'; src: url('/fonts/Montserrat-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
 @font-face { font-family: 'Nunito'; src: url('/fonts/Nunito-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
-@font-face { font-family: 'RobotoBlack'; src: url('/fonts/Roboto-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
-@font-face { font-family: 'PlayfairDisplay'; src: url('/fonts/PlayfairDisplay-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
-@font-face { font-family: 'Merriweather'; src: url('/fonts/Merriweather-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
-@font-face { font-family: 'Bitter'; src: url('/fonts/Bitter-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
-@font-face { font-family: 'Exo2'; src: url('/fonts/Exo2-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'BlackOpsOne'; src: url('/fonts/BlackOpsOne-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'CourierPrime'; src: url('/fonts/CourierPrime-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yomogi'; src: url('/fonts/Yomogi-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'IBMPlexMono'; src: url('/fonts/IBMPlexMono-Medium.ttf') format('truetype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Bitter'; src: url('/fonts/Bitter-Medium.ttf') format('truetype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Exo2'; src: url('/fonts/Exo2-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
 @font-face { font-family: 'Comfortaa'; src: url('/fonts/Comfortaa-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
-@font-face { font-family: 'Raleway'; src: url('/fonts/Raleway-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'PatrickHand'; src: url('/fonts/PatrickHand-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'FuzzyBubbles'; src: url('/fonts/FuzzyBubbles-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
 
 * {
   margin: 0;
