@@ -48,6 +48,14 @@
       texturesSection.style.display = name === 'textures' ? 'block' : 'none';
       if (name === 'textures') loadTextureList();
     }
+    var fontsSection = document.getElementById('section-fonts');
+    if (fontsSection) {
+      fontsSection.style.display = name === 'fonts' ? 'block' : 'none';
+      if (name === 'fonts' && !FontTuning._initialized) {
+        FontTuning._initialized = true;
+        FontTuning.init();
+      }
+    }
   }
 
   // ---- Custom color palette ----

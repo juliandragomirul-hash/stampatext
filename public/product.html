@@ -154,7 +154,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=115"></script>
+  <script src="/js/svg-renderer.js?v=122"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -213,11 +213,11 @@
       var rawCleanedSvg = null;
       var storedZones = [];
       var storedDisplayText = '';
-      async function rebuildWithFont(fontKey, frameInset) {
+      async function rebuildWithFont(fontKey, frameMode) {
         if (!rawCleanedSvg) return baseSvg;
         // Clear measurement cache — each font needs fresh iframe measurement
         SvgRenderer._autoFitMeasureCache = null;
-        frameInset = frameInset || 0;
+        frameMode = frameMode || 'single';
         var weight = FONT_WEIGHTS[fontKey] || '400';
 
         // Start from raw template, replace font-family + weight
@@ -240,7 +240,8 @@
             svg = await SvgRenderer.autoFitTextInString(
               svg, idx, zone.bounding_width,
               zone.font_size, originalScaleX,
-              frameInset, templateFillType || 'full', templateCornerType || 'straight'
+              frameMode, templateFillType || 'full', templateCornerType || 'straight',
+              templateBorderType || null
             );
             didAutoFit = true;
           }
@@ -391,7 +392,8 @@
       // Initial render: run autoFit with selected font
       baseSvg = await rebuildWithFont(currentFont);
 
-      // ---- Build UI ----
+      // ---- Load font config & Build UI ----
+      await SvgRenderer.loadFontConfig();
       buildFontPicker();
       buildColorPalette();
       buildTexturePicker();
@@ -459,6 +461,20 @@
 
       // Download confirm
       document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
+
+      // Zoom lightbox: click preview to enlarge
+      document.getElementById('product-preview').addEventListener('click', function() {
+        var svgEl = this.querySelector('svg');
+        if (!svgEl) return;
+        var overlay = document.createElement('div');
+        overlay.className = 'stamp-zoom-overlay';
+        overlay.appendChild(svgEl.cloneNode(true));
+        overlay.addEventListener('click', function() { overlay.remove(); });
+        document.addEventListener('keydown', function onEsc(e) {
+          if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); }
+        });
+        document.body.appendChild(overlay);
+      });
 
       // ---- Helper functions ----
 
@@ -638,16 +654,8 @@
         previewEl.style.opacity = '0.5';
 
         try {
-          // Calculate frame inset so autoFit leaves room for double/split borders
-          var frameInset = 0;
-          if (currentFrame === 'double' || currentFrame === 'split') {
-            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
-            var fiBi = Object.assign({}, borderInfo);
-            SvgRenderer.supplementBorderInfo(fiBi, { border_type: templateBorderType, fill_type: templateFillType });
-            frameInset = SvgRenderer.estimateFrameInset(currentFrame, fiBi);
-          }
-          // Rebuild from raw template with current font (autoFit handles sizing)
-          baseSvg = await rebuildWithFont(currentFont, frameInset);
+          // Rebuild from raw template with current font (autoFit handles sizing via computeTextZone)
+          baseSvg = await rebuildWithFont(currentFont, currentFrame);
           var svg = baseSvg;
           svg = SvgRenderer.colorize(svg, currentColor);
           svg = SvgRenderer.applyThinStroke(svg);
@@ -668,7 +676,7 @@
             if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
             var siBi = Object.assign({}, borderInfo);
             SvgRenderer.supplementBorderInfo(siBi, { border_type: templateBorderType, fill_type: templateFillType });
-            if (siBi.border) {
+            if (siBi.border || siBi.stitch) {
               svg = SvgRenderer.addDoubleFrame(svg, siBi, currentColor, 'single');
             }
           }

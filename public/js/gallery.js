@@ -152,6 +152,9 @@ const Gallery = {
     this.displayedCount = 0;
     this.isFirstShowMore = true;
 
+    // Ensure font config is loaded before rendering
+    if (!SvgRenderer._fontConfig) await SvgRenderer.loadFontConfig();
+
     const templates = await this.fetchTemplates();
     if (templates.length === 0) {
       this.renderEmpty('No templates available yet.');
@@ -160,12 +163,25 @@ const Gallery = {
 
     const storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
 
-    for (const tpl of templates) {
+    // Prefetch all SVGs in parallel (browser handles connection limits)
+    var svgPromises = templates.map(function(tpl) {
+      var svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
+      return SvgRenderer.fetchSvg(svgUrl).catch(function() { return null; });
+    });
+    var svgs = await Promise.all(svgPromises);
+
+    // Progress indicator element
+    var progressEl = document.querySelector('.stamp-loading');
+
+    // Process auto-fit sequentially (each creates an iframe for measurement)
+    for (var i = 0; i < templates.length; i++) {
+      var tpl = templates[i];
+      if (!svgs[i]) continue; // skip failed fetches
+
+      if (progressEl) progressEl.textContent = 'Processing templates... (' + (i + 1) + '/' + templates.length + ')';
+
       try {
-        // Build the full public URL for the SVG
-        const svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
-        const rawSvg = await SvgRenderer.fetchSvg(svgUrl);
-        var cleanedSvg = SvgRenderer.cleanSvgString(rawSvg);
+        var cleanedSvg = SvgRenderer.cleanSvgString(svgs[i]);
         cleanedSvg = SvgRenderer.uniquifySvgIds(cleanedSvg);
 
         // Detect text case from original SVG
@@ -209,9 +225,10 @@ const Gallery = {
               zone.bounding_width,
               zone.font_size,
               originalScaleX,
-              0,
+              'single',
               tpl.fill_type || 'full',
-              tpl.corner_type || 'straight'
+              tpl.corner_type || 'straight',
+              tpl.border_type || null
             );
             didAutoFit = true;
           }
@@ -315,31 +332,31 @@ const Gallery = {
         var frameMode = allowedFrames[f];
         // Skip double frame for filled stitch — too visually dense / redundant with single
         if (frameMode === 'double' && bi.stitch && base.fillType === 'full') continue;
+        // Skip double frame for outlined torn edge — poor visual result
+        if (frameMode === 'double' && bi.filter && base.fillType !== 'full') continue;
 
         // Random color per variant
         var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
 
-        // Per-variant font sizing: re-apply autoFit with frame-specific inset + corner compensation
+        // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
         var variantSvg = base.svgString;
         var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
         if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners)) {
-          var frameInset = (frameMode !== 'single') ? SvgRenderer.estimateFrameInset(frameMode, bi) : 0;
-          if (frameInset > 0 || hasRoundedCorners) {
-            try {
-              variantSvg = SvgRenderer._applyAutoFitSizing(
-                base.preAutoFitSvg,
-                base.autoFitZoneInfo.idx,
-                base.autoFitZoneInfo.boundingWidth,
-                base.autoFitZoneInfo.fontSize,
-                base.autoFitZoneInfo.originalScaleX,
-                frameInset,
-                base.autoFitMeasurements,
-                base.fillType,
-                base.cornerType
-              );
-            } catch (err) {
-              console.warn('Per-variant sizing failed for', base.name, frameMode, err);
-            }
+          try {
+            variantSvg = SvgRenderer._applyAutoFitSizing(
+              base.preAutoFitSvg,
+              base.autoFitZoneInfo.idx,
+              base.autoFitZoneInfo.boundingWidth,
+              base.autoFitZoneInfo.fontSize,
+              base.autoFitZoneInfo.originalScaleX,
+              frameMode,
+              base.autoFitMeasurements,
+              base.fillType,
+              base.cornerType,
+              base.borderType
+            );
+          } catch (err) {
+            console.warn('Per-variant sizing failed for', base.name, frameMode, err);
           }
         }
 
@@ -361,7 +378,7 @@ const Gallery = {
             framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
           } else if (frameMode === 'split') {
             framed = SvgRenderer.addSplitBorder(cropped, bi);
-          } else if (frameMode === 'single' && bi.border && base.fillType !== 'full') {
+          } else if (frameMode === 'single' && (bi.border || bi.stitch) && base.fillType !== 'full') {
             framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'single');
           }
         } catch (err) {
@@ -483,29 +500,49 @@ const Gallery = {
       }
       if (frameRenderings.length === 0) continue;
 
-      // Compute border info once per template (needed for split)
-      var bi = null;
-      if (frameRenderings.indexOf('split') !== -1) {
-        bi = SvgRenderer.detectBorderType(base.svgString);
-        SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: base.fillType });
-      }
+      // Compute border info once per template (needed for double/split/single-decorative)
+      var bi = SvgRenderer.detectBorderType(base.svgString);
+      SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: base.fillType });
 
-      for (var j = 0; j < colorsToApply.length; j++) {
-        var color = colorsToApply[j];
-        var colorized = SvgRenderer.colorize(base.svgString, color);
-        colorized = SvgRenderer.applyThinStroke(colorized);
-        colorized = SvgRenderer.cropViewBoxToStamp(colorized);
-        colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
-        var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+      // Frame loop OUTSIDE color loop — frame affects text sizing via computeTextZone
+      for (var f = 0; f < frameRenderings.length; f++) {
+        var frameMode = frameRenderings[f];
+        // Skip double frame for filled stitch — too visually dense
+        if (frameMode === 'double' && bi.stitch && base.fillType === 'full') continue;
+        // Skip double frame for outlined torn edge — poor visual result
+        if (frameMode === 'double' && bi.filter && base.fillType !== 'full') continue;
 
-        for (var f = 0; f < frameRenderings.length; f++) {
-          var frameMode = frameRenderings[f];
+        // Per-variant font sizing: re-apply autoFit with frame-specific interior
+        var variantSvg = base.svgString;
+        var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
+        if (base.autoFitZoneInfo && base.autoFitMeasurements &&
+            (frameMode !== 'single' || hasRoundedCorners)) {
+          try {
+            variantSvg = SvgRenderer._applyAutoFitSizing(
+              base.preAutoFitSvg,
+              base.autoFitZoneInfo.idx, base.autoFitZoneInfo.boundingWidth,
+              base.autoFitZoneInfo.fontSize, base.autoFitZoneInfo.originalScaleX,
+              frameMode === 'none' ? 'single' : frameMode,
+              base.autoFitMeasurements, base.fillType, base.cornerType,
+              base.borderType
+            );
+          } catch (err) { variantSvg = base.svgString; }
+        }
+
+        for (var j = 0; j < colorsToApply.length; j++) {
+          var color = colorsToApply[j];
+          var colorized = SvgRenderer.colorize(variantSvg, color);
+          colorized = SvgRenderer.applyThinStroke(colorized);
+          colorized = SvgRenderer.cropViewBoxToStamp(colorized);
+          colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
+          var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+
           var framed = cropped;
           if (frameMode === 'double') {
             framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
           } else if (frameMode === 'split') {
             framed = SvgRenderer.addSplitBorder(cropped, bi);
-          } else if (frameMode === 'single' && bi.border && base.fillType !== 'full') {
+          } else if (frameMode === 'single' && (bi.border || bi.stitch) && base.fillType !== 'full') {
             framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'single');
           }
 
@@ -1035,27 +1072,25 @@ const Gallery = {
         var rbi = SvgRenderer.detectBorderType(base.svgString);
         SvgRenderer.supplementBorderInfo(rbi, { border_type: base.borderType, fill_type: base.fillType });
 
-        // Per-variant font sizing: re-apply autoFit with frame-specific inset + corner compensation
+        // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
         var variantSvg = base.svgString;
         var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
         if (base.autoFitZoneInfo && base.autoFitMeasurements && (vp.f !== 'single' || hasRoundedCorners)) {
-          var frameInset = (vp.f !== 'single') ? SvgRenderer.estimateFrameInset(vp.f, rbi) : 0;
-          if (frameInset > 0 || hasRoundedCorners) {
-            try {
-              variantSvg = SvgRenderer._applyAutoFitSizing(
-                base.preAutoFitSvg,
-                base.autoFitZoneInfo.idx,
-                base.autoFitZoneInfo.boundingWidth,
-                base.autoFitZoneInfo.fontSize,
-                base.autoFitZoneInfo.originalScaleX,
-                frameInset,
-                base.autoFitMeasurements,
-                base.fillType,
-                base.cornerType
-              );
-            } catch (err2) {
-              console.warn('Per-variant sizing failed (restore):', base.name, vp.f, err2);
-            }
+          try {
+            variantSvg = SvgRenderer._applyAutoFitSizing(
+              base.preAutoFitSvg,
+              base.autoFitZoneInfo.idx,
+              base.autoFitZoneInfo.boundingWidth,
+              base.autoFitZoneInfo.fontSize,
+              base.autoFitZoneInfo.originalScaleX,
+              vp.f,
+              base.autoFitMeasurements,
+              base.fillType,
+              base.cornerType,
+              base.borderType
+            );
+          } catch (err2) {
+            console.warn('Per-variant sizing failed (restore):', base.name, vp.f, err2);
           }
         }
 

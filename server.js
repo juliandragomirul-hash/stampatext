@@ -262,6 +262,34 @@ app.post('/api/payments/paypal-capture-order', async (req, res) => {
   }
 });
 
+// ---- API: Font Config (admin) ----
+const fs = require('fs');
+const FONT_CONFIG_PATH = path.join(__dirname, 'public', 'data', 'font-config.json');
+
+app.get('/api/admin/font-config', (req, res) => {
+  try {
+    const data = fs.readFileSync(FONT_CONFIG_PATH, 'utf8');
+    res.json(JSON.parse(data));
+  } catch (err) {
+    console.error('Failed to read font config:', err);
+    res.status(500).json({ error: 'Failed to read font config' });
+  }
+});
+
+app.put('/api/admin/font-config', (req, res) => {
+  try {
+    const config = req.body;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      return res.status(400).json({ error: 'Invalid config format' });
+    }
+    fs.writeFileSync(FONT_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf8');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to write font config:', err);
+    res.status(500).json({ error: 'Failed to write font config' });
+  }
+});
+
 // ---- HTML routes ----
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'index.html'));

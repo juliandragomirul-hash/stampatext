@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StampaText - App</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="page-loading">
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/app" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions">
+      <span class="header-credits" id="user-credits">0 credits</span>
+      <span class="header-user" id="user-email"></span>
+      <div class="dropdown-wrapper">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/app/profile">Profilul Meu</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <h1 class="page-title">Your Templates</h1>
+    <p class="page-subtitle">Choose a template and start customizing</p>
+
+    <div class="template-grid">
+      <div class="template-card">
+        <div class="template-card-image">Coming soon</div>
+        <div class="template-card-body">
+          <div class="template-card-title">Certificate Template</div>
+          <div class="template-card-desc">Elegant certificate with custom name and date</div>
+          <button class="btn btn-primary btn-small">Customize</button>
+        </div>
+      </div>
+      <div class="template-card">
+        <div class="template-card-image">Coming soon</div>
+        <div class="template-card-body">
+          <div class="template-card-title">Invitation Template</div>
+          <div class="template-card-desc">Beautiful invitation with editable text fields</div>
+          <button class="btn btn-primary btn-small">Customize</button>
+        </div>
+      </div>
+      <div class="template-card">
+        <div class="template-card-image">Coming soon</div>
+        <div class="template-card-body">
+          <div class="template-card-title">Business Card</div>
+          <div class="template-card-desc">Professional business card with your details</div>
+          <button class="btn btn-primary btn-small">Customize</button>
+        </div>
+      </div>
+      <div class="template-card">
+        <div class="template-card-image">Coming soon</div>
+        <div class="template-card-body">
+          <div class="template-card-title">Event Badge</div>
+          <div class="template-card-desc">Name badge for events and conferences</div>
+          <button class="btn btn-primary btn-small">Customize</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/router.js"></script>
+  <script>
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('user-menu');
+      const btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const session = await requireAuth();
+      if (!session) return;
+
+      let profile = null;
+      try {
+        profile = await getProfile();
+      } catch (e) {
+        console.error('Failed to load profile:', e);
+      }
+
+      document.getElementById('user-email').textContent = session.user.email;
+      document.getElementById('user-credits').textContent = (profile ? profile.credits : 0) + ' credits';
+
+      if (profile && profile.role === 'admin') {
+        document.getElementById('menu-admin').style.display = 'block';
+      }
+
+      showPage();
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Split Border Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Oswald', sans-serif; background: #f5f5f5; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 8px; font-size: 1.5rem; }
+    .controls { text-align: center; margin-bottom: 20px; }
+    .controls input { font-size: 1rem; padding: 8px 16px; width: 300px; border: 2px solid #ccc; border-radius: 4px; }
+    .controls button { font-size: 1rem; padding: 8px 16px; margin-left: 8px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    .controls button:hover { background: #555; }
+    .status { text-align: center; margin: 10px 0; font-size: 0.9rem; color: #666; }
+
+    .template-row {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .template-row h3 {
+      font-size: 0.95rem;
+      margin-bottom: 10px;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 6px;
+    }
+    .template-row h3 span { color: #888; font-weight: 400; font-size: 0.85rem; }
+    .three-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .col-label {
+      text-align: center;
+      font-size: 0.75rem;
+      color: #999;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .col-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .col-cell .stamp-wrapper {
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100px;
+    }
+    .col-cell .stamp-wrapper svg,
+    .col-cell .stamp-wrapper img {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Split Border Preview</h1>
+  <div class="controls">
+    <input type="text" id="text-input" value="RUBBER STAMP" placeholder="Enter preview text">
+    <button id="btn-render">Render All</button>
+  </div>
+  <div class="status" id="status">Loading...</div>
+  <div id="grid"></div>
+
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/svg-renderer.js?v=40"></script>
+  <script>
+  (async function() {
+    var grid = document.getElementById('grid');
+    var statusEl = document.getElementById('status');
+    var textInput = document.getElementById('text-input');
+    var previewColor = '#FF0000';
+
+    // ---- Fetch all active templates ----
+    statusEl.textContent = 'Fetching templates...';
+    var { data: templates, error } = await sb
+      .from('templates')
+      .select('*, text_zones(*)')
+      .eq('is_active', true)
+      .order('name');
+
+    if (error || !templates || templates.length === 0) {
+      statusEl.textContent = 'Error: ' + (error ? error.message : 'No templates found');
+      return;
+    }
+
+    var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl.replace(/\/$/, '');
+    statusEl.textContent = templates.length + ' templates loaded. Rendering...';
+
+    // ---- detectBorderType (from product.html) ----
+    function detectBorderType(svgStr) {
+      var rects = [];
+      var re = /<rect([^>]*)\/?>/gi;
+      var m;
+      while ((m = re.exec(svgStr)) !== null) {
+        var attrs = m[1];
+        if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+          var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+          if (!hasColoredStroke) continue;
+        }
+        var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+        if (!wM) continue;
+        rects.push({ attrs: attrs, w: parseFloat(wM[1]) });
+      }
+      rects.sort(function(a, b) { return b.w - a.w; });
+      var origFill = null, origStroke = null, origStrokeWidth = null;
+      if (rects.length > 0) {
+        var outerAttrs = rects[0].attrs;
+        var fM = outerAttrs.match(/\bfill=["']([^"']+)["']/);
+        var sM = outerAttrs.match(/\bstroke=["']([^"']+)["']/);
+        var swM = outerAttrs.match(/stroke-width=["']([\d.]+)["']/);
+        origFill = fM ? fM[1] : null;
+        origStroke = sM ? sM[1] : null;
+        origStrokeWidth = swM ? parseFloat(swM[1]) : null;
+      }
+      var wavyM = svgStr.match(/data-wavy=["']([^"']+)["']/);
+      var borderM = svgStr.match(/data-border=["']([^"']+)["']/);
+      var stitchM = svgStr.match(/data-stitch=["']([^"']+)["']/);
+      var brushM = svgStr.match(/data-brush-border=["']([^"']+)["']/);
+      var filterM = svgStr.match(/data-filter=["']([^"']+)["']/);
+      var brushCoords = null, brushContent = null;
+      if (brushM) {
+        brushCoords = brushM[1].split(',').map(Number);
+        var bgM = svgStr.match(/<g[^>]*data-brush-border=["'][^"']*["'][^>]*>([\s\S]*?)<\/g>/);
+        if (bgM) brushContent = bgM[1].trim();
+      }
+      return {
+        wavy: wavyM ? wavyM[1] : null,
+        border: borderM ? borderM[1] : null,
+        stitch: stitchM ? stitchM[1] : null,
+        brush: !!brushM,
+        brushCoords: brushCoords,
+        brushContent: brushContent,
+        filter: filterM ? filterM[1] : null,
+        origFill: origFill,
+        origStroke: origStroke,
+        origStrokeWidth: origStrokeWidth
+      };
+    }
+
+    // ---- addDoubleFrame: regular (plain inner rect) — from product.html ----
+    function addRegularDouble(svgStr, bi, appliedColor) {
+      bi = bi || {};
+      var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.border || bi.filter;
+      if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
+      var rects = [];
+      var re = /<rect([^>]*)\/?>/gi;
+      var m;
+      while ((m = re.exec(svgStr)) !== null) {
+        var attrs = m[1];
+        if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+          var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+          if (!hasColoredStroke) continue;
+        }
+        if (/display=["']none["']/i.test(attrs)) continue;
+        var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+        var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
+        if (!wM || !hM) continue;
+        rects.push({ full: m[0], attrs: attrs, w: parseFloat(wM[1]), h: parseFloat(hM[1]), index: m.index });
+      }
+      if (rects.length === 0) return svgStr;
+      rects.sort(function(a, b) { return b.w - a.w; });
+      var outer = rects[0];
+      if (rects.length > 1 && rects[1].w > outer.w * 0.9) {
+        var second = rects[1];
+        if (/fill=["']none["']/i.test(second.attrs) && /stroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(second.attrs)) {
+          return svgStr;
+        }
+      }
+      var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+      var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+      var swM = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
+      var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
+      var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
+      var ox = xM ? parseFloat(xM[1]) : 0;
+      var oy = yM ? parseFloat(yM[1]) : 0;
+      var ow = outer.w, oh = outer.h;
+      var osw = swM ? parseFloat(swM[1]) : (bi.origStrokeWidth || 20);
+      if (osw === 0 && bi.origStrokeWidth) osw = bi.origStrokeWidth;
+      var orx = rxM ? parseFloat(rxM[1]) : 0;
+      var ory = ryM ? parseFloat(ryM[1]) : 0;
+      var fillM = outer.attrs.match(/\bfill=["']([^"']+)["']/);
+      var outerFill = fillM ? fillM[1] : 'none';
+      var strokeM = outer.attrs.match(/\bstroke=["']([^"']+)["']/);
+      var outerStroke = strokeM ? strokeM[1] : '#000000';
+      if (outerFill === 'none' && bi.wavy && bi.origFill && bi.origFill !== 'none') outerFill = bi.origFill;
+      if ((!strokeM || outerStroke === 'none') && bi.origStroke) outerStroke = bi.origStroke;
+      var isFull = outerFill !== 'none' && !/^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(outerFill);
+      // For wavy templates, the PATH has the fill (not the rect), so detect fullness from DB
+      if (bi.wavy && !isFull && bi.fillType === 'full') {
+        isFull = true;
+      }
+      var innerColor;
+      if (isFull) {
+        // Use appliedColor for luminance (more reliable than outerFill which may be 'none' for wavy)
+        var colorHex = (appliedColor || outerFill || '#000000').replace('#', '');
+        if (colorHex.length === 3) colorHex = colorHex[0]+colorHex[0]+colorHex[1]+colorHex[1]+colorHex[2]+colorHex[2];
+        var r = parseInt(colorHex.substring(0, 2), 16);
+        var g = parseInt(colorHex.substring(2, 4), 16);
+        var b = parseInt(colorHex.substring(4, 6), 16);
+        var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        innerColor = lum > 160 ? '#000000' : '#FFFFFF';
+      } else {
+        // For empty templates, prefer the known applied color over whatever the SVG has
+        innerColor = appliedColor || outerStroke;
+        if (!innerColor || innerColor === 'none' || /^#(?:FFF(?:FFF)?|FFFFFF)$/i.test(innerColor)) {
+          innerColor = outerStroke && outerStroke !== 'none' ? outerStroke : '#000000';
+        }
+      }
+      // For wavy, read the actual path stroke-width (rect's stroke may be removed)
+      var wavySw = 0;
+      if (bi.wavy) {
+        var wavyPathM = svgStr.match(/<path[^>]*stroke-linejoin="round"[^>]*>/i);
+        if (wavyPathM) {
+          var wswM = wavyPathM[0].match(/stroke-width="([\d.]+)"/);
+          if (wswM) wavySw = parseFloat(wswM[1]);
+        }
+      }
+      var innerSw = 12;
+      var inset = osw / 2;
+      if (bi.stitch) inset = osw / 2 + innerSw / 2 + 12;
+      if (bi.brush) inset = Math.max(inset, Math.min(ow, oh) * 0.12);
+      if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
+      if (bi.wavy) inset = Math.max(inset, wavySw * 1.15 + innerSw / 2);
+      if (!isFull && !bi.wavy && !bi.brush && !bi.stitch && !bi.filter) {
+        inset = osw / 2 + innerSw / 2 + 12;
+      }
+      var ix = ox + inset, iy = oy + inset;
+      var iw = ow - inset * 2, ih = oh - inset * 2;
+      var irx = Math.max(0, orx - inset), iry = Math.max(0, ory - inset);
+      // Always produce a plain inner rect (never clone wavy path)
+      var innerRect = '<rect x="' + ix.toFixed(2) + '" y="' + iy.toFixed(2) +
+        '" width="' + iw.toFixed(2) + '" height="' + ih.toFixed(2) +
+        '" fill="none" stroke="' + innerColor + '" stroke-width="' + innerSw +
+        '" stroke-miterlimit="10"';
+      if (irx > 0) innerRect += ' rx="' + irx.toFixed(1) + '"';
+      if (iry > 0) innerRect += ' ry="' + iry.toFixed(1) + '"';
+      innerRect += '/>';
+      var textPos = svgStr.search(/<text[\s>]/i);
+      if (textPos !== -1) return svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
+      return svgStr.replace(/<\/svg>/, innerRect + '</svg>');
+    }
+
+    // ---- addSplitBorder: carve a white stroke through the thick border ----
+    // Concept: overlay the SAME shape (rect or wavy path) with a thin white stroke.
+    // This splits the thick colored stroke into two thinner colored strokes with white between.
+    function addSplitBorder(svgStr, bi) {
+      bi = bi || {};
+      // Skip perforated/zigzag — split border not supported for these
+      if (bi.border) return svgStr;
+      var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.filter;
+      if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
+
+      var innerHtml = '';
+      var whiteSw = 12; // white carving stroke width
+
+      // ==== WAVY: clone the wavy <path> with white thin stroke ====
+      if (bi.wavy) {
+        var wavyRe = /<path[^>]*stroke-linejoin="round"[^>]*\/?>/gi;
+        var wavyAll = svgStr.match(wavyRe);
+        if (wavyAll) {
+          innerHtml = wavyAll[wavyAll.length - 1]
+            .replace(/fill="[^"]*"/, 'fill="none"')
+            .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
+            .replace(/stroke-width="[^"]*"/, 'stroke-width="' + whiteSw + '"');
+        }
+      }
+
+      // ==== ALL OTHER TYPES: clone the outer rect with white thin stroke ====
+      // This carves a white line through the thick colored stroke of the outer rect.
+      // For borders with shapes (circles/diamonds), also carve through the shapes.
+      else {
+        // Find the outer rect
+        var rects = [];
+        var re = /<rect([^>]*)\/?>/gi;
+        var m;
+        while ((m = re.exec(svgStr)) !== null) {
+          var attrs = m[1];
+          if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+            var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+            if (!hasColoredStroke) continue;
+          }
+          if (/display=["']none["']/i.test(attrs)) continue;
+          var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+          var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
+          if (!wM || !hM) continue;
+          rects.push({ full: m[0], attrs: attrs, w: parseFloat(wM[1]), h: parseFloat(hM[1]) });
+        }
+        if (rects.length === 0) return svgStr;
+        rects.sort(function(a, b) { return b.w - a.w; });
+        var outer = rects[0];
+
+        var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+        var yM = outer.attrs.match(/\by=["']([\d.\-]+)["']/);
+        var swM = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
+        var rxM = outer.attrs.match(/\brx=["']([\d.]+)["']/);
+        var ryM = outer.attrs.match(/\bry=["']([\d.]+)["']/);
+        var strokeColorM = outer.attrs.match(/\bstroke=["']([^"']+)["']/);
+        var ox = xM ? parseFloat(xM[1]) : 0;
+        var oy = yM ? parseFloat(yM[1]) : 0;
+        var ow = outer.w, oh = outer.h;
+        var osw = swM ? parseFloat(swM[1]) : (bi.origStrokeWidth || 20);
+        var orx = rxM ? parseFloat(rxM[1]) : 0;
+        var ory = ryM ? parseFloat(ryM[1]) : 0;
+        var strokeColor = strokeColorM ? strokeColorM[1] : '#000000';
+
+        // Copy filter from outer rect (e.g. ripped paper) so white carve follows same edge
+        var filterAttr = outer.attrs.match(/filter="([^"]*)"/);
+
+        // For stitch shapes: overlay white shapes to create hollow effect
+        if (bi.stitch) {
+          var ringHtml = '';
+          if (bi.stitch === 'circle') {
+            // Find colored circles, overlay white circles at smaller radius
+            var circleRe = /<circle\s+cx="([\d.]+)"\s+cy="([\d.]+)"\s+r="([\d.]+)"\s+fill="(?!#FFF|#FFFFFF|white|none)([^"]+)"\s*\/>/gi;
+            var cm;
+            while ((cm = circleRe.exec(svgStr)) !== null) {
+              var ccx = cm[1], ccy = cm[2], cr = parseFloat(cm[3]);
+              ringHtml += '<circle cx="' + ccx + '" cy="' + ccy + '" r="' + (cr * 0.55).toFixed(2) + '" fill="#FFFFFF"/>';
+            }
+          } else {
+            // stitch line/square: find colored small rects, overlay white rects inset
+            var stitchRectRe = /<rect\s+x="([\d.\-]+)"\s+y="([\d.\-]+)"\s+width="([\d.]+)"\s+height="([\d.]+)"\s+fill="(?!#FFF|#FFFFFF|white|none)([^"]+)"\s*\/>/gi;
+            var srm;
+            while ((srm = stitchRectRe.exec(svgStr)) !== null) {
+              var sx = parseFloat(srm[1]), sy = parseFloat(srm[2]);
+              var sw = parseFloat(srm[3]), sh = parseFloat(srm[4]);
+              if (sw > 200 || sh > 200) continue; // skip outer rect
+              var insetX = sw * 0.225, insetY = sh * 0.225;
+              ringHtml += '<rect x="' + (sx + insetX).toFixed(2) + '" y="' + (sy + insetY).toFixed(2) +
+                '" width="' + Math.max(1, sw - 2 * insetX).toFixed(2) +
+                '" height="' + Math.max(1, sh - 2 * insetY).toFixed(2) + '" fill="#FFFFFF"/>';
+            }
+          }
+          if (ringHtml) {
+            svgStr = svgStr.replace(/<\/svg>/, ringHtml + '</svg>');
+          }
+          innerHtml = '';
+        }
+        // For all other types: clone rect with white thin stroke
+        else {
+          innerHtml = '<rect x="' + ox.toFixed(2) + '" y="' + oy.toFixed(2) +
+            '" width="' + ow.toFixed(2) + '" height="' + oh.toFixed(2) +
+            '" fill="none" stroke="#FFFFFF" stroke-width="' + whiteSw + '"';
+          if (orx > 0) innerHtml += ' rx="' + orx.toFixed(1) + '"';
+          if (ory > 0) innerHtml += ' ry="' + ory.toFixed(1) + '"';
+          if (filterAttr) innerHtml += ' filter="' + filterAttr[1] + '"';
+          innerHtml += '/>';
+        }
+      }
+
+      if (!innerHtml) return svgStr;
+
+      // Insert before text
+      var textPos = svgStr.search(/<text[\s>]/i);
+      if (textPos !== -1) return svgStr.slice(0, textPos) + innerHtml + svgStr.slice(textPos);
+      return svgStr.replace(/<\/svg>/, innerHtml + '</svg>');
+    }
+
+    // Helper: generate border shapes with custom fill color
+    // spacingRadius = original radius (for position calc), drawRadius = smaller radius (for shape size)
+    function generateBorderShapesColored(x, y, w, h, shapeType, drawRadius, spacingRadius, spacingMult, color) {
+      var shapes = '';
+      var spacing = spacingRadius * (spacingMult || 2.5);
+      var numH = Math.max(1, Math.round(w / spacing));
+      var hSpacing = w / numH;
+      for (var i = 0; i <= numH; i++) {
+        var cx = x + i * hSpacing;
+        shapes += borderShapeColored(shapeType, cx, y, drawRadius, color);
+        shapes += borderShapeColored(shapeType, cx, y + h, drawRadius, color);
+      }
+      var numV = Math.max(1, Math.round(h / spacing));
+      var vSpacing = h / numV;
+      for (var i = 1; i < numV; i++) {
+        var cy = y + i * vSpacing;
+        shapes += borderShapeColored(shapeType, x, cy, drawRadius, color);
+        shapes += borderShapeColored(shapeType, x + w, cy, drawRadius, color);
+      }
+      return shapes;
+    }
+
+    function borderShapeColored(type, cx, cy, r, color) {
+      if (type === 'circle') {
+        return '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + r + '" fill="' + color + '"/>';
+      }
+      var top = (cy - r).toFixed(2);
+      var bot = (cy + r).toFixed(2);
+      var lft = (cx - r).toFixed(2);
+      var rgt = (cx + r).toFixed(2);
+      return '<polygon points="' + cx.toFixed(2) + ',' + top + ' ' + rgt + ',' + cy.toFixed(2) + ' ' + cx.toFixed(2) + ',' + bot + ' ' + lft + ',' + cy.toFixed(2) + '" fill="' + color + '"/>';
+    }
+
+    // ---- getBorderLabel ----
+    function getBorderLabel(tpl) {
+      var bt = tpl.border_type || 'simple';
+      var labels = {
+        wavy: 'Wavy', brushstroke: 'Brushstroke',
+        stitch_line: 'Stitch Line', stitch_square: 'Stitch Square', stitch_circle: 'Stitch Dot',
+        torn_edge: 'Torn Edge', perforated_spaced: 'Spaced Perforated',
+        perforated: 'Perforated', zigzag: 'Zigzag', simple: 'Plain'
+      };
+      return labels[bt] || bt;
+    }
+
+    // ---- Process + render one template ----
+    async function processTemplate(tpl, userText) {
+      var svgUrl = storageBaseUrl + '/' + tpl.svg_path;
+      var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
+      var cleaned = SvgRenderer.cleanSvgString(rawSvg);
+      cleaned = SvgRenderer.uniquifySvgIds(cleaned);
+
+      // Detect text case
+      var displayText = userText;
+      var textMatch = cleaned.match(/<text[^>]*>([\s\S]*?)<\/text>/i);
+      if (textMatch) {
+        var inner = textMatch[1].replace(/<[^>]*>/g, '');
+        inner = inner.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        var letters = inner.replace(/[^a-zA-Z]/g, '');
+        if (letters.length > 0) {
+          var upper = letters.replace(/[^A-Z]/g, '').length;
+          var lower = letters.replace(/[^a-z]/g, '').length;
+          if (upper > 0 && lower === 0) displayText = userText.toUpperCase();
+          else if (lower > 0 && upper === 0) displayText = userText.toLowerCase();
+        }
+      }
+
+      // Replace text + auto-fit
+      var zones = (tpl.text_zones || [])
+        .filter(function(z) { return z.is_editable; })
+        .sort(function(a, b) { return a.sort_order - b.sort_order; });
+
+      var didAutoFit = false;
+      for (var i = 0; i < zones.length; i++) {
+        var zone = zones[i];
+        var idx = zone.svg_element_index || 0;
+        cleaned = SvgRenderer.replaceTextInString(cleaned, idx, displayText);
+        if (zone.bounding_width) {
+          var originalScaleX = zone.transform_matrix
+            ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1
+            : 1;
+          cleaned = await SvgRenderer.autoFitTextInString(
+            cleaned, idx, zone.bounding_width, zone.font_size, originalScaleX
+          );
+          didAutoFit = true;
+        }
+      }
+      if (!didAutoFit && /<image[\s>]/i.test(cleaned)) {
+        cleaned = await SvgRenderer.autoFitTextInString(cleaned, 0, 1, 128, 1);
+      }
+
+      return cleaned;
+    }
+
+    // ---- Render all templates ----
+    async function renderAll() {
+      var userText = textInput.value || 'RUBBER STAMP';
+      grid.innerHTML = '';
+      statusEl.textContent = 'Rendering ' + templates.length + ' templates...';
+
+      for (var t = 0; t < templates.length; t++) {
+        var tpl = templates[t];
+        statusEl.textContent = 'Rendering ' + (t + 1) + '/' + templates.length + ': ' + tpl.name;
+
+        try {
+          // Process the template (text replacement + auto-fit)
+          var baseSvg = await processTemplate(tpl, userText);
+
+          // Colorize with red
+          var colorized = SvgRenderer.colorize(baseSvg, previewColor);
+          colorized = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+
+          // Detect border type from the RAW (pre-colorize) SVG to get original colors
+          var bi = detectBorderType(baseSvg);
+          // autoFit strips data-stitch/data-border/data-filter from SVG after processing,
+          // so detectBorderType may miss them. Supplement from the DB border_type field.
+          if (!bi.stitch && tpl.border_type && tpl.border_type.indexOf('stitch_') === 0) {
+            bi.stitch = tpl.border_type.replace('stitch_', '');
+          }
+          if (!bi.border && tpl.border_type === 'perforated_spaced') {
+            bi.border = 'circle-10'; // default perforated params
+          }
+          if (!bi.border && tpl.border_type === 'perforated') {
+            bi.border = 'circle-8-2';
+          }
+          if (!bi.border && tpl.border_type === 'zigzag') {
+            bi.border = 'diamond-20';
+          }
+          if (!bi.filter && tpl.border_type === 'torn_edge') {
+            bi.filter = 'ripped-20';
+          }
+          if (!bi.wavy && tpl.border_type === 'wavy') {
+            bi.wavy = 'gentle'; // autoFit strips data-wavy
+          }
+          bi.fillType = tpl.fill_type; // 'empty' or 'full' — needed for wavy where path has fill, not rect
+
+          // 1. Single (no double frame)
+          var singleSvg = colorized;
+
+          // 2. Regular double (plain inner rect)
+          var regularDoubleSvg = addRegularDouble(colorized, bi, previewColor);
+
+          // 3. Split border (border shape cloned)
+          var splitSvg = addSplitBorder(colorized, bi);
+
+          // Create row
+          var row = document.createElement('div');
+          row.className = 'template-row';
+
+          var borderLabel = getBorderLabel(tpl);
+          var fillLabel = tpl.fill_type === 'empty' ? 'Empty' : 'Full';
+          var cornerLabel = tpl.corner_type || '';
+          row.innerHTML = '<h3>' + tpl.name + ' <span>[' + borderLabel + ' | ' + fillLabel +
+            (cornerLabel ? ' | ' + cornerLabel : '') + ']</span></h3>';
+
+          var cols = document.createElement('div');
+          cols.className = 'three-col';
+
+          // Single column
+          var col1 = document.createElement('div');
+          col1.className = 'col-cell';
+          col1.innerHTML = '<div class="col-label">Single</div><div class="stamp-wrapper"></div>';
+          var img1 = SvgRenderer.createSvgImage(singleSvg);
+          col1.querySelector('.stamp-wrapper').appendChild(img1);
+
+          // Regular double column
+          var col2 = document.createElement('div');
+          col2.className = 'col-cell';
+          col2.innerHTML = '<div class="col-label">Regular Double</div><div class="stamp-wrapper"></div>';
+          var img2 = SvgRenderer.createSvgImage(regularDoubleSvg);
+          col2.querySelector('.stamp-wrapper').appendChild(img2);
+
+          // Split border column
+          var col3 = document.createElement('div');
+          col3.className = 'col-cell';
+          col3.innerHTML = '<div class="col-label">Split</div><div class="stamp-wrapper"></div>';
+          var img3 = SvgRenderer.createSvgImage(splitSvg);
+          col3.querySelector('.stamp-wrapper').appendChild(img3);
+
+          cols.appendChild(col1);
+          cols.appendChild(col2);
+          cols.appendChild(col3);
+          row.appendChild(cols);
+          grid.appendChild(row);
+        } catch (err) {
+          console.error('Error rendering ' + tpl.name + ':', err);
+          var errRow = document.createElement('div');
+          errRow.className = 'template-row';
+          errRow.innerHTML = '<h3>' + tpl.name + ' <span style="color:red">[ERROR: ' + err.message + ']</span></h3>';
+          grid.appendChild(errRow);
+        }
+      }
+      statusEl.textContent = 'Done! ' + templates.length + ' templates rendered.';
+    }
+
+    // Button handler
+    document.getElementById('btn-render').addEventListener('click', renderAll);
+
+    // Initial render
+    await renderAll();
+  })();
+  </script>
+</body>
+</html>

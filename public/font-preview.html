@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Font Preview — Redundancy Check</title>
+<style>
+  @font-face { font-family: 'Abril Fatface'; src: url('../stampatext recuzita/fonts/extracted/Abril_Fatface/AbrilFatface-Regular.ttf'); }
+  @font-face { font-family: 'Aclonica'; src: url('../stampatext recuzita/fonts/extracted/aclonica/Aclonica-Regular.ttf'); }
+  @font-face { font-family: 'Agbalumo'; src: url('../stampatext recuzita/fonts/extracted/agbalumo/Agbalumo-Regular.ttf'); }
+  @font-face { font-family: 'Alfa Slab One'; src: url('../stampatext recuzita/fonts/extracted/alfa-slab-one/AlfaSlabOne-Regular.ttf'); }
+  @font-face { font-family: 'Anton SC'; src: url('../stampatext recuzita/fonts/extracted/anton-sc/AntonSC-Regular.ttf'); }
+  @font-face { font-family: 'Archivo Black'; src: url('../stampatext recuzita/fonts/extracted/archivo-black/ArchivoBlack-Regular.ttf'); }
+  @font-face { font-family: 'Army Rust'; src: url('../stampatext recuzita/fonts/extracted/army_rust/ARMY RUST.ttf'); }
+  @font-face { font-family: 'Bangers'; src: url('../stampatext recuzita/fonts/extracted/bangers/Bangers.ttf'); }
+  @font-face { font-family: 'Bebas Neue'; src: url('../stampatext recuzita/fonts/extracted/bebas_neue/BebasNeue-Regular.ttf'); }
+  @font-face { font-family: 'Cloudy'; src: url('../stampatext recuzita/fonts/extracted/cloudy/CLOUDY FONT.ttf'); }
+  @font-face { font-family: 'Gunplay'; src: url('../stampatext recuzita/fonts/extracted/gunplay/gunplay rg.otf'); }
+  @font-face { font-family: 'Hussar Bold'; src: url('../stampatext recuzita/fonts/extracted/hussar/HussarBd.otf'); }
+  @font-face { font-family: 'Oswald Medium'; src: url('../stampatext recuzita/fonts/extracted/Oswald/Oswald-Medium.ttf'); }
+  @font-face { font-family: 'Oswald Bold'; src: url('../stampatext recuzita/fonts/extracted/Oswald/Oswald-Bold.ttf'); }
+  @font-face { font-family: 'Roboto Bold'; src: url('../stampatext recuzita/fonts/extracted/roboto/Roboto-Bold.ttf'); }
+  @font-face { font-family: 'Roboto Black'; src: url('../stampatext recuzita/fonts/extracted/roboto/Roboto-Black.ttf'); }
+  @font-face { font-family: 'Roboto Condensed'; src: url('../stampatext recuzita/fonts/extracted/roboto/Roboto-BoldCondensed.ttf'); }
+  @font-face { font-family: 'Special Elite'; src: url('../stampatext recuzita/fonts/extracted/special-elite/SpecialElite.ttf'); }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui; background: #f5f5f5; padding: 30px; }
+  h1 { margin-bottom: 10px; }
+  .subtitle { color: #666; margin-bottom: 30px; }
+
+  .group { margin-bottom: 40px; border: 2px solid #ddd; border-radius: 12px; padding: 20px; background: #fff; }
+  .group.redundant { border-color: #e74c3c; }
+  .group.unique { border-color: #27ae60; }
+  .group-header { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
+  .group-header h2 { font-size: 16px; }
+  .tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; }
+  .tag.similar { background: #fdecea; color: #e74c3c; }
+  .tag.unique { background: #eafaf1; color: #27ae60; }
+  .tag.category { background: #eef; color: #446; }
+  .group-note { font-size: 13px; color: #888; margin-bottom: 12px; font-style: italic; }
+
+  .font-row { display: flex; align-items: center; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+  .font-row:last-child { border-bottom: none; }
+  .font-name { width: 180px; font-size: 13px; color: #555; flex-shrink: 0; }
+  .font-sample { font-size: 48px; line-height: 1.2; color: #222; }
+  .font-sample-small { font-size: 24px; color: #444; margin-top: 4px; }
+
+  .legend { display: flex; gap: 20px; margin-bottom: 30px; font-size: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; }
+  .legend-dot.red { background: #e74c3c; }
+  .legend-dot.green { background: #27ae60; }
+</style>
+</head>
+<body>
+
+<h1>Font Preview — Redundancy Check</h1>
+<p class="subtitle">15 fonts grouped by visual similarity. Red border = potential redundancy group. Green = unique.</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot red"></div> Similar group — pick one</div>
+  <div class="legend-item"><div class="legend-dot green"></div> Unique — keep</div>
+</div>
+
+<!-- GROUP 1: Condensed Bold Sans (most similar to each other) -->
+<div class="group redundant">
+  <div class="group-header">
+    <h2>Condensed Bold Sans-Serif</h2>
+    <span class="tag similar">Similar — pick 1-2</span>
+    <span class="tag category">Tall & Narrow</span>
+  </div>
+  <div class="group-note">These are all tall, condensed, uppercase-friendly sans-serifs. Very close in character.</div>
+
+  <div class="font-row">
+    <div class="font-name">Bebas Neue</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Bebas Neue'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Bebas Neue'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Oswald Medium</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Oswald Medium'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Oswald Medium'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Oswald Bold</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Oswald Bold'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Oswald Bold'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Anton SC</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Anton SC'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Anton SC'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Hussar Bold</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Hussar Bold'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Hussar Bold'">The quick brown fox jumps</div>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP 2: Wide Bold Sans -->
+<div class="group redundant">
+  <div class="group-header">
+    <h2>Wide Bold Sans-Serif</h2>
+    <span class="tag similar">Similar — pick 1-2</span>
+    <span class="tag category">Bold & Wide</span>
+  </div>
+  <div class="group-note">Heavy, wide sans-serifs. Archivo Black and Aclonica are close; Roboto Black is a slightly cleaner take.</div>
+
+  <div class="font-row">
+    <div class="font-name">Archivo Black</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Archivo Black'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Archivo Black'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Aclonica</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Aclonica'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Aclonica'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Roboto Black</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Roboto Black'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Roboto Black'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Roboto Bold</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Roboto Bold'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Roboto Bold'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Roboto Condensed</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Roboto Condensed'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Roboto Condensed'">The quick brown fox jumps</div>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP 3: Slab Serif / Display Serif -->
+<div class="group redundant">
+  <div class="group-header">
+    <h2>Display Serif / Slab</h2>
+    <span class="tag similar">Similar vibe — pick 1</span>
+    <span class="tag category">Serif / Slab</span>
+  </div>
+  <div class="group-note">Both are heavy display serifs. Abril is elegant/high-contrast, Alfa Slab is chunky/uniform.</div>
+
+  <div class="font-row">
+    <div class="font-name">Abril Fatface</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Abril Fatface'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Abril Fatface'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Alfa Slab One</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Alfa Slab One'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Alfa Slab One'">The quick brown fox jumps</div>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP 4: Unique / Distinctive fonts -->
+<div class="group unique">
+  <div class="group-header">
+    <h2>Unique / Distinctive</h2>
+    <span class="tag unique">All unique — keep</span>
+    <span class="tag category">Display / Decorative</span>
+  </div>
+  <div class="group-note">Each has a very distinct personality. No real redundancy here.</div>
+
+  <div class="font-row">
+    <div class="font-name">Bangers</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Bangers'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Bangers'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Special Elite</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Special Elite'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Special Elite'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Army Rust</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Army Rust'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Army Rust'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Gunplay</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Gunplay'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Gunplay'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Cloudy</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Cloudy'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Cloudy'">The quick brown fox jumps</div>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-name">Agbalumo</div>
+    <div>
+      <div class="font-sample" style="font-family: 'Agbalumo'">HELLO WORLD 123</div>
+      <div class="font-sample-small" style="font-family: 'Agbalumo'">The quick brown fox jumps</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

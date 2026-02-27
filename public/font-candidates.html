@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Font Candidates — Replacement Preview</title>
+
+<!-- Candidate fonts from Google Fonts CDN -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Fira+Sans+Extra+Condensed:wght@800;900&family=IBM+Plex+Mono:wght@500;600;700&family=Bitter:wght@700;900&family=Kalam:wght@400;700&family=Glegoo:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 30px 40px; }
+  h1 { margin-bottom: 6px; font-size: 24px; }
+  .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; line-height: 1.6; }
+
+  .section-label {
+    margin-top: 30px;
+    margin-bottom: 10px;
+    padding: 8px 16px;
+    background: #333;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .section-label:first-of-type { margin-top: 0; }
+  .section-label small {
+    font-weight: 400;
+    text-transform: none;
+    opacity: 0.7;
+    margin-left: 10px;
+  }
+
+  .font-row {
+    display: grid;
+    grid-template-columns: 240px 1fr 1fr 1fr 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    margin-bottom: 8px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+  }
+  .font-name {
+    font-size: 13px;
+    color: #555;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .font-name small {
+    display: block;
+    font-size: 11px;
+    color: #999;
+    font-weight: 400;
+    font-style: italic;
+  }
+  .font-sample {
+    font-size: 36px;
+    line-height: 1.3;
+    color: #222;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .font-test {
+    font-size: 24px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .test-ro { color: #c0392b; }
+  .test-cy { color: #2c3e50; }
+  .test-vi { color: #27ae60; }
+
+  .header-row {
+    display: grid;
+    grid-template-columns: 240px 1fr 1fr 1fr 1fr;
+    gap: 16px;
+    padding: 4px 20px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: #999;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .header-row .col-label { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-ro { background: #c0392b; }
+  .dot-cy { background: #2c3e50; }
+  .dot-vi { background: #27ae60; }
+
+  .num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    text-align: center;
+    border-radius: 50%;
+    background: #333;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  .stamp-demo {
+    margin-top: 12px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .stamp-box {
+    display: inline-block;
+    border: 5px solid #c0392b;
+    padding: 12px 30px;
+    text-transform: uppercase;
+    color: #c0392b;
+    transform: rotate(-3deg);
+    text-align: center;
+  }
+  .stamp-box.dark {
+    border-color: #2c3e50;
+    color: #2c3e50;
+  }
+</style>
+</head>
+<body>
+
+<h1>Font Candidates — Replacement Preview</h1>
+<p class="subtitle">
+  Candidates to replace <strong>Army Rust</strong> (stencil/military) and <strong>Special Elite</strong> (typewriter).<br>
+  Plus <strong>Kalam</strong> and <strong>Glegoo</strong>. Check each column for correct rendering of special characters.
+</p>
+
+<div class="header-row">
+  <span>Font / Category</span>
+  <span>STAMP PREVIEW</span>
+  <span class="col-label"><span class="dot dot-ro"></span> Romanian</span>
+  <span class="col-label"><span class="dot dot-cy"></span> Cyrillic</span>
+  <span class="col-label"><span class="dot dot-vi"></span> Vietnamese</span>
+</div>
+
+<!-- ===== ARMY RUST ALTERNATIVES ===== -->
+<div class="section-label">Army Rust alternatives <small>military / stencil / heavy</small></div>
+
+<div class="font-row">
+  <div class="font-name"><span class="num">1</span>Black Ops One<small>Stencil military (400 = visually Black)</small></div>
+  <div class="font-sample" style="font-family: 'Black Ops One', sans-serif; font-weight: 400">APPROVED</div>
+  <div class="font-test test-ro" style="font-family: 'Black Ops One', sans-serif; font-weight: 400">CHITĂRIȚA</div>
+  <div class="font-test test-cy" style="font-family: 'Black Ops One', sans-serif; font-weight: 400">ПРИВЕТ МИР</div>
+  <div class="font-test test-vi" style="font-family: 'Black Ops One', sans-serif; font-weight: 400">XƯỚNG HÁT</div>
+</div>
+
+<div class="font-row">
+  <div class="font-name"><span class="num">2</span>Fira Sans Extra Condensed<small>Ultra-condensed Black (900)</small></div>
+  <div class="font-sample" style="font-family: 'Fira Sans Extra Condensed', sans-serif; font-weight: 900">APPROVED</div>
+  <div class="font-test test-ro" style="font-family: 'Fira Sans Extra Condensed', sans-serif; font-weight: 900">CHITĂRIȚA</div>
+  <div class="font-test test-cy" style="font-family: 'Fira Sans Extra Condensed', sans-serif; font-weight: 900">ПРИВЕТ МИР</div>
+  <div class="font-test test-vi" style="font-family: 'Fira Sans Extra Condensed', sans-serif; font-weight: 900">XƯỚNG HÁT</div>
+</div>
+
+<!-- ===== SPECIAL ELITE ALTERNATIVES ===== -->
+<div class="section-label">Special Elite alternatives <small>typewriter / slab serif / vintage</small></div>
+
+<div class="font-row">
+  <div class="font-name"><span class="num">3</span>IBM Plex Mono<small>Monospace typewriter (700)</small></div>
+  <div class="font-sample" style="font-family: 'IBM Plex Mono', monospace; font-weight: 700">APPROVED</div>
+  <div class="font-test test-ro" style="font-family: 'IBM Plex Mono', monospace; font-weight: 700">CHITĂRIȚA</div>
+  <div class="font-test test-cy" style="font-family: 'IBM Plex Mono', monospace; font-weight: 700">ПРИВЕТ МИР</div>
+  <div class="font-test test-vi" style="font-family: 'IBM Plex Mono', monospace; font-weight: 700">XƯỚNG HÁT</div>
+</div>
+
+<div class="font-row">
+  <div class="font-name"><span class="num">4</span>Bitter Black<small>Slab serif (900)</small></div>
+  <div class="font-sample" style="font-family: 'Bitter', serif; font-weight: 900">APPROVED</div>
+  <div class="font-test test-ro" style="font-family: 'Bitter', serif; font-weight: 900">CHITĂRIȚA</div>
+  <div class="font-test test-cy" style="font-family: 'Bitter', serif; font-weight: 900">ПРИВЕТ МИР</div>
+  <div class="font-test test-vi" style="font-family: 'Bitter', serif; font-weight: 900">XƯỚNG HÁT</div>
+</div>
+
+<!-- ===== USER-REQUESTED ===== -->
+<div class="section-label">User-requested <small>additional candidates</small></div>
+
+<div class="font-row">
+  <div class="font-name"><span class="num">5</span>Kalam<small>Handwritten (700)</small></div>
+  <div class="font-sample" style="font-family: 'Kalam', cursive; font-weight: 700">APPROVED</div>
+  <div class="font-test test-ro" style="font-family: 'Kalam', cursive; font-weight: 700">CHITĂRIȚA</div>
+  <div class="font-test test-cy" style="font-family: 'Kalam', cursive; font-weight: 700">ПРИВЕТ МИР</div>
+  <div class="font-test test-vi" style="font-family: 'Kalam', cursive; font-weight: 700">XƯỚNG HÁT</div>
+</div>
+
+<div class="font-row">
+  <div class="font-name"><span class="num">6</span>Glegoo<small>Slab serif (700)</small></div>
+  <div class="font-sample" style="font-family: 'Glegoo', serif; font-weight: 700">APPROVED</div>
+  <div class="font-test test-ro" style="font-family: 'Glegoo', serif; font-weight: 700">CHITĂRIȚA</div>
+  <div class="font-test test-cy" style="font-family: 'Glegoo', serif; font-weight: 700">ПРИВЕТ МИР</div>
+  <div class="font-test test-vi" style="font-family: 'Glegoo', serif; font-weight: 700">XƯỚNG HÁT</div>
+</div>
+
+<!-- ===== STAMP-STYLE DEMO ===== -->
+<div class="section-label">Stamp demo <small>how they look as stamps</small></div>
+
+<div class="stamp-demo">
+  <div class="stamp-box" style="font-family: 'Black Ops One', sans-serif; font-weight: 400; font-size: 38px;">
+    CONFIDENTIAL
+  </div>
+  <div class="stamp-box dark" style="font-family: 'Fira Sans Extra Condensed', sans-serif; font-weight: 900; font-size: 38px;">
+    TOP SECRET
+  </div>
+  <div class="stamp-box" style="font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 28px;">
+    CLASSIFIED
+  </div>
+  <div class="stamp-box dark" style="font-family: 'Bitter', serif; font-weight: 900; font-size: 32px;">
+    RESTRICTED
+  </div>
+  <div class="stamp-box" style="font-family: 'Kalam', cursive; font-weight: 700; font-size: 32px;">
+    HANDWRITTEN
+  </div>
+  <div class="stamp-box dark" style="font-family: 'Glegoo', serif; font-weight: 700; font-size: 30px;">
+    OFFICIAL
+  </div>
+</div>
+
+</body>
+</html>

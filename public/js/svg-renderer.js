@@ -18,6 +18,47 @@ const SvgRenderer = {
   // Prevents re-downloading the same SVGs when user presses Stamp multiple times.
   _svgFetchCache: {},
 
+  // Per-font tuning config loaded from /data/font-config.json
+  _fontConfig: null,
+
+  // Load font config from server (called once at page init)
+  loadFontConfig: function() {
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, 5000);
+    return fetch('/data/font-config.json?_cb=' + Date.now(), { signal: controller.signal })
+      .then(function(r) { clearTimeout(timeoutId); return r.json(); })
+      .then(function(data) { SvgRenderer._fontConfig = data; return data; })
+      .catch(function(err) { clearTimeout(timeoutId); console.warn('Font config load failed, using defaults:', err); });
+  },
+
+  // Detect text case from SVG string: single/singleDiacrit/multi/multiDiacrit
+  _detectTextCase: function(svgString) {
+    var tspans = (svgString.match(/<tspan/gi) || []).length;
+    var isMulti = tspans > 1;
+    // Extract text content from tspans (or <text> if no tspans)
+    var textContent = (svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi) || []).join('');
+    if (!textContent) textContent = (svgString.match(/<text[^>]*>([^<]*)<\/text>/gi) || []).join('');
+    var hasDiacrit = /[ăâîșțĂÂÎȘȚéèêëàáüöñÉÈÊËÀÁÜÖÑ]/i.test(textContent);
+    if (isMulti && hasDiacrit) return 'multiDiacrit';
+    if (isMulti) return 'multi';
+    if (hasDiacrit) return 'singleDiacrit';
+    return 'single';
+  },
+
+  // Get config for a specific font + text case (with hardcoded fallback)
+  _getFontConfig: function(fontName, textCase) {
+    var defaults = { scaleY: 1.20, letterSpacing: 0, dx: 0, dy: 0, wb: 1.0, hb: 1.0, stroke: 0 };
+    if (!this._fontConfig || !this._fontConfig[fontName]) return defaults;
+    var fontEntry = this._fontConfig[fontName];
+    // New structure: fontEntry has sub-objects (single, singleDiacrit, multi, multiDiacrit)
+    if (fontEntry.single) {
+      var tc = textCase || 'single';
+      return fontEntry[tc] || fontEntry.single || defaults;
+    }
+    // Legacy flat structure fallback
+    return fontEntry;
+  },
+
   // Map of font names to local font files and their format
   _fontMap: {
     'Oswald':          { url: '/fonts/Oswald-Medium.ttf',                    format: 'truetype' },
@@ -95,7 +136,10 @@ const SvgRenderer = {
     if (this._svgFetchCache[svgUrl]) return this._svgFetchCache[svgUrl];
 
     var bustUrl = svgUrl + (svgUrl.indexOf('?') === -1 ? '?' : '&') + '_cb=' + Date.now();
-    const res = await fetch(bustUrl);
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
+    const res = await fetch(bustUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (!res.ok) throw new Error('Failed to fetch SVG: ' + res.status);
     var text = await res.text();
     this._svgFetchCache[svgUrl] = text;
@@ -586,9 +630,35 @@ const SvgRenderer = {
     var fontMatch = svgString.match(/font-family=["']'?([^"']+)'?["']/);
     var fontName = fontMatch ? fontMatch[1] : '';
 
-    // Per-font stroke config: 'thin' = background-colored (visually thins), 'thick' = text-colored (visually thickens)
-    var strokeConfig = { 'BlackOpsOne': { mode: 'thin', width: 2 }, 'Yomogi': { mode: 'thick', width: 1 } }[fontName];
-    if (!strokeConfig) return svgString;
+    // Per-font stroke from font-config.json: positive = thick (text-colored), negative = thin (bg-colored)
+    var textCase = SvgRenderer._detectTextCase(svgString);
+    var fc = SvgRenderer._getFontConfig(fontName, textCase);
+    var strokeVal = fc.stroke || 0;
+    if (strokeVal === 0) {
+      // Check if this is an outlined variant (no colored rect fill)
+      var allRects2 = svgString.match(/<rect[^>]*>/gi) || [];
+      var hasColoredFill = false;
+      for (var i = 0; i < allRects2.length; i++) {
+        var fillM2 = allRects2[i].match(/\sfill=["']([^"']+)["']/i);
+        if (!fillM2) continue;
+        var f2 = fillM2[1].toLowerCase();
+        if (f2 === '#ffffff' || f2 === '#fff' || f2 === 'white' || f2 === 'none') continue;
+        hasColoredFill = true;
+        break;
+      }
+      if (!hasColoredFill) {
+        // Outlined variant: +2 thickening stroke compensates irradiation illusion
+        strokeVal = 2;
+      } else {
+        // Filled variant: clean baseline (no stroke)
+        return svgString.replace(/<text([^>]*)>/gi, function(match, attrs) {
+          attrs = attrs.replace(/\s*stroke=["'][^"']*["']/gi, '');
+          attrs = attrs.replace(/\s*stroke-width=["'][^"']*["']/gi, '');
+          return '<text' + attrs + '>';
+        });
+      }
+    }
+    var strokeConfig = { mode: strokeVal > 0 ? 'thick' : 'thin', width: Math.abs(strokeVal) };
 
     var strokeColor;
     if (strokeConfig.mode === 'thin') {
@@ -636,7 +706,7 @@ const SvgRenderer = {
    * @returns {string} SVG with viewBox cropped to stamp bounds
    */
   cropViewBoxToStamp: function(svgString) {
-    // Find the outer stamp rect (largest non-white, non-none rect)
+    // Find the outer stamp rect (largest non-white rect; fill="none" allowed for outlined stamps)
     var allRects = svgString.match(/<rect[^>]*>/gi) || [];
     var outerRect = null;
     var outerW = 0;
@@ -645,9 +715,7 @@ const SvgRenderer = {
       var fillM = tag.match(/\sfill=["']([^"']+)["']/i);
       if (fillM) {
         var f = fillM[1].toLowerCase();
-        if (f === '#ffffff' || f === 'white' || f === 'none') continue;
-      } else {
-        continue; // no fill = skip
+        if (f === '#ffffff' || f === 'white') continue; // allow fill="none" (outlined stitch frames)
       }
       var wM = tag.match(/\swidth=["']([\d.]+)["']/);
       if (wM && parseFloat(wM[1]) > outerW) {
@@ -676,13 +744,15 @@ const SvgRenderer = {
     } else if (/data-filter=["']ripped/i.test(svgString)) {
       var fMatch = svgString.match(/data-filter=["']ripped-(\d+)["']/i);
       decoMargin = fMatch ? parseFloat(fMatch[1]) : 20;
-    } else if (/data-wavy=["']strong["']/i.test(svgString)) {
-      decoMargin = 20;
-    } else if (/data-wavy=/i.test(svgString)) {
-      decoMargin = 10;
+    } else if (/data-wavy-gen=["']strong["']/i.test(svgString)) {
+      decoMargin = 50; // strong wavy: depth 20 + strokeW/2 (20) + breathing
+    } else if (/data-wavy-gen=/i.test(svgString)) {
+      decoMargin = 40; // gentle wavy: depth 7 + strokeW/2 (20) + breathing
     } else if (/data-border=/i.test(svgString)) {
       var bMatch = svgString.match(/data-border=["']\w+-(\d+)/i);
       decoMargin = bMatch ? Math.max(0, parseFloat(bMatch[1])) : 10;
+    } else if (/data-stitch-gen=/i.test(svgString)) {
+      decoMargin = 65; // stitch shapes extend ~50-63px beyond outer rect
     }
 
     // Compute cropped viewBox: rect bounds + stroke/2 + decorative + breathing margin
@@ -1037,6 +1107,17 @@ const SvgRenderer = {
    * @returns {string[]}
    */
   splitTextIntoLines(text) {
+    // Respect explicit newlines (from multi-line input)
+    if (text.indexOf('\n') !== -1) {
+      var explicitLines = text.split('\n');
+      var result = [];
+      for (var ei = 0; ei < explicitLines.length; ei++) {
+        var subLines = this.splitTextIntoLines(explicitLines[ei]);
+        for (var si = 0; si < subLines.length; si++) result.push(subLines[si]);
+      }
+      return result;
+    }
+
     var max = this._getMaxCharsPerLine(text.length);
     if (text.length <= max) return [text];
 
@@ -1418,12 +1499,12 @@ const SvgRenderer = {
    * @param {number} originalScaleX - original horizontal scale from matrix
    * @returns {Promise<string>} - modified SVG string
    */
-  // Measurement cache: avoids re-creating iframe for same template with different frameInset
+  // Measurement cache: avoids re-creating iframe for same template with different frameMode
   _autoFitMeasureCache: null,
 
-  async autoFitTextInString(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameInset, fillType, cornerType) {
+  async autoFitTextInString(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, fillType, cornerType, borderType) {
     originalScaleX = originalScaleX || 1;
-    frameInset = frameInset || 0;
+    frameMode = frameMode || 'single';
 
     // ============================================================
     // CATEGORY DETECTION: Check if this is a Fixed Frame template
@@ -1445,7 +1526,7 @@ const SvgRenderer = {
     // Check measurement cache — reuse if same SVG (avoids iframe for variant calls)
     var cacheKey = svgString.length + '_' + textIndex + '_' + svgString.slice(0, 80);
     if (this._autoFitMeasureCache && this._autoFitMeasureCache.key === cacheKey) {
-      return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameInset, this._autoFitMeasureCache, fillType, cornerType);
+      return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, this._autoFitMeasureCache, fillType, cornerType, borderType);
     }
 
     // Category 1: Dynamic Frame - TEXT-FIRST approach
@@ -1587,7 +1668,7 @@ const SvgRenderer = {
             console.warn('Canvas measureText failed, will use fontSize fallback:', canvasErr);
           }
 
-          // Cache measurements for reuse with different frameInset values
+          // Cache measurements for reuse with different frameMode values
           SvgRenderer._autoFitMeasureCache = {
             key: cacheKey,
             measuredWidth: measuredWidth,
@@ -1603,7 +1684,7 @@ const SvgRenderer = {
             canvasAdvanceWidth: canvasAdvanceWidth
           };
 
-          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameInset, SvgRenderer._autoFitMeasureCache, fillType, cornerType));
+          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, SvgRenderer._autoFitMeasureCache, fillType, cornerType, borderType));
           return;
 
         } catch (e) {
@@ -1615,16 +1696,13 @@ const SvgRenderer = {
         }
         } // end doMeasure
 
-        // Wait for fonts before measuring
-        if (iframe.contentDocument && iframe.contentDocument.fonts) {
-          iframe.contentDocument.fonts.ready.then(function () {
-            setTimeout(doMeasure, 50);
-          }).catch(function () {
-            setTimeout(doMeasure, 500);
-          });
-        } else {
-          setTimeout(doMeasure, 500);
-        }
+        // Wait for fonts before measuring (3s timeout prevents hanging on stuck font loads)
+        var fontsReady = (iframe.contentDocument && iframe.contentDocument.fonts)
+          ? iframe.contentDocument.fonts.ready
+          : Promise.resolve();
+        Promise.race([fontsReady, new Promise(function(r) { setTimeout(r, 3000); })])
+          .then(function() { setTimeout(doMeasure, 50); })
+          .catch(function() { setTimeout(doMeasure, 50); });
       };
 
       iframe.src = url;
@@ -1632,23 +1710,79 @@ const SvgRenderer = {
   },
 
   /**
-   * Estimate how much inner-rect inset a frame type adds (per side, in SVG units).
-   * Used to adjust effectiveMaxWidth when sizing text for different frame variants.
+   * Compute per-side inset from outer rect edge to the clear text interior.
+   * Single source of truth — uses same geometry as addDoubleFrame / addSplitBorder / border generators.
+   * @param {number} sw - outer stroke width
+   * @param {Object} borderFlags - {stitch, wavy, wavyStrong, border, brush, filter, borderRadius, filterDisplacement}
    * @param {string} frameMode - 'single', 'double', or 'split'
-   * @param {Object} borderInfo - result from detectBorderType + supplementBorderInfo
-   * @returns {number} per-side inset in SVG units (0 for single/split)
+   * @param {string} cornerType - 'straight', 'soft_round', etc.
+   * @param {string} fillType - 'full' or 'empty'
+   * @returns {number} per-side inset in SVG units
    */
-  estimateFrameInset: function(frameMode, borderInfo) {
-    if (frameMode !== 'double') return 0;
-    // Must match addDoubleFrame geometry: inset + innerSw/2 from outer rect edge to inner rect interior
-    var isDecorative = borderInfo.border || borderInfo.stitch || borderInfo.wavy || borderInfo.filter || borderInfo.brush;
-    var outerSw = isDecorative ? (borderInfo.origStrokeWidth || 50) : Math.min(borderInfo.origStrokeWidth || 30, 30);
-    if (isDecorative) {
-      return outerSw * 0.7;  // conservative estimate for stitch/zigzag/wavy/brush/filter
+  computeTextZone: function(sw, borderFlags, frameMode, cornerType, fillType) {
+    var isFull = fillType === 'full';
+    var totalInset;
+
+    if (frameMode === 'double') {
+      // --- Exact addDoubleFrame geometry (addDoubleFrame lines 3818-3832) ---
+      var innerSw = Math.max(4, Math.round(sw * 0.24));
+      if (borderFlags.brush) innerSw = Math.max(6, Math.round(sw * 0.5));
+      if (borderFlags.stitch && !isFull) innerSw = Math.max(6, Math.round(sw * 0.7));
+      var frameInset;
+      if (!borderFlags.stitch && isFull) {
+        frameInset = sw / 2 + innerSw / 2;
+      } else {
+        frameInset = sw / 2 + innerSw * 1.5;
+      }
+      if (borderFlags.stitch) frameInset = sw * 0.35;
+      if (borderFlags.border) {
+        frameInset = sw * 0.3;
+        if (!isFull) frameInset += 8; // white gap for outlined border double
+      }
+      if (borderFlags.brush) frameInset = Math.max(frameInset, 35);
+      if (borderFlags.filter && !isFull) frameInset = Math.max(frameInset, sw * 0.95);
+      // Filled filter (torn edge): inner rect eats into stroke — minimal inset
+      if (borderFlags.filter && isFull) frameInset = innerSw / 2 + 4;
+      if (borderFlags.wavy) {
+        var wavySw = 40; // hardcoded in _generateWavyBorder
+        frameInset = Math.max(frameInset, wavySw * 1.15 + innerSw / 2);
+      }
+      // Interior = frameInset (to inner rect center) + innerSw/2 (inner stroke paints inward)
+      totalInset = frameInset + innerSw / 2;
+
+    } else {
+      // --- Single frame + split (split adds thin white stroke inside outer border,
+      //     decorative elements stay in same positions — text zone is identical) ---
+      if (borderFlags.wavy) {
+        var wavySw = 40, depth = borderFlags.wavyStrong ? 20 : 7;
+        totalInset = depth + wavySw / 2;
+      } else if (borderFlags.brush) {
+        // Brush templates have sw=0 (brush <g> is the border, not rect stroke)
+        // Brush strokes intrude ~35px visually from rect edge
+        totalInset = Math.max(35, sw * 1.5);
+      } else if (borderFlags.filter) {
+        // Filter displacement creates ragged edges outward; interior is mostly clear
+        totalInset = (borderFlags.filterDisplacement || 20) * 0.5;
+      } else if (borderFlags.border) {
+        totalInset = Math.max(sw / 2, borderFlags.borderRadius || 10);
+      } else {
+        totalInset = sw / 2; // plain border + stitch (stitch extends outward)
+      }
     }
-    // Plain double: outlined worst case = osw/2 + innerSw*1.5 + innerSw/2
-    var innerSw = Math.max(4, Math.round(outerSw * 0.24));
-    return outerSw / 2 + 2 * innerSw;
+
+    // Corner compensation: rounded corners eat into rectangular space
+    if (cornerType && cornerType !== 'straight') {
+      var CORNER_RX = {
+        soft_round: 35, medium_round: 80, strong_round: 120,
+        mixed_top_straight: 120, mixed_top_round: 120,
+        mixed_diag_down: 120, mixed_diag_up: 120
+      };
+      var outerRx = CORNER_RX[cornerType] || 0;
+      var innerRx = Math.max(0, outerRx - totalInset);
+      totalInset += Math.max(0, innerRx * 0.30);
+    }
+
+    return totalInset;
   },
 
   /**
@@ -1660,12 +1794,13 @@ const SvgRenderer = {
    * @param {number} maxWidth - bounding_width from database
    * @param {number} originalFontSize
    * @param {number} originalScaleX
-   * @param {number} frameInset - per-side inset consumed by frame type (double border etc.)
+   * @param {string} frameMode - 'single', 'double', or 'split'
    * @param {Object} measurements - cached {measuredWidth, bbox, numTspans}
    * @param {string} fillType - 'full' (filled) or 'empty' (outlined)
+   * @param {string} cornerType - corner radius type
    * @returns {string} modified SVG string
    */
-  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameInset, measurements, fillType, cornerType) {
+  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType) {
     var measuredWidth = measurements.measuredWidth;
     var bbox = measurements.bbox;
     var numTspans = measurements.numTspans;
@@ -1682,21 +1817,42 @@ const SvgRenderer = {
       }
     }
 
-    // Border-aware width factor (different borders consume different visual space)
-    var widthFactor = 0.85;  // default for plain borders
-    if (/data-stitch=/i.test(svgString))        widthFactor = 0.88;  // extends outward, but needs breathing room
-    if (/data-border=/i.test(svgString))        widthFactor = 0.78;  // thick stroke (50px) eats space
-    if (/data-wavy=/i.test(svgString))          widthFactor = 0.75;  // inward depth + thick stroke
-    if (/data-brush-border=/i.test(svgString))  widthFactor = 0.70;  // large padding around brush
-    if (/data-filter=/i.test(svgString))        widthFactor = 0.78;  // displacement reduces area
-    var effectiveMaxWidth = Math.min(maxWidth, actualRectWidth * widthFactor);
-    // Reduce available width by frame inset (double border inner rect)
-    if (frameInset > 0) effectiveMaxWidth -= 2 * frameInset;
-    // Per-font adjustments: vertical scale, letter spacing, size boost, vertical nudge
+    // Detect border type from SVG attributes (single source of truth)
+    var borderFlags = {
+      stitch: /data-stitch=/i.test(svgString),
+      wavy: /data-wavy=/i.test(svgString),
+      wavyStrong: /data-wavy=["']strong["']/i.test(svgString),
+      border: /data-border=/i.test(svgString),
+      brush: /data-brush-border=/i.test(svgString),
+      filter: /data-filter=/i.test(svgString)
+    };
+    if (borderFlags.border) {
+      var bm = svgString.match(/data-border=["']\w+-(\d+)/i);
+      borderFlags.borderRadius = bm ? parseFloat(bm[1]) : 10;
+    }
+    if (borderFlags.filter) {
+      var fm = svgString.match(/data-filter=["']ripped-(\d+)["']/i);
+      borderFlags.filterDisplacement = fm ? parseFloat(fm[1]) : 20;
+    }
+    // Supplement borderFlags from database metadata (SVG may lack data attributes)
+    if (!borderFlags.brush && borderType === 'brushstroke') borderFlags.brush = true;
+    if (!borderFlags.filter && borderType === 'torn_edge') {
+      borderFlags.filter = true;
+      borderFlags.filterDisplacement = 20;
+    }
+    if (!borderFlags.wavy && borderType === 'wavy') {
+      borderFlags.wavy = true;
+    }
+    frameMode = frameMode || 'single';
+
+    // Per-font adjustments from config (loaded from /data/font-config.json)
     var fontFamilyMatch = svgString.match(/font-family=["']'?([^"']+)'?["']/);
     var detectedFont = fontFamilyMatch ? fontFamilyMatch[1] : '';
-    var fontScaleY = (detectedFont === 'BlackOpsOne') ? 1.10 : 1.0;
-    var fontLetterSpacing = { 'Oswald': 5, 'CourierPrime': 5, 'Yomogi': 10, 'Bitter': 2, 'Exo2': 5, 'PatrickHand': 15 }[detectedFont] || 0;
+    var textCase = SvgRenderer._detectTextCase(svgString);
+    var fc = SvgRenderer._getFontConfig(detectedFont, textCase);
+    var fontScaleY = fc.scaleY;
+    var fontLetterSpacing = fc.letterSpacing;
+    var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, lineSpacing: fc.lineSpacing || 1.0 };
     // Account for letter-spacing in measured width (canvas doesn't include it)
     if (fontLetterSpacing > 0 && measuredWidth > 0) {
       // Find longest tspan text to count characters
@@ -1714,6 +1870,18 @@ const SvgRenderer = {
         measuredWidth += fontLetterSpacing * (maxChars - 1);
       }
     }
+
+    // Compute text target width using computeTextZone (reference stroke, capped at 30 for plain)
+    var swExtract = svgString.match(/<rect[^>]*stroke-width=["']([\d.]+)["']/i);
+    var estStrokeW = swExtract ? parseFloat(swExtract[1]) : 0;
+    var isPlainBorder = !borderFlags.stitch && !borderFlags.wavy && !borderFlags.border &&
+                        !borderFlags.brush && !borderFlags.filter;
+    // Cap stroke for plain borders; filter only in single frame (double frame needs full sw for inner rect)
+    var capStroke = isPlainBorder || (borderFlags.filter && frameMode === 'single');
+    var refSw = capStroke ? Math.min(estStrokeW, 30) : estStrokeW;
+    var refInnerGap = 10; // base breathing room for effectiveMaxWidth computation
+    var refInset = SvgRenderer.computeTextZone(refSw, borderFlags, frameMode, cornerType, 'full');
+    var effectiveMaxWidth = actualRectWidth - 2 * (refInset + refInnerGap);
 
     // Calculate ratio based on measured width vs effective max width
     if (measuredWidth > 0) {
@@ -1744,13 +1912,6 @@ const SvgRenderer = {
       // Proportional stroke: thicker for short text, thinner for long text
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var proportionalSw = Math.max(25, Math.min(50, fontRatioForProportional * 50));
-
-      // Recalculate frameInset using actual proportional stroke
-      // (estimateFrameInset caps at 30, but proportionalSw can be up to 50)
-      if (frameInset > 0 && !/data-(?:border|stitch|wavy|filter|brush-border)=/.test(svgString)) {
-        var pInnerSw = Math.max(4, Math.round(proportionalSw * 0.24));
-        frameInset = proportionalSw / 2 + 2 * pInnerSw;
-      }
 
       // Apply font-size change in the string
       var result = svgString;
@@ -1800,6 +1961,7 @@ const SvgRenderer = {
       } else {
         lineHeight = newFontSize * 1.15;
       }
+      lineHeight *= fontTune.lineSpacing;
       var fontRatioCalc = newFontSize / originalFontSize;
       // STEP 1b: textBlockHeight from canvas ink measurements (accurate per-font, per-text)
       var hasCanvasMetrics = measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0;
@@ -1835,82 +1997,20 @@ const SvgRenderer = {
           textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.85;
         }
       }
-      var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX;
-      textBlockHeight *= fontScaleY;  // stretch rect for vertically scaled fonts
+      var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX * fontTune.wb;
+      textBlockHeight *= fontScaleY * fontTune.hb;  // stretch rect for vertically scaled fonts + per-font height bias
 
       // STEP 2: Inside-out rect wrapping
       // Inner gap: proportional breathing room — larger font (short text) gets more gap
       var baseGap = 10;
       var hInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
       var vInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
-      // Border overhead: distance from rect edge to visual inner edge
-      var swExtract = result.match(/<rect[^>]*stroke-width=["']([\d.]+)["']/i);
-      var estStrokeW = swExtract ? parseFloat(swExtract[1]) : 0;
-      if (!/data-(?:border|stitch|wavy|filter|brush-border)=/.test(result)) {
-        estStrokeW = Math.min(estStrokeW, proportionalSw);  // proportional plain border cap
-      }
-      var hBorderOverhead, vBorderOverhead;
-      var isPlainBorder = !/data-(?:border|stitch|wavy|filter|brush-border)=/.test(result);
-      if (frameInset > 0) {
-        // frameInset = outer edge to inner rect center; inner stroke extends inward by innerSw/2
-        var innerSw = Math.max(4, Math.round(estStrokeW * 0.24));
-        hBorderOverhead = frameInset + innerSw / 2;
-        vBorderOverhead = frameInset + innerSw / 2;
-      } else if (isPlainBorder) {
-        // Plain single/split: use double-equivalent overhead so all frame types
-        // produce similarly-sized rects (prevents single looking smaller than double)
-        var innerSwEquiv = Math.max(4, Math.round(estStrokeW * 0.24));
-        var equivInset = estStrokeW / 2 + 2 * innerSwEquiv;
-        hBorderOverhead = equivInset + innerSwEquiv / 2;
-        vBorderOverhead = equivInset + innerSwEquiv / 2;
-      } else {
-        hBorderOverhead = estStrokeW / 2;
-        vBorderOverhead = estStrokeW / 2;
-      }
 
-      // Decorative border visual intrusion: these borders extend inward beyond sw/2
-      var decorativeIntrusion = 0;
-      if (/data-brush-border=/i.test(result)) {
-        decorativeIntrusion = 30;
-      } else if (/data-filter=/i.test(result)) {
-        var fMatch = result.match(/data-filter=["']ripped-(\d+)["']/i);
-        decorativeIntrusion = fMatch ? parseFloat(fMatch[1]) : 20;
-      } else if (/data-wavy=["']strong["']/i.test(result)) {
-        decorativeIntrusion = 20;
-      } else if (/data-wavy=/i.test(result)) {
-        decorativeIntrusion = 10;
-      } else if (/data-border=/i.test(result)) {
-        var bMatch = result.match(/data-border=["']\w+-(\d+)/i);
-        decorativeIntrusion = bMatch ? Math.max(0, parseFloat(bMatch[1]) - 10) : 5;
-      }
-      // stitch: 0 (extends outward, no inward intrusion)
-      vBorderOverhead += decorativeIntrusion;
-      hBorderOverhead += decorativeIntrusion;
-
-      // Corner radius compensation: rounded corners eat into rectangular space
-      // Geometry: (ir - gap)² × 2 ≤ ir² → gap ≥ ir × 0.293
-      var cornerComp = 0;
-      if (cornerType && cornerType !== 'straight') {
-        var CORNER_RX = {
-          soft_round: 35, medium_round: 80, strong_round: 120,
-          mixed_top_straight: 120, mixed_top_round: 120,
-          mixed_diag_down: 120, mixed_diag_up: 120
-        };
-        var outerRx = CORNER_RX[cornerType] || 0;
-        var innerRx;
-        if (frameInset > 0) {
-          var innerRectRx = Math.max(0, outerRx - frameInset);
-          var innerSw = Math.max(4, Math.round(estStrokeW * 0.24));
-          innerRx = Math.max(0, innerRectRx - innerSw / 2);
-        } else {
-          innerRx = Math.max(0, outerRx - estStrokeW / 2);
-        }
-        cornerComp = Math.max(0, innerRx * 0.35 - Math.min(hInnerGap, vInnerGap));
-      }
-
-      // Total padding = breathing room + stroke clearance + decorative intrusion + corner compensation
-      var hPadding = hInnerGap + hBorderOverhead + cornerComp;
-      var vPadding = vInnerGap + vBorderOverhead + cornerComp;
+      // Recompute text zone with actual proportional stroke for rect padding
+      var actualSw = capStroke ? proportionalSw : estStrokeW;
+      var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, 'full');
+      var hPadding = hInnerGap + actualInset;
+      var vPadding = vInnerGap + actualInset;
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
 
@@ -1989,8 +2089,8 @@ const SvgRenderer = {
             var matrixScaleX = parseFloat(mMatch[1]) || 1;
             inkHorizCorrection = inkOffset * canvasScale * matrixScaleX * aspectCompressX;
           }
-          var newTx = viewBoxCenterX + inkHorizCorrection;
-          var newTy = viewBoxCenterY + baselineOffset * fontScaleY;
+          var newTx = viewBoxCenterX + inkHorizCorrection + fontTune.dx * newFontSize;
+          var newTy = viewBoxCenterY + baselineOffset * fontScaleY + fontTune.dy * newFontSize;
           var finalSx = (parseFloat(mMatch[1]) * aspectCompressX).toFixed(4);
           var sy = fontScaleY !== 1 ? fontScaleY.toFixed(4) : mMatch[4];
           var newMat = 'matrix(' + finalSx + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + sy + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
@@ -2033,6 +2133,7 @@ const SvgRenderer = {
       var borderFilterData = null;
       var stitchData = null;
       var wavyData = null;
+      var wavyGenTag = null;
 
       // Second pass: resize rects
       result = result.replace(/<rect([^>]*?)(\/?)>/gi, function (m, attrs, selfClose) {
@@ -2148,6 +2249,8 @@ const SvgRenderer = {
               na = na.replace(/stroke=["'][^"']*["']/, 'stroke="none"');
               na = na.replace(/stroke-width=["'][^"']*["']/, 'stroke-width="0"');
               na = na.replace(/fill=["'][^"']*["']/, 'fill="none"');
+              // Tag SVG so cropViewBoxToStamp can add wavy margin
+              wavyGenTag = wavyAttr[1]; // "gentle" or "strong"
             }
           }
         } else {
@@ -2202,6 +2305,8 @@ const SvgRenderer = {
           sType, sSize, sSpacing, stitchData.color
         );
         result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
+        // Tag SVG so cropViewBoxToStamp can add stitch margin
+        result = result.replace(/<svg /, '<svg data-stitch-gen="' + sType + '" ');
       }
 
       // ---- WAVY BORDER ----
@@ -2211,6 +2316,10 @@ const SvgRenderer = {
           wavyData.color, wavyData.strokeW, wavyData.variant, wavyData.filled
         );
         result = result.replace(/<text/, wavyHtml + '<text');
+      }
+      // Tag SVG so cropViewBoxToStamp can add wavy margin
+      if (wavyGenTag) {
+        result = result.replace(/<svg /, '<svg data-wavy-gen="' + wavyGenTag + '" ');
       }
 
       // ---- BORDER FILTER (ripped paper etc.) ----
@@ -3741,7 +3850,6 @@ const SvgRenderer = {
     // Filled stitch is already visually dense — skip double frame entirely
     if (bi.stitch && isFull) return svgStr;
     var innerSw = Math.max(4, Math.round(osw * 0.24));
-    if (bi.border && !isFull) innerSw = Math.max(6, Math.round(osw * 0.3));
     if (bi.brush) innerSw = Math.max(6, Math.round(osw * 0.5));
     if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.7));
     var inset;
@@ -3754,6 +3862,8 @@ const SvgRenderer = {
     if (bi.border) inset = osw * 0.3;
     if (bi.brush) inset = Math.max(inset, osw * 0.95);
     if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
+    // Filled filter (torn edge): stroke and fill are same color, inner rect can eat into stroke
+    if (bi.filter && isFull) inset = innerSw / 2 + 4;
     if (bi.wavy) inset = Math.max(inset, wavySw * 1.15 + innerSw / 2);
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
@@ -3785,11 +3895,11 @@ const SvgRenderer = {
     };
 
     var innerRect = _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, inset);
-    // Outlined zigzag/perforated: add white hack rect (same as filled) + colored inner rect
+    // Outlined zigzag/perforated: white gap + colored inner rect
     if (bi.border && !isFull) {
-      var whiteHackSw = Math.max(4, Math.round(osw * 0.24));
-      var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteHackSw, inset);
-      var colorInset = inset + whiteHackSw;
+      var whiteGapSw = 8; // fixed thin white gap (consistent across all osw values)
+      var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteGapSw, inset);
+      var colorInset = inset + whiteGapSw;
       var cix = ox + colorInset, ciy = oy + colorInset;
       var ciw = ow - colorInset * 2, cih = oh - colorInset * 2;
       var colorRect = _shape(cix, ciy, ciw, cih, 'none', innerColor, innerSw, colorInset);
@@ -3897,7 +4007,7 @@ const SvgRenderer = {
       // Copy filter from outer rect (e.g. ripped paper)
       var filterAttr = outer.attrs.match(/filter="([^"]*)"/);
 
-      // Stitch shapes: overlay white shapes to create hollow effect
+      // Stitch shapes: overlay white shapes to create hollow/outlined effect
       if (bi.stitch) {
         var ringHtml = '';
         if (bi.stitch === 'circle') {
@@ -3910,11 +4020,16 @@ const SvgRenderer = {
         } else {
           var stitchRectRe = /<rect\s+x="([\d.\-]+)"\s+y="([\d.\-]+)"\s+width="([\d.]+)"\s+height="([\d.]+)"\s+fill="(?!#FFF|#FFFFFF|white|none)([^"]+)"\s*\/>/gi;
           var srm;
+          // Stitch line: uniform inset from shorter dim (even border all sides)
+          // Stitch square: proportional inset per axis (22.5%)
+          var isLine = bi.stitch === 'line';
           while ((srm = stitchRectRe.exec(svgStr)) !== null) {
             var sx = parseFloat(srm[1]), sy = parseFloat(srm[2]);
             var sw = parseFloat(srm[3]), sh = parseFloat(srm[4]);
             if (sw > 200 || sh > 200) continue;
-            var insetX = sw * 0.225, insetY = sh * 0.225;
+            var uniformInset = Math.min(sw, sh) * 0.225;
+            var insetX = isLine ? uniformInset : sw * 0.225;
+            var insetY = isLine ? uniformInset : sh * 0.225;
             ringHtml += '<rect x="' + (sx + insetX).toFixed(2) + '" y="' + (sy + insetY).toFixed(2) +
               '" width="' + Math.max(1, sw - 2 * insetX).toFixed(2) +
               '" height="' + Math.max(1, sh - 2 * insetY).toFixed(2) + '" fill="#FFFFFF"/>';

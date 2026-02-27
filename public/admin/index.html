@@ -36,6 +36,7 @@
         <li><a class="admin-nav-item active" href="#dashboard">Dashboard</a></li>
         <li><a class="admin-nav-item" href="#templates">Templates</a></li>
         <li><a class="admin-nav-item" href="#textures">Textures</a></li>
+        <li><a class="admin-nav-item" href="#fonts">Font Tuning</a></li>
         <li><a class="admin-nav-item" href="#users">Users</a></li>
       </ul>
     </nav>
@@ -239,8 +240,22 @@
         </div>
       </div>
 
+      <!-- Font Tuning Section -->
+      <div id="section-fonts" style="display:none;">
+        <h1 class="page-title">Font Tuning</h1>
+        <p class="page-subtitle">Adjust per-font rendering parameters with live preview</p>
+        <div style="margin-bottom: 1rem;">
+          <button class="btn btn-primary" id="font-save-all">Save All</button>
+          <span id="font-save-status" style="margin-left: 0.75rem; color: #22c55e; display: none;">Saved!</span>
+        </div>
+        <div id="font-tuning-grid" class="font-tuning-grid"></div>
+      </div>
+
     </main>
   </div>
+
+  <!-- Zoom overlay for font tuning previews -->
+  <div id="font-zoom-overlay" class="stamp-zoom-overlay" style="display:none;"></div>
 
   <!-- Scripts -->
   <script src="/js/supabase.umd.js"></script>
@@ -250,6 +265,7 @@
   <script src="/js/router.js"></script>
   <script src="/js/svg-renderer.js"></script>
   <script src="/js/admin-templates.js"></script>
+  <script src="/js/admin-font-tuning.js"></script>
   <script>
     function toggleMenu() {
       document.getElementById('user-menu').classList.toggle('active');

@@ -1,0 +1,506 @@
+{
+  "Oswald": {
+    "single": {
+      "scaleY": 1,
+      "letterSpacing": 3,
+      "dx": 0.01,
+      "dy": 0,
+      "wb": 1.04,
+      "hb": 1.2,
+      "stroke": 5,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1,
+      "letterSpacing": 3,
+      "dx": 0.01,
+      "dy": 0.05,
+      "wb": 1.05,
+      "hb": 1.2,
+      "stroke": 5,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1,
+      "letterSpacing": 3,
+      "dx": 0.01,
+      "dy": 0,
+      "wb": 1.05,
+      "hb": 1.2,
+      "stroke": 5,
+      "lineSpacing": 0.95
+    },
+    "multiDiacrit": {
+      "scaleY": 1.05,
+      "letterSpacing": 3,
+      "dx": 0.01,
+      "dy": 0.05,
+      "wb": 1.05,
+      "hb": 1.1,
+      "stroke": 5,
+      "lineSpacing": 0.95
+    }
+  },
+  "CourierPrime": {
+    "single": {
+      "scaleY": 1.4,
+      "letterSpacing": 5,
+      "dx": 0.04,
+      "dy": -0.065,
+      "wb": 0.95,
+      "hb": 0.92,
+      "stroke": 3.5,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.4,
+      "letterSpacing": 5,
+      "dx": 0.035,
+      "dy": -0.01,
+      "wb": 0.95,
+      "hb": 0.93,
+      "stroke": 5,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.4,
+      "letterSpacing": 5,
+      "dx": 0.04,
+      "dy": -0.13,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 4.5,
+      "lineSpacing": 0.7
+    },
+    "multiDiacrit": {
+      "scaleY": 1.4,
+      "letterSpacing": 5,
+      "dx": -0.005,
+      "dy": -0.055,
+      "wb": 1.02,
+      "hb": 0.88,
+      "stroke": 6,
+      "lineSpacing": 0.75
+    }
+  },
+  "Montserrat": {
+    "single": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": 0.01,
+      "dy": 0.03,
+      "wb": 1.07,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.095,
+      "wb": 1.07,
+      "hb": 0.95,
+      "stroke": 4,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": -0.02,
+      "dy": -0.035,
+      "wb": 1.03,
+      "hb": 1.06,
+      "stroke": 2.5,
+      "lineSpacing": 0.8
+    },
+    "multiDiacrit": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": 0.005,
+      "dy": 0.03,
+      "wb": 1.02,
+      "hb": 0.94,
+      "stroke": 4.5,
+      "lineSpacing": 0.85
+    }
+  },
+  "Yomogi": {
+    "single": {
+      "scaleY": 1,
+      "letterSpacing": 10,
+      "dx": 0.03,
+      "dy": 0.04,
+      "wb": 0.78,
+      "hb": 1,
+      "stroke": 6.5,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1,
+      "letterSpacing": 10,
+      "dx": 0.03,
+      "dy": 0.04,
+      "wb": 0.78,
+      "hb": 1,
+      "stroke": 4,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1,
+      "letterSpacing": 10,
+      "dx": 0.03,
+      "dy": 0.04,
+      "wb": 0.78,
+      "hb": 1,
+      "stroke": 4,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1,
+      "letterSpacing": 10,
+      "dx": 0.03,
+      "dy": 0.04,
+      "wb": 0.78,
+      "hb": 1,
+      "stroke": 4,
+      "lineSpacing": 1
+    }
+  },
+  "BlackOpsOne": {
+    "single": {
+      "scaleY": 1.5,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": -0.01,
+      "wb": 1.1,
+      "hb": 1,
+      "stroke": -2,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.5,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": -0.01,
+      "wb": 1.1,
+      "hb": 1,
+      "stroke": -2,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.5,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": -0.01,
+      "wb": 1.1,
+      "hb": 1,
+      "stroke": -2,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.5,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": -0.01,
+      "wb": 1.1,
+      "hb": 1,
+      "stroke": -2,
+      "lineSpacing": 1
+    }
+  },
+  "PatrickHand": {
+    "single": {
+      "scaleY": 1.2,
+      "letterSpacing": 15,
+      "dx": 0.06,
+      "dy": 0,
+      "wb": 0.85,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 15,
+      "dx": 0.06,
+      "dy": 0,
+      "wb": 0.85,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.2,
+      "letterSpacing": 15,
+      "dx": 0.06,
+      "dy": 0,
+      "wb": 0.85,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 15,
+      "dx": 0.06,
+      "dy": 0,
+      "wb": 0.85,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    }
+  },
+  "Nunito": {
+    "single": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.025,
+      "wb": 1.02,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.025,
+      "wb": 1.02,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.025,
+      "wb": 1.02,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.4,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.025,
+      "wb": 1.02,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    }
+  },
+  "IBMPlexMono": {
+    "single": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.02,
+      "dy": 0.02,
+      "wb": 0.95,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.02,
+      "dy": 0.02,
+      "wb": 0.95,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.02,
+      "dy": 0.02,
+      "wb": 0.95,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.02,
+      "dy": 0.02,
+      "wb": 0.95,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    }
+  },
+  "Exo2": {
+    "single": {
+      "scaleY": 1.2,
+      "letterSpacing": 5,
+      "dx": 0.05,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 5,
+      "dx": 0.05,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.2,
+      "letterSpacing": 5,
+      "dx": 0.05,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 5,
+      "dx": 0.05,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    }
+  },
+  "Bitter": {
+    "single": {
+      "scaleY": 1.2,
+      "letterSpacing": 2,
+      "dx": 0.04,
+      "dy": 0.02,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 2,
+      "dx": 0.04,
+      "dy": 0.02,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.2,
+      "letterSpacing": 2,
+      "dx": 0.04,
+      "dy": 0.02,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 2,
+      "dx": 0.04,
+      "dy": 0.02,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    }
+  },
+  "Comfortaa": {
+    "single": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.015,
+      "dy": 0.075,
+      "wb": 1.05,
+      "hb": 1.15,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.015,
+      "dy": 0.075,
+      "wb": 1.05,
+      "hb": 1.15,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.015,
+      "dy": 0.075,
+      "wb": 1.05,
+      "hb": 1.15,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.2,
+      "letterSpacing": 0,
+      "dx": 0.015,
+      "dy": 0.075,
+      "wb": 1.05,
+      "hb": 1.15,
+      "stroke": 0,
+      "lineSpacing": 1
+    }
+  },
+  "FuzzyBubbles": {
+    "single": {
+      "scaleY": 1.3,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "singleDiacrit": {
+      "scaleY": 1.3,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multi": {
+      "scaleY": 1.3,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    },
+    "multiDiacrit": {
+      "scaleY": 1.3,
+      "letterSpacing": 0,
+      "dx": 0,
+      "dy": 0.015,
+      "wb": 0.97,
+      "hb": 1,
+      "stroke": 0,
+      "lineSpacing": 1
+    }
+  }
+}
