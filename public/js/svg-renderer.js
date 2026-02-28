@@ -25,7 +25,7 @@ const SvgRenderer = {
   loadFontConfig: function() {
     var controller = new AbortController();
     var timeoutId = setTimeout(function() { controller.abort(); }, 5000);
-    return fetch('/data/font-config.json?_cb=' + Date.now(), { signal: controller.signal })
+    return fetch('/data/font-config.json?_v=' + this._svgVersion, { signal: controller.signal })
       .then(function(r) { clearTimeout(timeoutId); return r.json(); })
       .then(function(data) { SvgRenderer._fontConfig = data; return data; })
       .catch(function(err) { clearTimeout(timeoutId); console.warn('Font config load failed, using defaults:', err); });
@@ -131,11 +131,15 @@ const SvgRenderer = {
    * @param {string} svgUrl
    * @returns {Promise<string>}
    */
+  // SVG template version — bump this when you upload new/changed templates to Supabase.
+  // Lets browser + CDN cache SVGs across sessions (no more Date.now() per-request busting).
+  _svgVersion: 1,
+
   async fetchSvg(svgUrl) {
     // Return from in-memory cache if available (same session, same URL)
     if (this._svgFetchCache[svgUrl]) return this._svgFetchCache[svgUrl];
 
-    var bustUrl = svgUrl + (svgUrl.indexOf('?') === -1 ? '?' : '&') + '_cb=' + Date.now();
+    var bustUrl = svgUrl + (svgUrl.indexOf('?') === -1 ? '?' : '&') + '_v=' + this._svgVersion;
     var controller = new AbortController();
     var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
     const res = await fetch(bustUrl, { signal: controller.signal });
@@ -840,7 +844,7 @@ const SvgRenderer = {
     var F = function(n) { return n.toFixed(2); };
     var scWidth = (variant === 'strong') ? 80 : 35;
     var depth = (variant === 'strong') ? 20 : 7;
-    strokeW = 40;
+    strokeW = strokeW || 40;
 
     var numH = Math.max(3, Math.round(w / scWidth));
     if (numH % 2 === 0) numH++;   // force ODD for smooth corners
@@ -1736,8 +1740,13 @@ const SvgRenderer = {
       }
       if (borderFlags.stitch) frameInset = sw * 0.35;
       if (borderFlags.border) {
-        frameInset = sw * 0.3;
-        if (!isFull) frameInset += 8; // white gap for outlined border double
+        if (isFull) {
+          frameInset = sw * 0.3;
+        } else {
+          // Outlined zigzag: larger inset to clear shape intrusion (shapes extend sw/2 inward)
+          frameInset = sw * 0.65;
+          frameInset += Math.max(8, Math.round(sw * 0.15)); // proportional white gap
+        }
       }
       if (borderFlags.brush) frameInset = Math.max(frameInset, 35);
       if (borderFlags.filter && !isFull) frameInset = Math.max(frameInset, sw * 0.95);
@@ -1843,6 +1852,13 @@ const SvgRenderer = {
     if (!borderFlags.wavy && borderType === 'wavy') {
       borderFlags.wavy = true;
     }
+    if (!borderFlags.border && (borderType === 'perforated' || borderType === 'perforated_spaced' || borderType === 'zigzag')) {
+      borderFlags.border = true;
+      borderFlags.borderRadius = borderType === 'perforated_spaced' ? 25 : 20;
+    }
+    if (!borderFlags.stitch && borderType && borderType.indexOf('stitch_') === 0) {
+      borderFlags.stitch = true;
+    }
     frameMode = frameMode || 'single';
 
     // Per-font adjustments from config (loaded from /data/font-config.json)
@@ -1879,6 +1895,8 @@ const SvgRenderer = {
     // Cap stroke for plain borders; filter only in single frame (double frame needs full sw for inner rect)
     var capStroke = isPlainBorder || (borderFlags.filter && frameMode === 'single');
     var refSw = capStroke ? Math.min(estStrokeW, 30) : estStrokeW;
+    // Zigzag: ensure minimum sw for initial sizing (Supabase SVGs may lack stroke-width)
+    if (borderFlags.border && refSw < 30) refSw = 30;
     var refInnerGap = 10; // base breathing room for effectiveMaxWidth computation
     var refInset = SvgRenderer.computeTextZone(refSw, borderFlags, frameMode, cornerType, 'full');
     var effectiveMaxWidth = actualRectWidth - 2 * (refInset + refInnerGap);
@@ -1909,9 +1927,11 @@ const SvgRenderer = {
       }
 
 
-      // Proportional stroke: thicker for short text, thinner for long text
+      // Proportional stroke: thick for short text (small stamp), thin for long text (large stamp)
+      // Short text → high fontRatio (font scales up) → thick border (visual weight on compact stamp)
+      // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
-      var proportionalSw = Math.max(25, Math.min(50, fontRatioForProportional * 50));
+      var proportionalSw = fontRatioForProportional * 30;  // unclamped; per-family min/max below
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2006,9 +2026,13 @@ const SvgRenderer = {
       var hInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
       var vInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
 
-      // Recompute text zone with actual proportional stroke for rect padding
-      var actualSw = capStroke ? proportionalSw : estStrokeW;
-      var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, 'full');
+      // Recompute text zone with actual stroke for rect padding (clamped per-family)
+      var actualSw = capStroke ? Math.max(30, Math.min(75, proportionalSw)) : estStrokeW;
+      // Zigzag: use proportional stroke (same 30-75 range applied to outerRectSw below)
+      if (borderFlags.border) actualSw = Math.max(30, Math.min(75, proportionalSw));
+      // Zigzag: pass actual fillType so outlined gets larger inset for white gap clearance
+      var ctzFillType = borderFlags.border ? (fillType || 'full') : 'full';
+      var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, ctzFillType);
       var hPadding = hInnerGap + actualInset;
       var vPadding = vInnerGap + actualInset;
       var newRectWidth = textBlockWidth + hPadding * 2;
@@ -2124,7 +2148,36 @@ const SvgRenderer = {
       var rectWidths = rectInfos.map(function(r) { return r.w; });
       var outerRectOrigW = rectWidths[0] || vbW;
       var rawOuterSw = rectInfos.length > 0 ? rectInfos[0].sw : 0;
-      var outerRectSw = hasDecorativeBorder ? rawOuterSw : Math.min(rawOuterSw, proportionalSw);
+      // Default stroke for templates without stroke-width in SVG but with border type from DB
+      if (rawOuterSw === 0 && (borderFlags.border || borderFlags.filter || borderFlags.stitch)) {
+        rawOuterSw = 50;
+      }
+      // Supplement hasDecorativeBorder from borderFlags (DB may provide border type not in SVG)
+      if (!hasDecorativeBorder && (borderFlags.border || borderFlags.stitch || borderFlags.wavy || borderFlags.brush || borderFlags.filter)) {
+        hasDecorativeBorder = true;
+      }
+      // Per-family stroke scaling (table-based ranges)
+      //   Plain:     outerRectSw 30-75   (stroke IS the border)
+      //   Torn edge: outerRectSw 30-75   (stroke under filter scales, fScale stays 20)
+      //   Zigzag:    outerRectSw 30-75   (stroke band for shapes)
+      //   Stitch:    outerRectSw raw     (shapes handle visual weight)
+      //   Wavy:      outerRectSw raw     (wavy path handles visual weight)
+      //   Brush:     outerRectSw raw     (brush group handles visual weight)
+      var outerRectSw;
+      if (!hasDecorativeBorder || borderFlags.filter) {
+        // Plain + Torn edge: 30-75
+        outerRectSw = rawOuterSw > 0 ? Math.max(30, Math.min(75, proportionalSw)) : 0;
+      } else if (borderFlags.border) {
+        // Zigzag/perforated: 30-75
+        outerRectSw = rawOuterSw > 0 ? Math.max(30, Math.min(75, proportionalSw)) : 0;
+      } else {
+        // Stitch, wavy, brush: keep raw stroke, scale decorative elements instead
+        outerRectSw = rawOuterSw;
+      }
+      // Weight ratio for decorative element sizing (clamped 0.5-1.3 for brush; others clamp per-item)
+      var decorWeightRatio = rawOuterSw > 0
+        ? Math.max(0.5, Math.min(1.3, proportionalSw / rawOuterSw))
+        : 1;
       var mainRectThreshold = outerRectOrigW * 0.7;
       var decorScale = newRectWidth / outerRectOrigW;
       var innerPaddingX = outerRectSw > 0 ? outerRectSw * 0.22 : 11;
@@ -2164,13 +2217,12 @@ const SvgRenderer = {
             // Extra inset when filter border active (ripped paper displaces edges)
             var filterExtra = borderFilterData ? parseFloat(borderFilterData.split('-')[1]) || 0 : 0;
             // Extra inset when border shapes intrude past stroke edge
-            var shapeExtra = 0;
-            if (borderShapeData) {
-              var bRad = parseFloat(borderShapeData.type.split('-')[1]) || 0;
-              shapeExtra = Math.max(0, bRad - 15);
-            }
-            var iPadX = innerPaddingX + filterExtra + shapeExtra;
-            var iPadY = innerPaddingY + filterExtra + shapeExtra;
+            // Use borderFlags (available before rect loop) not borderShapeData (set during loop)
+            var shapeExtra = borderFlags.border ? outerRectSw * 0.8 : 0;
+            // Stitch shapes sit outward but need inner clearance to match dot variant
+            var stitchExtra = stitchData ? outerRectSw * 0.12 : 0;
+            var iPadX = innerPaddingX + filterExtra + shapeExtra + stitchExtra;
+            var iPadY = innerPaddingY + filterExtra + shapeExtra + stitchExtra;
             na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + (newRectWidth - iPadX * 2).toFixed(2) + '"');
             na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + (newRectHeight - iPadY * 2).toFixed(2) + '"');
             if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + (newRectX + iPadX).toFixed(2) + '"');
@@ -2180,15 +2232,15 @@ const SvgRenderer = {
             na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
             if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
             if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
-            // Set reference stroke-width on outer rect (only cap for plain borders)
-            if (!hasDecorativeBorder) {
+            // Set proportional stroke-width on outer rect (plain + torn edge + zigzag)
+            if (!hasDecorativeBorder || borderFlags.filter || borderFlags.border) {
               na = na.replace(/stroke-width=["'][\d.]+["']/, 'stroke-width="' + outerRectSw + '"');
             }
             // Capture border shape data from outer rect
             var borderAttr = attrs.match(/data-border=["']([^"']+)["']/);
             if (borderAttr) {
-              var swMatch = attrs.match(/stroke-width=["']([\d.]+)["']/);
-              var halfStroke = swMatch ? parseFloat(swMatch[1]) / 2 : 0;
+              // Use proportional outerRectSw (not original template value) for shape positioning
+              var halfStroke = outerRectSw / 2;
               // Override legacy SVG attribute values with tuned params
               var borderType = borderAttr[1];
               if (borderType === 'circle-30-3') borderType = 'circle-25-4';
@@ -2199,7 +2251,7 @@ const SvgRenderer = {
                 y: newRectY - halfStroke,
                 w: newRectWidth + halfStroke * 2,
                 h: newRectHeight + halfStroke * 2,
-                sw: swMatch ? parseFloat(swMatch[1]) : 50
+                sw: outerRectSw
               };
               na = na.replace(/\s*data-border=["'][^"']+["']/, '');
             }
@@ -2276,7 +2328,8 @@ const SvgRenderer = {
       if (borderShapeData) {
         var bParts = borderShapeData.type.split('-');
         var bShape = bParts[0];
-        var bRadius = parseFloat(bParts[1]) || 15;
+        // Zigzag shapes: scale with decorWeightRatio, clamped per outerRectSw 15-45
+        var bRadius = Math.max(5, Math.round((parseFloat(bParts[1]) || 15) * decorWeightRatio));
         // Scale diamond to fit within stroke (halfStroke = outerRectSw/2)
         if (bShape === 'diamond') {
           var halfSw = borderShapeData.sw ? borderShapeData.sw / 2 : bRadius * 1.25;
@@ -2295,8 +2348,9 @@ const SvgRenderer = {
       // ---- STITCH BORDER (line/square/circle shapes) ----
       if (stitchData) {
         var sType = stitchData.type;
-        var sSize = (sType === 'circle') ? 50 : 40;
-        var sSpacing = (sType === 'circle') ? 20 : (sType === 'line') ? 50 : 20;
+        // Stitch: 20-50 range (clamped to prevent dot clipping on short text)
+        var sSize = Math.max(20, Math.min(50, Math.round(((sType === 'circle') ? 50 : 40) * decorWeightRatio)));
+        var sSpacing = Math.max(10, Math.min(50, Math.round(((sType === 'circle') ? 20 : (sType === 'line') ? 50 : 20) * decorWeightRatio)));
         // Offset shapes outward so they're clearly outside the fill
         var sOffset = sSize * 0.75;
         var stitchHtml = SvgRenderer._generateStitchShapes(
@@ -2311,9 +2365,11 @@ const SvgRenderer = {
 
       // ---- WAVY BORDER ----
       if (wavyData) {
+        // Wavy: 30-60 range
+        var scaledWavySw = Math.max(30, Math.min(60, Math.round(46 * decorWeightRatio)));
         var wavyHtml = SvgRenderer._generateWavyBorder(
           wavyData.x, wavyData.y, wavyData.w, wavyData.h,
-          wavyData.color, wavyData.strokeW, wavyData.variant, wavyData.filled
+          wavyData.color, scaledWavySw, wavyData.variant, wavyData.filled
         );
         result = result.replace(/<text/, wavyHtml + '<text');
       }
@@ -2328,6 +2384,8 @@ const SvgRenderer = {
         var fType = fParts[0];
         var fScale = parseFloat(fParts[1]) || 20;
         if (fType === 'ripped') {
+          // Torn edge: scale displacement with decorWeightRatio (floor 12, below that looks plain)
+          fScale = Math.max(12, Math.round(fScale * decorWeightRatio));
           var fId = 'border-rip-' + Date.now() + '-' + Math.round(Math.random() * 9999);
           var freq = fScale <= 10 ? '0.04' : fScale <= 20 ? '0.035' : '0.025';
           var octaves = fScale <= 20 ? 4 : 3;
@@ -2354,8 +2412,8 @@ const SvgRenderer = {
         var origBCX = origBX + origBW / 2;
         var origBCY = origBY + origBH / 2;
         var overScale = 1.0;
-        var bsx = (newRectWidth / origBW) * overScale;
-        var bsy = (newRectHeight / origBH) * overScale;
+        var bsx = (newRectWidth / origBW) * overScale * decorWeightRatio;
+        var bsy = (newRectHeight / origBH) * overScale * decorWeightRatio;
         var newBCX = newRectX + newRectWidth / 2;
         var newBCY = newRectY + newRectHeight / 2;
         var brushTransform = 'translate(' + newBCX.toFixed(2) + ',' + newBCY.toFixed(2) + ') scale(' + bsx.toFixed(4) + ',' + bsy.toFixed(4) + ') translate(' + (-origBCX).toFixed(2) + ',' + (-origBCY).toFixed(2) + ')';
@@ -3859,7 +3917,7 @@ const SvgRenderer = {
       inset = osw / 2 + innerSw * 1.5;
     }
     if (bi.stitch) inset = osw * 0.35;
-    if (bi.border) inset = osw * 0.3;
+    if (bi.border) inset = isFull ? osw * 0.3 : osw * 0.65;
     if (bi.brush) inset = Math.max(inset, osw * 0.95);
     if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
     // Filled filter (torn edge): stroke and fill are same color, inner rect can eat into stroke
@@ -3897,7 +3955,7 @@ const SvgRenderer = {
     var innerRect = _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, inset);
     // Outlined zigzag/perforated: white gap + colored inner rect
     if (bi.border && !isFull) {
-      var whiteGapSw = 8; // fixed thin white gap (consistent across all osw values)
+      var whiteGapSw = Math.max(8, Math.round(osw * 0.15)); // proportional white gap
       var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteGapSw, inset);
       var colorInset = inset + whiteGapSw;
       var cix = ox + colorInset, ciy = oy + colorInset;
