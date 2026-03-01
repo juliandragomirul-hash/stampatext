@@ -1013,29 +1013,22 @@ const Gallery = {
 
     var overlay = document.createElement('div');
     overlay.className = 'stamp-zoom-overlay';
+    overlay.innerHTML = SvgRenderer.addWatermark(svgString);
 
-    var content = document.createElement('div');
-    content.className = 'stamp-zoom-content';
-    content.innerHTML = SvgRenderer.addWatermark(svgString);
-
-    // Make the SVG inside responsive at 2x the card width
-    var svgEl = content.querySelector('svg');
+    // Make the SVG responsive — CSS handles max-width/height via .stamp-zoom-overlay svg
+    var svgEl = overlay.querySelector('svg');
     if (svgEl) {
       svgEl.removeAttribute('width');
       svgEl.removeAttribute('height');
-      // Cards are ~300px wide in the grid; zoom shows ~900px
-      svgEl.style.width = '900px';
-      svgEl.style.height = 'auto';
+      svgEl.style.background = '#ffffff';
+      svgEl.style.borderRadius = '4px';
     }
 
-    overlay.appendChild(content);
     document.body.appendChild(overlay);
 
-    // Close on overlay click (not on content click)
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) {
-        overlay.remove();
-      }
+    // Close on click anywhere
+    overlay.addEventListener('click', function () {
+      overlay.remove();
     });
 
     // Close on Escape

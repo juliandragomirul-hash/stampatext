@@ -3173,10 +3173,9 @@ const SvgRenderer = {
       'width="' + clipW.toFixed(2) + '" height="' + clipH.toFixed(2) + '" ' +
       'overflow="hidden" pointer-events="none">';
 
-    // Filters: invert for white version, darken for shadow version
+    // Filter: force uniform grey regardless of input color (neutralizes colored [a] in logo)
     watermark += '<defs>' +
-      '<filter id="' + wmId + '-w"><feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0"/></filter>' +
-      '<filter id="' + wmId + '-d"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter>' +
+      '<filter id="' + wmId + '-g"><feColorMatrix type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 1 0"/></filter>' +
       '</defs>';
 
     var cx = clipW / 2, cy = clipH / 2;
@@ -3195,12 +3194,9 @@ const SvgRenderer = {
       }
     }
 
-    // Dark shadow layer (shows on light/outlined stamps)
+    // Single grey layer — visible on both light and dark stamps
     watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
-      'opacity="0.22" filter="url(#' + wmId + '-d)">' + tiles + '</g>';
-    // White layer on top (shows on dark/filled stamps)
-    watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
-      'opacity="0.25" filter="url(#' + wmId + '-w)">' + tiles + '</g>';
+      'opacity="0.28" filter="url(#' + wmId + '-g)">' + tiles + '</g>';
 
     watermark += '</svg>';
 
