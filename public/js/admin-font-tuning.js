@@ -19,10 +19,10 @@ const FontTuning = {
 
   // 4 preview cases per font
   PREVIEW_CASES: [
-    { key: 'single',        label: '1-line',         text: 'APPROVED' },
-    { key: 'singleDiacrit', label: '1-line diacrit',  text: 'APROBAT\u0102' },
-    { key: 'multi',         label: 'Multi-line',      text: 'CONGRATULATIONS\nRETIREE' },
-    { key: 'multiDiacrit',  label: 'Multi diacrit',   text: '\u00CENREGISTRAT\u0102\nOFICIAL' }
+    { key: 'single',        label: '1-line',         text: 'COMING SOON' },
+    { key: 'singleDiacrit', label: '1-line diacrit',  text: 'A\u0102 FI MO\u021A' },
+    { key: 'multi',         label: 'Multi-line',      text: 'AONGRATULATIONA\nRETIREE' },
+    { key: 'multiDiacrit',  label: 'Multi diacrit',   text: '\u00CENREGIS\u021AR\u0102T\u00CE\n\u00C2FI\u021AI\u0102LA' }
   ],
 
   // Font weights (must match product.html FONT_WEIGHTS)
@@ -49,7 +49,8 @@ const FontTuning = {
     { key: 'wb',             label: 'wb',       min: 0.60,  max: 1.30, step: 0.01,  decimals: 2 },
     { key: 'hb',             label: 'hb',       min: 0.80,  max: 1.50, step: 0.01,  decimals: 2 },
     { key: 'stroke',          label: 'Stroke',   min: -8,    max: 8,    step: 0.5,   decimals: 1 },
-    { key: 'lineSpacing',     label: 'Line Sp',  min: 0.60,  max: 1.80, step: 0.05,  decimals: 2 }
+    { key: 'lineSpacing',     label: 'Line Sp',  min: 0.60,  max: 1.80, step: 0.05,  decimals: 2 },
+    { key: 'ws',               label: 'Word Sp',  min: -0.30, max: 0.30, step: 0.01,  decimals: 2 }
   ],
 
   async init() {
@@ -163,7 +164,7 @@ const FontTuning = {
           var p = this.PARAMS[j];
           var val = fc[p.key];
           if (val === undefined || val === null) {
-            var paramDefaults = { scaleY: 1.20, letterSpacing: 0, dx: 0, dy: 0, wb: 1.0, hb: 1.0, stroke: 0, lineSpacing: 1.0 };
+            var paramDefaults = { scaleY: 1.20, letterSpacing: 0, dx: 0, dy: 0, wb: 1.0, hb: 1.0, stroke: 0, lineSpacing: 1.0, ws: 0 };
             val = paramDefaults[p.key] || 0;
           }
           var row = document.createElement('div');

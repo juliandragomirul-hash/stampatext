@@ -47,7 +47,7 @@ const SvgRenderer = {
 
   // Get config for a specific font + text case (with hardcoded fallback)
   _getFontConfig: function(fontName, textCase) {
-    var defaults = { scaleY: 1.20, letterSpacing: 0, dx: 0, dy: 0, wb: 1.0, hb: 1.0, stroke: 0 };
+    var defaults = { scaleY: 1.20, letterSpacing: 0, dx: 0, dy: 0, wb: 1.0, hb: 1.0, ws: 0, stroke: 0 };
     if (!this._fontConfig || !this._fontConfig[fontName]) return defaults;
     var fontEntry = this._fontConfig[fontName];
     // New structure: fontEntry has sub-objects (single, singleDiacrit, multi, multiDiacrit)
@@ -1868,7 +1868,7 @@ const SvgRenderer = {
     var fc = SvgRenderer._getFontConfig(detectedFont, textCase);
     var fontScaleY = fc.scaleY;
     var fontLetterSpacing = fc.letterSpacing;
-    var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, lineSpacing: fc.lineSpacing || 1.0 };
+    var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0 };
     // Account for letter-spacing in measured width (canvas doesn't include it)
     if (fontLetterSpacing > 0 && measuredWidth > 0) {
       // Find longest tspan text to count characters
@@ -2018,6 +2018,24 @@ const SvgRenderer = {
         }
       }
       var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX * fontTune.wb;
+      // Per-font word-spacing: count spaces in longest line, adjust block width
+      var wordSpacingPx = 0;
+      if (fontTune.ws !== 0) {
+        wordSpacingPx = fontTune.ws * newFontSize;
+        // Count spaces in longest tspan (or single-line text)
+        var longestText = '';
+        var wsTexts = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi) || [];
+        wsTexts.forEach(function(t) {
+          var inner = t.replace(/<[^>]+>/g, '');
+          if (inner.length > longestText.length) longestText = inner;
+        });
+        if (!longestText) {
+          var wsM = svgString.match(/<text[^>]*>([^<]*)<\/text>/i);
+          if (wsM) longestText = wsM[1];
+        }
+        var numSpaces = (longestText.match(/ /g) || []).length;
+        textBlockWidth += numSpaces * wordSpacingPx * fontRatioCalc;
+      }
       textBlockHeight *= fontScaleY * fontTune.hb;  // stretch rect for vertically scaled fonts + per-font height bias
 
       // STEP 2: Inside-out rect wrapping
@@ -2128,6 +2146,10 @@ const SvgRenderer = {
       // Per-font letter-spacing
       if (fontLetterSpacing > 0) {
         result = SvgRenderer._setTextAttribute(result, textIndex, 'letter-spacing', String(fontLetterSpacing));
+      }
+      // Per-font word-spacing
+      if (wordSpacingPx !== 0) {
+        result = SvgRenderer._setTextAttribute(result, textIndex, 'word-spacing', wordSpacingPx.toFixed(1));
       }
 
       // STEP 5: Resize/reposition rects to wrap around text (centered on viewBox center)
