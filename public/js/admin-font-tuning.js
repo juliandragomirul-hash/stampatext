@@ -49,8 +49,7 @@ const FontTuning = {
     { key: 'wb',             label: 'wb',       min: 0.60,  max: 1.30, step: 0.01,  decimals: 2 },
     { key: 'hb',             label: 'hb',       min: 0.80,  max: 1.50, step: 0.01,  decimals: 2 },
     { key: 'stroke',          label: 'Stroke',   min: -8,    max: 8,    step: 0.5,   decimals: 1 },
-    { key: 'lineSpacing',     label: 'Line Sp',  min: 0.60,  max: 1.80, step: 0.05,  decimals: 2 },
-    { key: 'ws',               label: 'Word Sp',  min: -0.30, max: 0.30, step: 0.01,  decimals: 2 }
+    { key: 'lineSpacing',     label: 'Line Sp',  min: 0.60,  max: 1.80, step: 0.05,  decimals: 2 }
   ],
 
   async init() {

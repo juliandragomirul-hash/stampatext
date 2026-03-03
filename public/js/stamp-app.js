@@ -409,34 +409,39 @@
   // ---- Auth state for header ----
   function initAuthState() {
     // Use onAuthStateChange — fires reliably once session is restored from localStorage
-    sb.auth.onAuthStateChange(async function (event, session) {
+    sb.auth.onAuthStateChange(function (event, session) {
       if (session) {
         document.getElementById('btn-login').style.display = 'none';
         document.getElementById('btn-signup').style.display = 'none';
-        var goApp = document.getElementById('btn-go-app');
-        if (goApp) goApp.style.display = 'inline-block';
+        var hamburger = document.getElementById('hamburger-wrapper');
+        if (hamburger) hamburger.style.display = '';
         var buyBtn = document.getElementById('btn-buy-credits');
         if (buyBtn) buyBtn.style.display = 'inline-block';
 
-        // Show credits in header
-        try {
-          var profile = await getProfile();
-          if (profile) {
-            var creditsEl = document.getElementById('user-credits');
-            if (creditsEl) {
-              creditsEl.textContent = profile.credits + ' credits';
-              creditsEl.style.display = 'inline-block';
+        // Defer profile fetch — calling getSession() inside onAuthStateChange
+        // can deadlock the Supabase client's internal session lock, blocking all queries
+        setTimeout(async function() {
+          try {
+            var profile = await getProfile();
+            if (profile) {
+              var creditsEl = document.getElementById('user-credits');
+              if (creditsEl) {
+                creditsEl.textContent = profile.credits + ' credits';
+                creditsEl.style.display = 'inline-block';
+              }
+              var adminLink = document.getElementById('menu-admin');
+              if (adminLink && profile.role === 'admin') adminLink.style.display = '';
             }
+          } catch (e) {
+            console.error('Failed to load profile:', e);
           }
-        } catch (e) {
-          console.error('Failed to load profile:', e);
-        }
+        }, 0);
       } else {
         // Signed out — reset header
         document.getElementById('btn-login').style.display = '';
         document.getElementById('btn-signup').style.display = '';
-        var goApp = document.getElementById('btn-go-app');
-        if (goApp) goApp.style.display = 'none';
+        var hamburger = document.getElementById('hamburger-wrapper');
+        if (hamburger) hamburger.style.display = 'none';
         var creditsEl = document.getElementById('user-credits');
         if (creditsEl) creditsEl.style.display = 'none';
         var buyBtn = document.getElementById('btn-buy-credits');

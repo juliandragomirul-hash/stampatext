@@ -32,7 +32,16 @@
       <button class="btn btn-secondary btn-small" id="btn-buy-credits" style="display:none;" onclick="openBuyCreditsModal()">Buy Credits</button>
       <button class="btn btn-secondary btn-small" id="btn-login" onclick="window.location.href='/?login=1'">Login</button>
       <button class="btn btn-primary btn-small" id="btn-signup" onclick="window.location.href='/?signup=1'">Sign Up</button>
-      <a href="/app" class="btn btn-primary btn-small" id="btn-go-app" style="display:none;">Go to App</a>
+      <div class="dropdown-wrapper" id="hamburger-wrapper" style="display:none;">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/">Stampeaz&#259;</a>
+          <a class="dropdown-item" href="/app/profile">Profilul Meu</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -154,7 +163,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=133"></script>
+  <script src="/js/svg-renderer.js?v=138"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -855,8 +864,8 @@
         if (session) {
           document.getElementById('btn-login').style.display = 'none';
           document.getElementById('btn-signup').style.display = 'none';
-          var goApp = document.getElementById('btn-go-app');
-          if (goApp) goApp.style.display = 'inline-block';
+          var hamburger = document.getElementById('hamburger-wrapper');
+          if (hamburger) hamburger.style.display = '';
           var buyBtn = document.getElementById('btn-buy-credits');
           if (buyBtn) buyBtn.style.display = 'inline-block';
           var profile = await getProfile();
@@ -866,11 +875,24 @@
               creditsEl.textContent = profile.credits + ' credits';
               creditsEl.style.display = 'inline-block';
             }
+            var adminLink = document.getElementById('menu-admin');
+            if (adminLink && profile.role === 'admin') adminLink.style.display = '';
           }
         }
       } catch (e) { console.error('Auth state error:', e); }
 
     })();
+
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('user-menu');
+      var btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
   </script>
 
 </body>

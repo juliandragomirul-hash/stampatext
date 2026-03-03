@@ -1382,6 +1382,7 @@ const SvgRenderer = {
           // Single line — use tspan with preserved styling if available
           var lineContent = lines[0]
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          lineContent = lineContent.replace(/ /g, 'o\u200B');  // invisible-o: space → o+ZWS marker
           if (tspanStyle) {
             // Wrap in tspan to preserve styling
             // Use y="0" for Fixed Frame templates (absolute), dy="0" for Dynamic Frame (relative)
@@ -1399,6 +1400,7 @@ const SvgRenderer = {
           for (var li = 0; li < lines.length; li++) {
             var lineEscaped = lines[li]
               .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            lineEscaped = lineEscaped.replace(/ /g, 'o\u200B');  // invisible-o: space → o+ZWS marker
             // Use y="0" for first line if original used absolute positioning
             // Otherwise use dy="0" placeholder - will be recalculated in autoFit
             var yAttr = usesAbsoluteY ? ' y="0"' : ' dy="0"';
@@ -1869,9 +1871,10 @@ const SvgRenderer = {
     var fontScaleY = fc.scaleY;
     var fontLetterSpacing = fc.letterSpacing;
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0 };
-    // Account for letter-spacing in measured width (canvas doesn't include it)
+    // Letter-spacing is absolute in SVG (doesn't scale with font size).
+    // Track it separately so the ratio calculation only scales char widths.
+    var lsExtra = 0;
     if (fontLetterSpacing > 0 && measuredWidth > 0) {
-      // Find longest tspan text to count characters
       var tspanTexts = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi) || [];
       var maxChars = 0;
       tspanTexts.forEach(function(t) {
@@ -1883,7 +1886,7 @@ const SvgRenderer = {
         if (textContentM) maxChars = textContentM[1].length;
       }
       if (maxChars > 1) {
-        measuredWidth += fontLetterSpacing * (maxChars - 1);
+        lsExtra = fontLetterSpacing * (maxChars - 1);
       }
     }
 
@@ -1898,12 +1901,14 @@ const SvgRenderer = {
     // Zigzag: ensure minimum sw for initial sizing (Supabase SVGs may lack stroke-width)
     if (borderFlags.border && refSw < 30) refSw = 30;
     var refInnerGap = 10; // base breathing room for effectiveMaxWidth computation
-    var refInset = SvgRenderer.computeTextZone(refSw, borderFlags, frameMode, cornerType, 'full');
+    var refInset = SvgRenderer.computeTextZone(refSw, borderFlags, frameMode, cornerType, fillType || 'full');
     var effectiveMaxWidth = actualRectWidth - 2 * (refInset + refInnerGap);
 
     // Calculate ratio based on measured width vs effective max width
+    // Subtract absolute letter-spacing from available width (LS doesn't scale with font)
     if (measuredWidth > 0) {
-      var ratio = effectiveMaxWidth / measuredWidth;
+      var charAvailWidth = Math.max(10, effectiveMaxWidth - lsExtra);
+      var ratio = charAvailWidth / measuredWidth;
 
       var minFontSize = originalFontSize * 0.4;
       var maxFontSize = originalFontSize * 3;  // cap at 3x original to prevent runaway sizing
@@ -1919,8 +1924,9 @@ const SvgRenderer = {
       if (newFontSize < minFontSize) {
         newFontSize = minFontSize;
         // At min font size, calculate horizontal compression
+        // Char widths scale with font, letter-spacing is absolute
         var fontRatio = minFontSize / originalFontSize;
-        var widthAtMinFont = measuredWidth * fontRatio;
+        var widthAtMinFont = measuredWidth * fontRatio + lsExtra;
         if (widthAtMinFont > effectiveMaxWidth) {
           newScaleX = originalScaleX * (effectiveMaxWidth / widthAtMinFont);
         }
@@ -2017,12 +2023,16 @@ const SvgRenderer = {
           textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.85;
         }
       }
-      var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX * fontTune.wb;
+      // Char widths scale with font size; letter-spacing is absolute (only scales with scaleX)
+      // Use max(wb, 1.0) so the rect is never narrower than measured text width.
+      // wb < 1 means measurement overestimates — the extra space is harmless padding,
+      // but narrowing below measurement causes clipping when calibration is imperfect.
+      var safeWb = Math.max(fontTune.wb, 1.0);
+      var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX * safeWb + lsExtra * newScaleX;
       // Per-font word-spacing: count spaces in longest line, adjust block width
       var wordSpacingPx = 0;
       if (fontTune.ws !== 0) {
         wordSpacingPx = fontTune.ws * newFontSize;
-        // Count spaces in longest tspan (or single-line text)
         var longestText = '';
         var wsTexts = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi) || [];
         wsTexts.forEach(function(t) {
@@ -2034,7 +2044,7 @@ const SvgRenderer = {
           if (wsM) longestText = wsM[1];
         }
         var numSpaces = (longestText.match(/ /g) || []).length;
-        textBlockWidth += numSpaces * wordSpacingPx * fontRatioCalc;
+        textBlockWidth += numSpaces * wordSpacingPx;
       }
       textBlockHeight *= fontScaleY * fontTune.hb;  // stretch rect for vertically scaled fonts + per-font height bias
 
@@ -2048,9 +2058,8 @@ const SvgRenderer = {
       var actualSw = capStroke ? Math.max(30, Math.min(75, proportionalSw)) : estStrokeW;
       // Zigzag: use proportional stroke (same 30-75 range applied to outerRectSw below)
       if (borderFlags.border) actualSw = Math.max(30, Math.min(75, proportionalSw));
-      // Zigzag: pass actual fillType so outlined gets larger inset for white gap clearance
-      var ctzFillType = borderFlags.border ? (fillType || 'full') : 'full';
-      var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, ctzFillType);
+      // Pass actual fillType so outlined templates get correct (larger) inset for double frame
+      var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, fillType || 'full');
       var hPadding = hInnerGap + actualInset;
       var vPadding = vInnerGap + actualInset;
       var newRectWidth = textBlockWidth + hPadding * 2;
@@ -2555,6 +2564,9 @@ const SvgRenderer = {
           result = result.replace(/(<svg[^>]*)\bheight=["'][\d.]+[a-z]*["']/, '$1height="' + fitVbH.toFixed(2) + '"');
         }
       }
+
+      // Invisible-o: convert o+ZWS markers back to invisible tspan elements
+      result = result.replace(/o\u200B/g, '<tspan fill-opacity="0" stroke-opacity="0">o</tspan>');
 
       return result;
     } else {
