@@ -13,8 +13,8 @@ const FontTuning = {
 
   // Font display order (matches product page roster)
   FONT_ORDER: [
-    'Oswald', 'CourierPrime', 'Montserrat', 'Yomogi', 'BlackOpsOne', 'PatrickHand',
-    'Nunito', 'IBMPlexMono', 'Exo2', 'Bitter', 'Comfortaa', 'FuzzyBubbles'
+    'Oswald', 'CourierPrime', 'Montserrat', 'Yomogi', 'BlackOpsOne',
+    'Nunito', 'Exo2', 'Bitter', 'Comfortaa', 'FuzzyBubbles'
   ],
 
   // 4 preview cases per font
@@ -28,15 +28,15 @@ const FontTuning = {
   // Font weights (must match product.html FONT_WEIGHTS)
   FONT_WEIGHTS: {
     'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700', 'Yomogi': '400',
-    'BlackOpsOne': '400', 'PatrickHand': '400', 'Nunito': '900', 'IBMPlexMono': '500',
+    'BlackOpsOne': '400', 'Nunito': '900',
     'Exo2': '700', 'Bitter': '500', 'Comfortaa': '700', 'FuzzyBubbles': '700'
   },
 
   // Font display names
   FONT_LABELS: {
     'Oswald': 'Oswald', 'CourierPrime': 'Courier Prime', 'Montserrat': 'Montserrat',
-    'Yomogi': 'Yomogi', 'BlackOpsOne': 'Black Ops One', 'PatrickHand': 'Patrick Hand',
-    'Nunito': 'Nunito', 'IBMPlexMono': 'IBM Plex Mono', 'Exo2': 'Exo 2',
+    'Yomogi': 'Yomogi', 'BlackOpsOne': 'Black Ops One',
+    'Nunito': 'Nunito', 'Exo2': 'Exo 2',
     'Bitter': 'Bitter', 'Comfortaa': 'Comfortaa', 'FuzzyBubbles': 'Fuzzy Bubbles'
   },
 

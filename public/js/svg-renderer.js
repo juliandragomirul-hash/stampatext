@@ -67,11 +67,9 @@ const SvgRenderer = {
     'BlackOpsOne':     { url: '/fonts/BlackOpsOne-Regular.ttf',              format: 'truetype' },
     'CourierPrime':    { url: '/fonts/CourierPrime-Regular.ttf',           format: 'truetype' },
     'Yomogi':          { url: '/fonts/Yomogi-Regular.ttf',                  format: 'truetype' },
-    'IBMPlexMono':     { url: '/fonts/IBMPlexMono-Medium.ttf',              format: 'truetype' },
     'Bitter':          { url: '/fonts/Bitter-Medium.ttf',                    format: 'truetype' },
     'Exo2':            { url: '/fonts/Exo2-Bold.ttf',                        format: 'truetype' },
     'Comfortaa':       { url: '/fonts/Comfortaa-Bold.ttf',                   format: 'truetype' },
-    'PatrickHand':     { url: '/fonts/PatrickHand-Regular.ttf',              format: 'truetype' },
     'FuzzyBubbles':    { url: '/fonts/FuzzyBubbles-Bold.ttf',               format: 'truetype' },
     // Legacy (kept for backward compat with saved designs)
     'RobotoBlack':     { url: '/fonts/Roboto-Bold.ttf',                      format: 'truetype' },
@@ -1546,11 +1544,9 @@ const SvgRenderer = {
       '@font-face{font-family:"BlackOpsOne";src:url("/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
       '@font-face{font-family:"CourierPrime";src:url("/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
       '@font-face{font-family:"Yomogi";src:url("/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"IBMPlexMono";src:url("/fonts/IBMPlexMono-Medium.ttf") format("truetype");font-weight:500;}' +
       '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
       '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
       '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
-      '@font-face{font-family:"PatrickHand";src:url("/fonts/PatrickHand-Regular.ttf") format("truetype");font-weight:400;}' +
       '@font-face{font-family:"FuzzyBubbles";src:url("/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
       '*{margin:0;padding:0;}' +
       '</style>' +
@@ -1702,10 +1698,25 @@ const SvgRenderer = {
         }
         } // end doMeasure
 
+        // Explicitly load the specific font face before relying on generic fonts.ready
+        // (fonts.ready can resolve before all font faces are actually available)
+        var explicitFontLoad = Promise.resolve();
+        try {
+          var svgDoc2 = iframe.contentDocument;
+          var te = svgDoc2.querySelector('text');
+          if (te && svgDoc2.fonts && svgDoc2.fonts.load) {
+            var tcs = iframe.contentWindow.getComputedStyle(te);
+            var tff = (tcs.fontFamily || te.getAttribute('font-family') || '').replace(/['"]/g, '');
+            var tfw = tcs.fontWeight || te.getAttribute('font-weight') || '400';
+            if (tff) explicitFontLoad = svgDoc2.fonts.load(tfw + ' 100px "' + tff + '"').catch(function(){});
+          }
+        } catch(e) {}
+
         // Wait for fonts before measuring (3s timeout prevents hanging on stuck font loads)
         var fontsReady = (iframe.contentDocument && iframe.contentDocument.fonts)
           ? iframe.contentDocument.fonts.ready
           : Promise.resolve();
+        fontsReady = explicitFontLoad.then(function() { return fontsReady; });
         Promise.race([fontsReady, new Promise(function(r) { setTimeout(r, 3000); })])
           .then(function() { setTimeout(doMeasure, 50); })
           .catch(function() { setTimeout(doMeasure, 50); });
@@ -1870,7 +1881,7 @@ const SvgRenderer = {
     var fc = SvgRenderer._getFontConfig(detectedFont, textCase);
     var fontScaleY = fc.scaleY;
     var fontLetterSpacing = fc.letterSpacing;
-    var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0 };
+    var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
     // Letter-spacing is absolute in SVG (doesn't scale with font size).
     // Track it separately so the ratio calculation only scales char widths.
     var lsExtra = 0;
@@ -2024,11 +2035,7 @@ const SvgRenderer = {
         }
       }
       // Char widths scale with font size; letter-spacing is absolute (only scales with scaleX)
-      // Use max(wb, 1.0) so the rect is never narrower than measured text width.
-      // wb < 1 means measurement overestimates — the extra space is harmless padding,
-      // but narrowing below measurement causes clipping when calibration is imperfect.
-      var safeWb = Math.max(fontTune.wb, 1.0);
-      var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX * safeWb + lsExtra * newScaleX;
+      var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX * fontTune.wb + lsExtra * newScaleX;
       // Per-font word-spacing: count spaces in longest line, adjust block width
       var wordSpacingPx = 0;
       if (fontTune.ws !== 0) {
@@ -2048,6 +2055,16 @@ const SvgRenderer = {
       }
       textBlockHeight *= fontScaleY * fontTune.hb;  // stretch rect for vertically scaled fonts + per-font height bias
 
+      // Text stroke extends visually beyond glyph bounds by strokeWidth/2 per side.
+      // Thick stroke (positive) expands text; thin stroke (negative) contracts — no compensation needed.
+      // Outlined variants with stroke=0 get auto +2 from applyThinStroke.
+      var effectiveStroke = fontTune.stroke;
+      if (effectiveStroke === 0 && fillType === 'empty') effectiveStroke = 2;
+      if (effectiveStroke > 0) {
+        textBlockWidth += effectiveStroke;
+        textBlockHeight += effectiveStroke;
+      }
+
       // STEP 2: Inside-out rect wrapping
       // Inner gap: proportional breathing room — larger font (short text) gets more gap
       var baseGap = 10;
@@ -2066,8 +2083,8 @@ const SvgRenderer = {
       var newRectHeight = textBlockHeight + vPadding * 2;
 
       // Aspect ratio enforcement: compress wide one-liners horizontally
-      // to produce less squat stamps. Without this, wide fonts (Patrick Hand,
-      // Montserrat) produce extreme landscape ratios that appear tiny in the
+      // to produce less squat stamps. Without this, wide fonts (Montserrat,
+      // Comfortaa) produce extreme landscape ratios that appear tiny in the
       // fixed-ratio card. Max 15% compression.
       var aspectCompressX = 1;
       if (numLines <= 1) {
@@ -3355,11 +3372,9 @@ const SvgRenderer = {
         '@font-face{font-family:"BlackOpsOne";src:url("/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
         '@font-face{font-family:"CourierPrime";src:url("/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
         '@font-face{font-family:"Yomogi";src:url("/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"IBMPlexMono";src:url("/fonts/IBMPlexMono-Medium.ttf") format("truetype");font-weight:500;}' +
         '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
         '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
         '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
-        '@font-face{font-family:"PatrickHand";src:url("/fonts/PatrickHand-Regular.ttf") format("truetype");font-weight:400;}' +
         '@font-face{font-family:"FuzzyBubbles";src:url("/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
         '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +

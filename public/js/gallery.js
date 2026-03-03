@@ -87,7 +87,7 @@ const Gallery = {
     torn_edge:         ['single', 'double', 'split']
   },
 
-  buildDescription(text, colorName, borderType, fillType, cornerType, objectType, appliedTilt, appliedTexture, appliedFrame, svgString) {
+  buildDescription(text, colorName, borderType, fillType, cornerType, objectType, appliedTilt, appliedTexture, appliedFrame, svgString, fontKey) {
     var border = this.BORDER_LABELS[borderType] || 'plain';
     var fill = (fillType === 'empty') ? 'outlined' : 'filled';
     var texture = '';
@@ -97,7 +97,7 @@ const Gallery = {
       texture = preset ? preset.label.toLowerCase() : '';
     }
     var tilt = (appliedTilt && appliedTilt !== 0) ? 'tilted' : '';
-    var frame = '';
+    var frame = 'single border';
     if (appliedFrame === 'double') frame = 'double border';
     else if (appliedFrame === 'split') frame = 'split border';
     var shape = '';
@@ -117,13 +117,15 @@ const Gallery = {
     else if (cornerType === 'mixed_top_round') corners = 'mixed corners (top round)';
     else if (cornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
     else if (cornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
-    // Build: "TEXT" written on [fill] [color] [tilt?] [border style?] [frame?] [shape] [objectType] with [corners] [and texture?]
+    // Build: "TEXT" written on [color] [tilt?] [border style?] [frame?] [filled/outlined] [shape] [objectType] with [corners] [and texture?]. FONT: [name]
     var adjectives = [tilt, border, frame].filter(Boolean).join(' ');
-    var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
+    var objPhrase = (adjectives ? adjectives + ' ' : '') + fill + ' ' + obj;
     var withParts = [corners, texture ? texture + ' texture' : ''].filter(Boolean);
     var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
-    return '\u201C' + this.escapeHtml(text) + '\u201D written on ' +
-      fill + ' ' + colorName.toLowerCase() + ' ' + objPhrase + withClause;
+    var desc = '\u201C' + this.escapeHtml(text) + '\u201D written on ' +
+      colorName.toLowerCase() + ' ' + objPhrase + withClause + '.';
+    if (fontKey) desc += ' FONT: ' + fontKey;
+    return desc;
   },
 
   /**
@@ -173,16 +175,56 @@ const Gallery = {
     // Progress indicator element
     var progressEl = document.querySelector('.stamp-loading');
 
-    // Process auto-fit sequentially (each creates an iframe for measurement)
-    for (var i = 0; i < templates.length; i++) {
-      var tpl = templates[i];
-      if (!svgs[i]) continue; // skip failed fetches
+    // Font cycling: each template gets the next font for visual testing (wraps at 10)
+    var FONT_CYCLE = [
+      { key: 'Oswald',       weight: '500' },
+      { key: 'CourierPrime',  weight: '400' },
+      { key: 'Montserrat',    weight: '700' },
+      { key: 'Yomogi',        weight: '400' },
+      { key: 'BlackOpsOne',   weight: '400' },
+      { key: 'Nunito',        weight: '900' },
+      { key: 'Exo2',          weight: '700' },
+      { key: 'Bitter',        weight: '500' },
+      { key: 'Comfortaa',     weight: '700' },
+      { key: 'FuzzyBubbles',  weight: '700' }
+    ];
+    var fontCycleIdx = 0;
 
-      if (progressEl) progressEl.textContent = 'Processing templates... (' + (i + 1) + '/' + templates.length + ')';
+    // Sort templates+SVGs by display order (family → sub → corner → fill)
+    // so font cycling matches what the user sees
+    var self = this;
+    var paired = templates.map(function(tpl, i) { return { tpl: tpl, svg: svgs[i] }; });
+    paired.sort(function(a, b) {
+      var fa = self.BORDER_STYLE_FAMILIES[a.tpl.border_type || 'simple'] || { family: 99, sub: 99 };
+      var fb = self.BORDER_STYLE_FAMILIES[b.tpl.border_type || 'simple'] || { family: 99, sub: 99 };
+      if (fa.family !== fb.family) return fa.family - fb.family;
+      if (fa.sub !== fb.sub) return fa.sub - fb.sub;
+      var ca = self.CORNER_ORDER[a.tpl.corner_type || 'straight'] || 99;
+      var cb = self.CORNER_ORDER[b.tpl.corner_type || 'straight'] || 99;
+      if (ca !== cb) return ca - cb;
+      var filla = a.tpl.fill_type === 'full' ? 0 : 1;
+      var fillb = b.tpl.fill_type === 'full' ? 0 : 1;
+      return filla - fillb;
+    });
+
+    // Process auto-fit sequentially (each creates an iframe for measurement)
+    for (var i = 0; i < paired.length; i++) {
+      var tpl = paired[i].tpl;
+      if (!paired[i].svg) continue; // skip failed fetches
+
+      if (progressEl) progressEl.textContent = 'Processing templates... (' + (i + 1) + '/' + paired.length + ')';
 
       try {
-        var cleanedSvg = SvgRenderer.cleanSvgString(svgs[i]);
+        var cleanedSvg = SvgRenderer.cleanSvgString(paired[i].svg);
         cleanedSvg = SvgRenderer.uniquifySvgIds(cleanedSvg);
+
+        // Cycle font for testing: swap font-family + font-weight before autoFit
+        var cycleFont = FONT_CYCLE[fontCycleIdx % FONT_CYCLE.length];
+        cleanedSvg = cleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
+          "font-family=\"'" + cycleFont.key + "'\"");
+        cleanedSvg = cleanedSvg.replace(/font-weight=["'][^"']*["']/g,
+          'font-weight="' + cycleFont.weight + '"');
+        fontCycleIdx++;
 
         // Detect text case from original SVG
         var displayText = userText;
@@ -260,7 +302,8 @@ const Gallery = {
           width: tpl.width,
           height: tpl.height,
           name: tpl.name,
-          displayText: displayText
+          displayText: displayText,
+          fontKey: cycleFont.key
         });
       } catch (err) {
         console.warn('Failed to process template ' + tpl.name + ':', err);
@@ -400,6 +443,7 @@ const Gallery = {
           height: base.height,
           name: base.name,
           displayText: base.displayText,
+          fontKey: base.fontKey,
           appliedColor: color,
           appliedFrame: frameMode,
           appliedTilt: 0,
@@ -570,6 +614,7 @@ const Gallery = {
                   height: base.height,
                   name: base.name,
                   displayText: base.displayText,
+                  fontKey: base.fontKey,
                   appliedColor: color,
                   appliedFrame: frameMode === 'none' ? base.frameType : frameMode,
                   appliedTilt: tilt,
@@ -591,6 +636,7 @@ const Gallery = {
                   height: base.height,
                   name: base.name,
                   displayText: base.displayText,
+                  fontKey: base.fontKey,
                   appliedColor: color,
                   appliedFrame: frameMode === 'none' ? base.frameType : frameMode,
                   appliedTilt: tilt,
@@ -682,7 +728,7 @@ const Gallery = {
         r.displayText || self.currentText, colorName,
         r.borderType, r.fillType, r.cornerType,
         r.objectType, r.appliedTilt, r.appliedTexture,
-        r.appliedFrame, r.svgString
+        r.appliedFrame, r.svgString, r.fontKey
       );
 
       var actionsDiv = document.createElement('a');
@@ -793,7 +839,7 @@ const Gallery = {
           r.displayText || self.currentText, colorName,
           r.borderType, r.fillType, r.cornerType,
           r.objectType, r.appliedTilt, r.appliedTexture,
-          r.appliedFrame, r.svgString
+          r.appliedFrame, r.svgString, r.fontKey
         );
 
         var actionsDiv = document.createElement('a');
@@ -1119,6 +1165,7 @@ const Gallery = {
           height: base.height,
           name: base.name,
           displayText: base.displayText,
+          fontKey: base.fontKey,
           appliedColor: vp.c,
           appliedFrame: vp.f || base.frameType || 'single',
           appliedTilt: vp.i,
