@@ -53,7 +53,15 @@ const SvgRenderer = {
     // New structure: fontEntry has sub-objects (single, singleDiacrit, multi, multiDiacrit)
     if (fontEntry.single) {
       var tc = textCase || 'single';
-      return fontEntry[tc] || fontEntry.single || defaults;
+      var cfg = fontEntry[tc] || fontEntry.single || defaults;
+      // Diacrit modes inherit wb from their non-diacrit parent.
+      // Measurement already accounts for diacrit glyph widths, so wb should match.
+      if (tc === 'singleDiacrit' && cfg.wb === undefined && fontEntry.single) {
+        cfg = Object.assign({}, cfg, { wb: fontEntry.single.wb });
+      } else if (tc === 'multiDiacrit' && cfg.wb === undefined && fontEntry.multi) {
+        cfg = Object.assign({}, cfg, { wb: fontEntry.multi.wb });
+      }
+      return cfg;
     }
     // Legacy flat structure fallback
     return fontEntry;
@@ -1364,11 +1372,12 @@ const SvgRenderer = {
           if (!fontFamilyMatch) {
             fontFamilyMatch = originalAttrs.match(/font-family='([^']*)'/);  // Try single-quoted
           }
-          var fontSizeMatch = originalAttrs.match(/font-size=["'][^"']*["']/);
           var fontWeightMatch = originalAttrs.match(/font-weight=["'][^"']*["']/);
           if (fillMatch) tspanStyle += ' ' + fillMatch[0];
           if (fontFamilyMatch) tspanStyle += ' font-family="' + fontFamilyMatch[1] + '"';
-          if (fontSizeMatch) tspanStyle += ' ' + fontSizeMatch[0];
+          // NOTE: font-size deliberately NOT copied to tspans — tspans must inherit
+          // from the <text> element so that _setTextAttribute(font-size) works correctly.
+          // Copying font-size here would override the autoFit-computed size.
           if (fontWeightMatch) tspanStyle += ' ' + fontWeightMatch[0];
         }
 
@@ -1380,7 +1389,6 @@ const SvgRenderer = {
           // Single line — use tspan with preserved styling if available
           var lineContent = lines[0]
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-          lineContent = lineContent.replace(/ /g, 'o\u200B');  // invisible-o: space → o+ZWS marker
           if (tspanStyle) {
             // Wrap in tspan to preserve styling
             // Use y="0" for Fixed Frame templates (absolute), dy="0" for Dynamic Frame (relative)
@@ -1398,7 +1406,6 @@ const SvgRenderer = {
           for (var li = 0; li < lines.length; li++) {
             var lineEscaped = lines[li]
               .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            lineEscaped = lineEscaped.replace(/ /g, 'o\u200B');  // invisible-o: space → o+ZWS marker
             // Use y="0" for first line if original used absolute positioning
             // Otherwise use dy="0" placeholder - will be recalculated in autoFit
             var yAttr = usesAbsoluteY ? ' y="0"' : ' dy="0"';
@@ -1510,6 +1517,13 @@ const SvgRenderer = {
     originalScaleX = originalScaleX || 1;
     frameMode = frameMode || 'single';
 
+    // Diagnostic: show actual tspan content entering autoFit
+    var _diagTspans = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi);
+    if (_diagTspans) {
+      var _diagText = _diagTspans.map(function(t) { return t.replace(/<[^>]+>/g, ''); }).join('|');
+      console.warn('[autoFit] ENTRY | tspans="' + _diagText.substring(0, 50) + '"');
+    }
+
     // ============================================================
     // CATEGORY DETECTION: Check if this is a Fixed Frame template
     // Category 2 = has <image> element (illustrated background)
@@ -1528,26 +1542,42 @@ const SvgRenderer = {
     if (!maxWidth || maxWidth <= 0) return svgString;
 
     // Check measurement cache — reuse if same SVG (avoids iframe for variant calls)
-    var cacheKey = svgString.length + '_' + textIndex + '_' + svgString.slice(0, 80);
+    // Key includes: font-family + actual tspan text content (prevents stale hits across different user texts)
+    var cacheFont = (svgString.match(/font-family=["']'?([^"']+)'?["']/) || [])[1] || '';
+    var cacheTextContent = '';
+    var cacheTextMatches = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi);
+    if (cacheTextMatches) {
+      for (var ci = 0; ci < cacheTextMatches.length; ci++) {
+        cacheTextContent += cacheTextMatches[ci].replace(/<[^>]+>/g, '');
+      }
+    }
+    var cacheKey = svgString.length + '_' + textIndex + '_' + cacheFont + '_' + cacheTextContent.substring(0, 40) + '_' + svgString.slice(0, 80);
     if (this._autoFitMeasureCache && this._autoFitMeasureCache.key === cacheKey) {
+      console.warn('[autoFit] CACHE HIT | font=' + cacheFont + ' text="' + cacheTextContent.substring(0, 25) + '"');
       return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, this._autoFitMeasureCache, fillType, cornerType, borderType);
     }
+    console.warn('[autoFit] CACHE MISS | font=' + cacheFont + ' text="' + cacheTextContent.substring(0, 25) + '"');
 
     // Category 1: Dynamic Frame - TEXT-FIRST approach
-    // Create an HTML wrapper with fonts to measure text accurately
+    // Create an HTML wrapper with fonts to measure text accurately.
+    // IMPORTANT: Use absolute URLs for @font-face src — blob documents cannot resolve
+    // root-relative URLs like "/fonts/...". Without absolute URLs, only Oswald loads
+    // (via Google Fonts CDN link) and all other fonts fall back to browser defaults,
+    // producing identical (wrong) measurements across different fonts.
+    var _fontBase = window.location.origin;
     var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
       '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
       '<style>' +
-      '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
-      '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Bold.ttf") format("truetype");font-weight:700;}' +
-      '@font-face{font-family:"Nunito";src:url("/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
-      '@font-face{font-family:"BlackOpsOne";src:url("/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"CourierPrime";src:url("/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"Yomogi";src:url("/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
-      '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
-      '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
-      '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
-      '@font-face{font-family:"FuzzyBubbles";src:url("/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"Oswald";src:url("' + _fontBase + '/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
+      '@font-face{font-family:"Montserrat";src:url("' + _fontBase + '/fonts/Montserrat-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"Nunito";src:url("' + _fontBase + '/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
+      '@font-face{font-family:"BlackOpsOne";src:url("' + _fontBase + '/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"CourierPrime";src:url("' + _fontBase + '/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"Yomogi";src:url("' + _fontBase + '/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
+      '@font-face{font-family:"Bitter";src:url("' + _fontBase + '/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
+      '@font-face{font-family:"Exo2";src:url("' + _fontBase + '/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"Comfortaa";src:url("' + _fontBase + '/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"FuzzyBubbles";src:url("' + _fontBase + '/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
       '*{margin:0;padding:0;}' +
       '</style>' +
       '</head><body>' + svgString + '</body></html>';
@@ -1604,15 +1634,24 @@ const SvgRenderer = {
           // For multi-line text (<tspan> children), measure the longest line
           var tspans = textEl.querySelectorAll('tspan');
           var measuredWidth;
+          // Diagnostic: verify tspan detection and per-tspan measurements
+          var tspanDiag = 'tspans=' + tspans.length;
           if (tspans.length > 1) {
             measuredWidth = 0;
             for (var ti = 0; ti < tspans.length; ti++) {
               var tw = tspans[ti].getComputedTextLength();
+              tspanDiag += ' | ts' + ti + '="' + (tspans[ti].textContent || '').substring(0, 18) + '"(' + (tspans[ti].textContent || '').length + 'ch) w=' + tw.toFixed(1);
               if (tw > measuredWidth) measuredWidth = tw;
             }
           } else {
             measuredWidth = textEl.getComputedTextLength();
+            tspanDiag += ' | FULL textEl w=' + measuredWidth.toFixed(1);
           }
+          // Also show what font the browser resolved + textEl total length for comparison
+          var resolvedFF = '';
+          try { resolvedFF = iframe.contentWindow.getComputedStyle(textEl).fontFamily || ''; } catch(e2){}
+          tspanDiag += ' | textElTotal=' + textEl.getComputedTextLength().toFixed(1) + ' resolvedFont=' + resolvedFF.substring(0, 30);
+          console.warn('[iframe-MEASURE] ' + tspanDiag);
 
           // Measure actual ink bounding box for precise height and centering
           var bbox = textEl.getBBox();
@@ -1686,7 +1725,47 @@ const SvgRenderer = {
             canvasAdvanceWidth: canvasAdvanceWidth
           };
 
-          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, SvgRenderer._autoFitMeasureCache, fillType, cornerType, borderType));
+          // remeasureFn: re-measure text at any font size while iframe is still alive.
+          // This gives exact rendered width at the TARGET size, eliminating estimation error.
+          var remeasureFn = null;
+          try {
+            var rmTextEl = svgDoc.querySelectorAll('text')[textIndex];
+            if (rmTextEl) {
+              remeasureFn = function(targetFontSize, targetLetterSpacing) {
+                try {
+                  rmTextEl.setAttribute('font-size', targetFontSize);
+                  // Also set font-size on tspans (tspan font-size overrides text element)
+                  var rmTspans = rmTextEl.querySelectorAll('tspan');
+                  for (var ti = 0; ti < rmTspans.length; ti++) {
+                    rmTspans[ti].setAttribute('font-size', targetFontSize);
+                  }
+                  if (targetLetterSpacing > 0) {
+                    rmTextEl.setAttribute('letter-spacing', targetLetterSpacing);
+                  } else {
+                    rmTextEl.removeAttribute('letter-spacing');
+                  }
+                  var w;
+                  if (rmTspans.length > 1) {
+                    w = 0;
+                    for (var ri = 0; ri < rmTspans.length; ri++) {
+                      w = Math.max(w, rmTspans[ri].getComputedTextLength());
+                    }
+                  } else {
+                    w = rmTextEl.getComputedTextLength();
+                  }
+                  // getBBox captures glyph visual overshoot beyond advance width
+                  // (decorative fonts like BlackOpsOne extend past their advance cells)
+                  try {
+                    var bbox = rmTextEl.getBBox();
+                    if (bbox && bbox.width > w) w = bbox.width;
+                  } catch(e2) {}
+                  return { width: w };
+                } catch (e) { return null; }
+              };
+            }
+          } catch (e) {}
+
+          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, SvgRenderer._autoFitMeasureCache, fillType, cornerType, borderType, remeasureFn));
           return;
 
         } catch (e) {
@@ -1820,9 +1899,10 @@ const SvgRenderer = {
    * @param {Object} measurements - cached {measuredWidth, bbox, numTspans}
    * @param {string} fillType - 'full' (filled) or 'empty' (outlined)
    * @param {string} cornerType - corner radius type
+   * @param {Function|null} remeasureFn - optional closure to re-measure text at target font size (iframe must be alive)
    * @returns {string} modified SVG string
    */
-  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType) {
+  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType, remeasureFn) {
     var measuredWidth = measurements.measuredWidth;
     var bbox = measurements.bbox;
     var numTspans = measurements.numTspans;
@@ -1932,12 +2012,36 @@ const SvgRenderer = {
       }
       var newScaleX = originalScaleX;
 
+      // Diagnostic: compare sizing across different text inputs
+      // Show WIDEST tspan (the one that determines measuredW), not just the first
+      var diagWidest = ''; var diagWidestLen = 0;
+      var diagAllTspans = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi) || [];
+      diagAllTspans.forEach(function(t) {
+        var inner = t.replace(/<[^>]+>/g, '');
+        if (inner.length > diagWidestLen) { diagWidestLen = inner.length; diagWidest = inner; }
+      });
+      console.warn('[autoFit] TEXT-SIZE | font=' + detectedFont +
+        ' widest="' + diagWidest.substring(0, 25) + '"(' + diagWidestLen + 'ch)' +
+        ' lines=' + numTspans +
+        ' measuredW=' + measuredWidth.toFixed(1) +
+        ' effMaxW=' + effectiveMaxWidth.toFixed(1) +
+        ' ratio=' + ratio.toFixed(3) +
+        ' newFS=' + newFontSize.toFixed(1) +
+        ' origFS=' + originalFontSize +
+        ' lsExtra=' + lsExtra.toFixed(1) +
+        ' heightConst=' + (heightAtNewFont > effectiveMaxWidth ? 'YES' : 'no') +
+        ' frame=' + frameMode);
+
       if (newFontSize < minFontSize) {
         newFontSize = minFontSize;
         // At min font size, calculate horizontal compression
-        // Char widths scale with font, letter-spacing is absolute
-        var fontRatio = minFontSize / originalFontSize;
-        var widthAtMinFont = measuredWidth * fontRatio + lsExtra;
+        var widthAtMinFont;
+        if (remeasureFn) {
+          var rmMin = remeasureFn(minFontSize, fontLetterSpacing);
+          widthAtMinFont = (rmMin && rmMin.width > 0) ? rmMin.width : measuredWidth * (minFontSize / originalFontSize) + lsExtra;
+        } else {
+          widthAtMinFont = measuredWidth * (minFontSize / originalFontSize) + lsExtra;
+        }
         if (widthAtMinFont > effectiveMaxWidth) {
           newScaleX = originalScaleX * (effectiveMaxWidth / widthAtMinFont);
         }
@@ -1953,6 +2057,10 @@ const SvgRenderer = {
       // Apply font-size change in the string
       var result = svgString;
       result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', newFontSize.toFixed(2));
+      // Strip font-size from tspans so they inherit from <text> element.
+      // Without this, tspans with their own font-size override the autoFit-computed size,
+      // causing text to render wider than measured → right-side clipping.
+      result = result.replace(/<tspan([^>]*)\s+font-size=["'][^"']*["']/gi, '<tspan$1');
 
       // Apply transform scaleX change if needed
       if (newScaleX !== originalScaleX || fontScaleY !== 1) {
@@ -2034,8 +2142,40 @@ const SvgRenderer = {
           textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.85;
         }
       }
-      // Char widths scale with font size; letter-spacing is absolute (only scales with scaleX)
-      var textBlockWidth = measuredWidth * fontRatioCalc * newScaleX * fontTune.wb + lsExtra * newScaleX;
+      // Exact text width via remeasureFn (measures at target font size in live iframe)
+      // Falls back to linear estimation when iframe is gone (gallery variants)
+      var exactWidth = null;
+      if (remeasureFn) {
+        var rm = remeasureFn(newFontSize, fontLetterSpacing);
+        if (rm && rm.width > 0) exactWidth = rm.width;
+      }
+      // Gallery variant fallback: use cached re-measurement scaled linearly
+      if (exactWidth === null && measurements.remeasuredWidth > 0) {
+        exactWidth = measurements.remeasuredWidth * (newFontSize / measurements.remeasuredFontSize);
+      }
+
+      var textBlockWidth;
+      var estimatedWidth = (measuredWidth * fontRatioCalc + lsExtra) * newScaleX;
+      if (exactWidth !== null) {
+        // Exact: remeasured width already includes letter-spacing
+        textBlockWidth = exactWidth * newScaleX;
+        // Cache for gallery variant reuse
+        measurements.remeasuredWidth = exactWidth;
+        measurements.remeasuredFontSize = newFontSize;
+        // Diagnostic: compare exact vs estimated (remove after debugging)
+        console.warn('[autoFit] EXACT path | font=' + detectedFont + ' exact=' + (exactWidth * newScaleX).toFixed(1) +
+          ' est=' + estimatedWidth.toFixed(1) + ' newFS=' + newFontSize.toFixed(1) +
+          ' origFS=' + originalFontSize + ' wb=' + fontTune.wb);
+      } else {
+        // Estimation fallback (no iframe, no cached re-measurement)
+        textBlockWidth = estimatedWidth;
+        console.warn('[autoFit] ESTIMATION path | font=' + detectedFont + ' est=' + estimatedWidth.toFixed(1) +
+          ' newFS=' + newFontSize.toFixed(1) + ' origFS=' + originalFontSize + ' wb=' + fontTune.wb);
+      }
+      // wb: breathing room multiplier (per-font, calibrated via admin tuning).
+      // No floor — each font's wb is trusted as-is for full admin control.
+      textBlockWidth *= fontTune.wb;
+
       // Per-font word-spacing: count spaces in longest line, adjust block width
       var wordSpacingPx = 0;
       if (fontTune.ws !== 0) {
@@ -2079,8 +2219,24 @@ const SvgRenderer = {
       var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, fillType || 'full');
       var hPadding = hInnerGap + actualInset;
       var vPadding = vInnerGap + actualInset;
+      // For multi-line: cap vertical padding to match visible inter-line whitespace.
+      // lineHeight includes ink, so the visible gap between lines ≈ lineHeight * 0.5.
+      if (numLines > 1) {
+        var maxVPad = lineHeight * 0.5;
+        console.warn('[autoFit] vPadCap | lines=' + numLines + ' vPad=' + vPadding.toFixed(1) +
+          ' maxVPad=' + maxVPad.toFixed(1) + ' lineH=' + lineHeight.toFixed(1) +
+          ' inset=' + actualInset.toFixed(1) + ' gap=' + vInnerGap);
+        if (vPadding > maxVPad) {
+          vInnerGap = Math.max(0, maxVPad - actualInset);
+          vPadding = vInnerGap + actualInset;
+        }
+      }
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
+      console.warn('[autoFit] SIZING | font=' + detectedFont + ' textBlockW=' + textBlockWidth.toFixed(1) +
+        ' rectW=' + newRectWidth.toFixed(1) + ' hPad=' + hPadding.toFixed(1) +
+        ' inset=' + actualInset.toFixed(1) + ' gap=' + hInnerGap +
+        ' stroke=' + effectiveStroke + ' frame=' + frameMode);
 
       // Aspect ratio enforcement: compress wide one-liners horizontally
       // to produce less squat stamps. Without this, wide fonts (Montserrat,
@@ -2137,8 +2293,14 @@ const SvgRenderer = {
           if (numTspans <= 1) {
             if (hasCanvasMetrics) {
               var canvasScale = newFontSize / measurements.canvasMeasureFontSize;
-              var scaledAscent = symAscent * canvasScale;
-              var scaledDescent = symDescent * canvasScale;
+              // Use ACTUAL ascent/descent (not symmetric) so the ink center aligns with rect center.
+              // symAscent/symDescent are symmetric (maxDiac added to both sides), which cancels out
+              // in the subtraction and ignores diacritic direction. Using actual measurements means:
+              //   only-above diacritics → shifts text down to center ink
+              //   only-below diacritics → shifts text up to center ink
+              //   both directions → roughly same as before
+              var scaledAscent = measurements.canvasAscent * canvasScale;
+              var scaledDescent = measurements.canvasDescent * canvasScale;
               baselineOffset = (scaledAscent - scaledDescent) / 2;
             } else {
               baselineOffset = newFontSize * 0.36;  // fallback: assume caps-like center
@@ -2181,6 +2343,9 @@ const SvgRenderer = {
       // STEP 5: Resize/reposition rects to wrap around text (centered on viewBox center)
       var newRectX = viewBoxCenterX - newRectWidth / 2;
       var newRectY = viewBoxCenterY - newRectHeight / 2;
+
+      // Debug text zone tracking (set during rect loop, drawn after)
+      var debugZoneX, debugZoneY, debugZoneW, debugZoneH;
 
       // First pass: find the largest rect width (outer frame) to classify rects
       var rectInfos = [];
@@ -2275,6 +2440,13 @@ const SvgRenderer = {
             na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + (newRectHeight - iPadY * 2).toFixed(2) + '"');
             if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + (newRectX + iPadX).toFixed(2) + '"');
             if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + (newRectY + iPadY).toFixed(2) + '"');
+            // Capture inner rect as debug text zone (double frame only — split uses outer)
+            if (frameMode === 'double') {
+              debugZoneX = newRectX + iPadX;
+              debugZoneY = newRectY + iPadY;
+              debugZoneW = newRectWidth - iPadX * 2;
+              debugZoneH = newRectHeight - iPadY * 2;
+            }
           } else {
             na = na.replace(/(\s)width=["'][\d.]+["']/, '$1width="' + newRectWidth.toFixed(2) + '"');
             na = na.replace(/(\s)height=["'][\d.]+["']/, '$1height="' + newRectHeight.toFixed(2) + '"');
@@ -2582,8 +2754,23 @@ const SvgRenderer = {
         }
       }
 
-      // Invisible-o: convert o+ZWS markers back to invisible tspan elements
-      result = result.replace(/o\u200B/g, '<tspan fill-opacity="0" stroke-opacity="0">o</tspan>');
+      // DEBUG: red rect showing actual text zone (REMOVE AFTER CALIBRATION)
+      // Fallback for single-frame stamps (no inner rect found)
+      if (debugZoneW === undefined) {
+        var halfSw = outerRectSw / 2;
+        debugZoneX = newRectX + halfSw;
+        debugZoneY = newRectY + halfSw;
+        debugZoneW = newRectWidth - outerRectSw;
+        debugZoneH = newRectHeight - outerRectSw;
+      }
+      if (debugZoneW > 0 && debugZoneH > 0) {
+        var debugTextRect = '<rect x="' + debugZoneX.toFixed(2) +
+          '" y="' + debugZoneY.toFixed(2) +
+          '" width="' + debugZoneW.toFixed(2) +
+          '" height="' + debugZoneH.toFixed(2) +
+          '" fill="rgba(255,0,0,0.15)" stroke="red" stroke-width="2" />';
+        result = result.replace('</svg>', debugTextRect + '</svg>');
+      }
 
       return result;
     } else {
@@ -3363,19 +3550,20 @@ const SvgRenderer = {
       iframe.style.visibility = 'hidden';
       document.body.appendChild(iframe);
 
+      var _fontBase2 = window.location.origin;
       var htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
         '<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">' +
         '<style>' +
-        '@font-face{font-family:"Oswald";src:url("/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
-        '@font-face{font-family:"Montserrat";src:url("/fonts/Montserrat-Bold.ttf") format("truetype");font-weight:700;}' +
-        '@font-face{font-family:"Nunito";src:url("/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
-        '@font-face{font-family:"BlackOpsOne";src:url("/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"CourierPrime";src:url("/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"Yomogi";src:url("/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
-        '@font-face{font-family:"Bitter";src:url("/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
-        '@font-face{font-family:"Exo2";src:url("/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
-        '@font-face{font-family:"Comfortaa";src:url("/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
-        '@font-face{font-family:"FuzzyBubbles";src:url("/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"Oswald";src:url("' + _fontBase2 + '/fonts/Oswald-Medium.ttf") format("truetype");font-weight:500;}' +
+        '@font-face{font-family:"Montserrat";src:url("' + _fontBase2 + '/fonts/Montserrat-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"Nunito";src:url("' + _fontBase2 + '/fonts/Nunito-Black.ttf") format("truetype");font-weight:900;}' +
+        '@font-face{font-family:"BlackOpsOne";src:url("' + _fontBase2 + '/fonts/BlackOpsOne-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"CourierPrime";src:url("' + _fontBase2 + '/fonts/CourierPrime-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"Yomogi";src:url("' + _fontBase2 + '/fonts/Yomogi-Regular.ttf") format("truetype");font-weight:400;}' +
+        '@font-face{font-family:"Bitter";src:url("' + _fontBase2 + '/fonts/Bitter-Medium.ttf") format("truetype");font-weight:500;}' +
+        '@font-face{font-family:"Exo2";src:url("' + _fontBase2 + '/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"Comfortaa";src:url("' + _fontBase2 + '/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"FuzzyBubbles";src:url("' + _fontBase2 + '/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
         '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +
         '</head><body>' + svgString + '</body></html>';

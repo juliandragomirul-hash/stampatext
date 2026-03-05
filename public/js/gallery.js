@@ -147,6 +147,7 @@ const Gallery = {
    * @param {string} userText
    */
   async processAll(userText) {
+    console.warn('[gallery] processAll START | session=' + (window.__diagSession || '?') + ' userText="' + userText.substring(0, 30) + '"');
     this.currentText = userText;
     this.baseResults = [];
     this.allResults = [];
@@ -252,6 +253,7 @@ const Gallery = {
         var autoFitZoneInfo = null;
         for (const zone of editableZones) {
           const idx = zone.svg_element_index || 0;
+          console.warn('[gallery] BEFORE replaceText | session=' + (window.__diagSession || '?') + ' tpl=' + tpl.id + ' font=' + cycleFont.key + ' border=' + (tpl.border_type || 'simple') + ' fill=' + (tpl.fill_type || 'full'));
           cleanedSvg = SvgRenderer.replaceTextInString(cleanedSvg, idx, userText);
 
           // Auto-fit if bounding_width is set

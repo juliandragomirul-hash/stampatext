@@ -280,9 +280,13 @@
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
   <script src="/js/router.js"></script>
-  <script src="/js/svg-renderer.js?v=140"></script>
-  <script src="/js/gallery.js?v=53"></script>
+  <script src="/js/svg-renderer.js?v=160"></script>
+  <script src="/js/gallery.js?v=56"></script>
   <script>
+    // Diagnostic session marker — unique per page load, proves console isn't preserved
+    window.__diagSession = Math.random().toString(36).substring(2, 6);
+    console.warn('[PAGE] LOAD | session=' + window.__diagSession + ' url=' + location.search.substring(0, 60));
+
     // Inline restore check — runs BEFORE stamp-app.js, cannot be cached separately
     (function() {
       var p = new URLSearchParams(window.location.search);

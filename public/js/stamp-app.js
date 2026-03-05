@@ -120,6 +120,7 @@
   async function handleStamp() {
     var input = document.getElementById('stamp-input');
     var text = input.value.trim();
+    console.warn('[handleStamp] session=' + (window.__diagSession || '?') + ' input="' + text.substring(0, 30) + '" url=' + location.search.substring(0, 60));
     if (!text || isProcessing) return;
 
     isProcessing = true;
