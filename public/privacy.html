@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - StampaText</title>
+  <link rel="stylesheet" href="/css/style.css?v=45">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions" id="header-actions">
+      <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <button class="btn btn-secondary btn-small" id="btn-login" onclick="window.location.href='/?login=1'">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup" onclick="window.location.href='/?signup=1'">Sign Up</button>
+      <div class="dropdown-wrapper" id="hamburger-wrapper" style="display:none;">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="static-page">
+    <h1>Privacy Policy</h1>
+    <p class="last-updated">Last updated: March 6, 2026</p>
+
+    <section>
+      <h2>1. Information We Collect</h2>
+      <h3>Account Information</h3>
+      <p>When you create an account, we collect your email address and an optional display name. Your password is securely hashed and managed by our authentication provider (Supabase).</p>
+
+      <h3>Payment Information</h3>
+      <p>Credit purchases are processed through PayPal. We do not store your payment card details. We receive your PayPal transaction ID and email for order verification.</p>
+
+      <h3>Usage Data</h3>
+      <p>We record stamp downloads (template used, timestamp) for credit tracking. We do not store the text you type into stamps.</p>
+    </section>
+
+    <section>
+      <h2>2. How We Use Your Information</h2>
+      <ul>
+        <li>To provide and maintain the Service (account management, credit tracking)</li>
+        <li>To process payments and prevent fraud</li>
+        <li>To communicate with you about your account or the Service</li>
+        <li>To improve the Service based on aggregate usage patterns</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. Data Sharing</h2>
+      <p>We do not sell or rent your personal information. We share data only with:</p>
+      <ul>
+        <li><strong>Supabase</strong> — Authentication and database hosting</li>
+        <li><strong>PayPal</strong> — Payment processing</li>
+      </ul>
+      <p>Both providers have their own privacy policies and are GDPR-compliant.</p>
+    </section>
+
+    <section>
+      <h2>4. Cookies and Tracking</h2>
+      <p>We use essential cookies for authentication (session tokens). We do not use third-party tracking cookies, analytics services, or advertising networks.</p>
+    </section>
+
+    <section>
+      <h2>5. Data Retention</h2>
+      <p>Your account data is retained as long as your account is active. If you delete your account, your personal data will be removed within 30 days. Transaction records may be retained for legal and accounting purposes.</p>
+    </section>
+
+    <section>
+      <h2>6. Your Rights</h2>
+      <p>You have the right to:</p>
+      <ul>
+        <li>Access the personal data we hold about you</li>
+        <li>Request correction of inaccurate data</li>
+        <li>Request deletion of your account and data</li>
+        <li>Export your data in a portable format</li>
+      </ul>
+      <p>To exercise these rights, contact us at <a href="mailto:contact@stampatext.com">contact@stampatext.com</a>.</p>
+    </section>
+
+    <section>
+      <h2>7. Security</h2>
+      <p>We use industry-standard security measures including encrypted connections (HTTPS), secure password hashing, and row-level security policies on our database. However, no system is 100% secure.</p>
+    </section>
+
+    <section>
+      <h2>8. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. We will notify you of significant changes via email or a notice on the site.</p>
+    </section>
+
+    <section>
+      <h2>9. Contact</h2>
+      <p>For privacy-related questions, contact us at <a href="mailto:contact@stampatext.com">contact@stampatext.com</a>.</p>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-links">
+        <a href="/about.html">About</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+        <a href="/privacy.html">Privacy Policy</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 StampaText. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts (auth + buy credits for header) -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
+  <script src="/js/buy-credits.js"></script>
+  <script>
+    (async function() {
+      try {
+        var session = await getSession();
+        if (session) {
+          document.getElementById('btn-login').style.display = 'none';
+          document.getElementById('btn-signup').style.display = 'none';
+          var hamburger = document.getElementById('hamburger-wrapper');
+          if (hamburger) hamburger.style.display = '';
+          var buyBtn = document.getElementById('btn-buy-credits');
+          if (buyBtn) buyBtn.style.display = 'inline-block';
+          var profile = await getProfile();
+          if (profile) {
+            var creditsEl = document.getElementById('user-credits');
+            if (creditsEl) {
+              creditsEl.textContent = profile.credits + ' credits';
+              creditsEl.style.display = 'inline-block';
+            }
+            var adminLink = document.getElementById('menu-admin');
+            if (adminLink && profile.role === 'admin') adminLink.style.display = '';
+          }
+        }
+      } catch (e) { console.error('Auth state error:', e); }
+    })();
+
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('user-menu');
+      var btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
+  </script>
+
+</body>
+</html>

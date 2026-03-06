@@ -87,9 +87,9 @@ app.post('/api/generations/record', async (req, res) => {
 
 // ---- Credit Packages (hardcoded for MVP) ----
 const CREDIT_PACKAGES = {
-  pack_10:  { credits: 10,  price: '5.00',  name: '10 Credits' },
-  pack_50:  { credits: 50,  price: '20.00', name: '50 Credits' },
-  pack_100: { credits: 100, price: '35.00', name: '100 Credits' }
+  pack_10:  { credits: 10,  price: '29.00', name: '10 Credits' },
+  pack_50:  { credits: 50,  price: '59.00', name: '50 Credits' },
+  pack_100: { credits: 100, price: '99.00', name: '100 Credits' }
 };
 
 // ---- PayPal Helpers ----

@@ -16,14 +16,14 @@
     <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
     <div class="header-actions" id="header-actions">
       <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
-      <button class="btn btn-secondary btn-small" id="btn-buy-credits" style="display:none;" onclick="openBuyCreditsModal()">Buy Credits</button>
       <button class="btn btn-secondary btn-small" id="btn-login" onclick="openModal('login')">Login</button>
       <button class="btn btn-primary btn-small" id="btn-signup" onclick="openModal('signup')">Sign Up</button>
       <div class="dropdown-wrapper" id="hamburger-wrapper" style="display:none;">
         <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
         <div class="dropdown-menu" id="user-menu">
-          <a class="dropdown-item" href="/">Stampeaz&#259;</a>
-          <a class="dropdown-item" href="/app/profile">Profilul Meu</a>
+          <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
           <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
           <div class="dropdown-divider"></div>
           <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
@@ -34,7 +34,7 @@
 
   <!-- Hero Section -->
   <section class="stamp-hero">
-    <h1 class="stamp-hero-title">Welcome, have your text stamped on hundreds of gorgeous models of stamps, stickers, blackboards, speech bubbles, banners, buttons and more</h1>
+    <h1 class="stamp-hero-title"><span style="font-size:3rem">Welcome!</span><br>Stamp your text on our gorgeous models.</h1>
     <div class="stamp-hero-input-wrapper">
       <input type="text" class="stamp-hero-input" id="stamp-input"
              placeholder="write the text you want to stamp and I'll be on it in seconds"
@@ -72,6 +72,7 @@
         <option value="full">Filled</option>
         <option value="empty">Outlined</option>
       </select>
+
       <button class="btn btn-small filter-bar-reset" id="filter-reset">Reset</button>
     </div>
     <div id="results-batches"></div>
@@ -272,6 +273,19 @@
     </div>
   </div>
 
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-links">
+        <a href="/about.html">About</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+        <a href="/privacy.html">Privacy Policy</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 StampaText. All rights reserved.</p>
+    </div>
+  </footer>
+
   <!-- Scripts -->
   <script src="/js/supabase.umd.js"></script>
   <script src="/js/config.js"></script>
@@ -280,8 +294,8 @@
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
   <script src="/js/router.js"></script>
-  <script src="/js/svg-renderer.js?v=171"></script>
-  <script src="/js/gallery.js?v=61"></script>
+  <script src="/js/svg-renderer.js?v=172"></script>
+  <script src="/js/gallery.js?v=65"></script>
   <script>
     // Diagnostic session marker — unique per page load, proves console isn't preserved
     window.__diagSession = Math.random().toString(36).substring(2, 6);

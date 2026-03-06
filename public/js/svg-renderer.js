@@ -1869,8 +1869,8 @@ const SvgRenderer = {
         totalInset = Math.max(sw / 2, borderFlags.borderRadius || 10);
       } else if (borderFlags.stitch) {
         // Stitch shapes extend OUTWARD from rect edge; rect stroke is set to "none".
-        // Text only needs minimal breathing room from the rect edge.
-        totalInset = 0;
+        // But visually the shapes crowd the interior — need some breathing room.
+        totalInset = 15;
       } else {
         totalInset = sw / 2; // plain border
       }
@@ -1878,6 +1878,10 @@ const SvgRenderer = {
       // is less prominent — text can extend closer to the edge.
       if (isFull) {
         totalInset *= 0.25;
+      }
+      // Stitch shapes crowd visually regardless of fill — enforce minimum
+      if (borderFlags.stitch) {
+        totalInset = Math.max(totalInset, 15);
       }
     }
 

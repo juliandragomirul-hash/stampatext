@@ -321,6 +321,11 @@ const Gallery = {
   async showInitialRandom() {
     // Clear all previous batches
     var container = document.getElementById('results-batches');
+    // Preserve filter bar before clearing (it may have been moved inside container)
+    var filterBar = document.getElementById('stamp-filter-bar');
+    if (filterBar && filterBar.parentNode === container) {
+      container.parentNode.appendChild(filterBar);
+    }
     container.innerHTML = '';
     this.displayedCount = 0;
     this.allResults = [];
@@ -784,8 +789,8 @@ const Gallery = {
     headerTitle.className = 'stamp-results-title';
     var timeLabel = isRestore ? 'Restored at' : 'Generated at';
     var headerMsg = isRestore
-      ? 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong>. Use the filters to narrow down.'
-      : 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random colors. Use the filters to narrow down. Click on the image you like and play with color, font, tilt and texture.';
+      ? 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Use the filters to narrow down.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
+      : 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Use the filters to narrow down.<br>Click on the model you like and play with color, border count, font, tilt and texture.';
     headerTitle.innerHTML = headerMsg + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
     headerSection.appendChild(headerTitle);
     container.appendChild(headerSection);
@@ -885,29 +890,10 @@ const Gallery = {
    * @param {string} mode - 'initial' (Show more only) or 'filtered' (Show more + Change preferences)
    */
   updateBatchButtons(mode) {
-    // Remove all existing action buttons
+    // Batch buttons removed — filters above the gallery handle navigation
     document.querySelectorAll('.stamp-batch-actions').forEach(function (el) {
       el.parentNode.removeChild(el);
     });
-
-    // Add buttons to the last batch section
-    var sections = document.querySelectorAll('.stamp-batch-section');
-    if (sections.length === 0) return;
-    var last = sections[sections.length - 1];
-
-    var actionsDiv = document.createElement('div');
-    actionsDiv.className = 'stamp-results-actions stamp-batch-actions';
-
-    if (mode === 'initial') {
-      actionsDiv.innerHTML =
-        '<button class="btn btn-primary btn-batch-show-more">Show more</button>';
-    } else {
-      actionsDiv.innerHTML =
-        '<button class="btn btn-primary btn-batch-show-more">Show more</button>' +
-        '<button class="btn btn-secondary btn-batch-change-prefs">Change preferences</button>';
-    }
-
-    last.appendChild(actionsDiv);
   },
 
   renderEmpty(message) {
@@ -921,6 +907,12 @@ const Gallery = {
     if (filterBar) {
       filterBar.style.display = 'flex';
       this.initFilterBar();
+      // Default to "Single" border count for a cleaner initial gallery
+      var frameSelect = document.getElementById('filter-border-count');
+      if (frameSelect && !frameSelect.value) {
+        frameSelect.value = 'single';
+        this.applyFilterBar();
+      }
     }
   },
 
@@ -958,7 +950,6 @@ const Gallery = {
     var frameVal = document.getElementById('filter-border-count').value;
     var cornersVal = document.getElementById('filter-corners').value;
     var fillVal = document.getElementById('filter-fill').value;
-
     var cards = document.querySelectorAll('#results-batches .stamp-card');
     var visibleCount = 0;
     cards.forEach(function(card) {
@@ -1182,6 +1173,11 @@ const Gallery = {
 
     // Clear and render — group by family just like fresh generation
     var container = document.getElementById('results-batches');
+    // Preserve filter bar before clearing (it may have been moved inside container)
+    var filterBar = document.getElementById('stamp-filter-bar');
+    if (filterBar && filterBar.parentNode === container) {
+      container.parentNode.appendChild(filterBar);
+    }
     container.innerHTML = '';
     this.allResults = batch;
     this.displayedCount = 0;

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms &amp; Conditions - StampaText</title>
+  <link rel="stylesheet" href="/css/style.css?v=45">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions" id="header-actions">
+      <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <button class="btn btn-secondary btn-small" id="btn-login" onclick="window.location.href='/?login=1'">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup" onclick="window.location.href='/?signup=1'">Sign Up</button>
+      <div class="dropdown-wrapper" id="hamburger-wrapper" style="display:none;">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="static-page">
+    <h1>Terms &amp; Conditions</h1>
+    <p class="last-updated">Last updated: March 6, 2026</p>
+
+    <section>
+      <h2>1. Acceptance of Terms</h2>
+      <p>By accessing and using StampaText ("the Service"), you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use the Service.</p>
+    </section>
+
+    <section>
+      <h2>2. Account Registration</h2>
+      <p>To download stamps, you must create an account with a valid email address. You are responsible for maintaining the security of your account credentials. Each person may create only one account.</p>
+    </section>
+
+    <section>
+      <h2>3. Credits and Purchases</h2>
+      <ul>
+        <li>New accounts receive 5 free credits upon registration.</li>
+        <li>Additional credits can be purchased via PayPal at the prices displayed on the site.</li>
+        <li>Each stamp download costs 1 credit.</li>
+        <li><strong>All credit purchases are final and non-refundable.</strong></li>
+        <li>Credits do not expire and are non-transferable between accounts.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>4. Usage Rights</h2>
+      <p>When you download a stamp using credits, you receive a personal, non-exclusive license to use that image for:</p>
+      <ul>
+        <li>Personal projects and social media</li>
+        <li>Commercial projects (marketing materials, websites, presentations)</li>
+        <li>Print materials (stickers, labels, merchandise)</li>
+      </ul>
+      <p>You may <strong>not</strong>:</p>
+      <ul>
+        <li>Resell or redistribute downloaded stamps as standalone files</li>
+        <li>Use stamps in a way that competes with StampaText (e.g., offering them as a stamp template service)</li>
+        <li>Remove or alter the watermark on preview images</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>5. Intellectual Property</h2>
+      <p>All templates, fonts (used under their respective open-source licenses), and the stamp generation technology are the property of StampaText. Your downloaded stamps are licensed to you; the underlying templates remain ours.</p>
+    </section>
+
+    <section>
+      <h2>6. Prohibited Conduct</h2>
+      <p>You agree not to:</p>
+      <ul>
+        <li>Attempt to bypass the credit system or watermark protection</li>
+        <li>Use automated tools to mass-download stamps</li>
+        <li>Create stamps with hateful, illegal, or offensive content</li>
+        <li>Interfere with the operation of the Service</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>7. Limitation of Liability</h2>
+      <p>StampaText is provided "as is" without warranties of any kind. We are not liable for any damages arising from your use of the Service, including but not limited to loss of data, profits, or business opportunities.</p>
+    </section>
+
+    <section>
+      <h2>8. Changes to Terms</h2>
+      <p>We may update these Terms at any time. Continued use of the Service after changes constitutes acceptance of the updated Terms. Material changes will be communicated via email or site notice.</p>
+    </section>
+
+    <section>
+      <h2>9. Contact</h2>
+      <p>Questions about these Terms? Contact us at <a href="mailto:contact@stampatext.com">contact@stampatext.com</a>.</p>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-links">
+        <a href="/about.html">About</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+        <a href="/privacy.html">Privacy Policy</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 StampaText. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts (auth + buy credits for header) -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
+  <script src="/js/buy-credits.js"></script>
+  <script>
+    (async function() {
+      try {
+        var session = await getSession();
+        if (session) {
+          document.getElementById('btn-login').style.display = 'none';
+          document.getElementById('btn-signup').style.display = 'none';
+          var hamburger = document.getElementById('hamburger-wrapper');
+          if (hamburger) hamburger.style.display = '';
+          var buyBtn = document.getElementById('btn-buy-credits');
+          if (buyBtn) buyBtn.style.display = 'inline-block';
+          var profile = await getProfile();
+          if (profile) {
+            var creditsEl = document.getElementById('user-credits');
+            if (creditsEl) {
+              creditsEl.textContent = profile.credits + ' credits';
+              creditsEl.style.display = 'inline-block';
+            }
+            var adminLink = document.getElementById('menu-admin');
+            if (adminLink && profile.role === 'admin') adminLink.style.display = '';
+          }
+        }
+      } catch (e) { console.error('Auth state error:', e); }
+    })();
+
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('user-menu');
+      var btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
+  </script>
+
+</body>
+</html>

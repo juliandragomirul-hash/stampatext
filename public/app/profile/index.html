@@ -1,23 +1,24 @@
 <!DOCTYPE html>
-<html lang="ro">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StampaText - Profilul Meu</title>
+  <title>StampaText - My Profile</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="page-loading">
 
   <!-- Header -->
   <header class="header">
-    <a href="/app" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
     <div class="header-actions">
       <span class="header-user" id="user-email"></span>
       <div class="dropdown-wrapper">
         <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
         <div class="dropdown-menu" id="user-menu">
-          <a class="dropdown-item" href="/">Stampeaz&#259;</a>
-          <a class="dropdown-item" href="/app/profile">Profilul Meu</a>
+          <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
           <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
           <div class="dropdown-divider"></div>
           <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
@@ -28,66 +29,66 @@
 
   <!-- Profile Content -->
   <div class="profile-container">
-    <h1 class="page-title">Profilul Meu</h1>
-    <p class="page-subtitle">Gestionează informațiile contului tău</p>
+    <h1 class="page-title">My Profile</h1>
+    <p class="page-subtitle">Manage your account information</p>
 
     <!-- Personal Info -->
     <div class="profile-section">
-      <div class="profile-section-title">Informații personale</div>
+      <div class="profile-section-title">Personal Information</div>
       <form id="form-profile" onsubmit="handleUpdateProfile(event)">
         <div class="form-group">
-          <label class="form-label" for="profile-name">Nume afișat</label>
-          <input class="form-input" type="text" id="profile-name" placeholder="Ex: Ion Popescu">
+          <label class="form-label" for="profile-name">Display name</label>
+          <input class="form-input" type="text" id="profile-name" placeholder="E.g. John Smith">
         </div>
         <div class="form-group">
           <label class="form-label" for="profile-email">Email</label>
           <input class="form-input" type="email" id="profile-email" readonly style="background-color:#f0f0f0; color:#888;">
         </div>
         <div class="form-error" id="profile-error"></div>
-        <div class="form-success" id="profile-success">Profilul a fost actualizat cu succes.</div>
-        <button class="btn btn-primary btn-small" type="submit" id="profile-submit">Salvează modificările</button>
+        <div class="form-success" id="profile-success">Profile updated successfully.</div>
+        <button class="btn btn-primary btn-small" type="submit" id="profile-submit">Save changes</button>
       </form>
     </div>
 
     <!-- Change Password -->
     <div class="profile-section">
-      <div class="profile-section-title">Schimbă parola</div>
+      <div class="profile-section-title">Change password</div>
       <form id="form-password" onsubmit="handleChangePassword(event)">
         <div class="form-group">
-          <label class="form-label" for="new-password">Parolă nouă</label>
+          <label class="form-label" for="new-password">New password</label>
           <input class="form-input" type="password" id="new-password" required minlength="6">
         </div>
         <div class="form-group">
-          <label class="form-label" for="confirm-password">Confirmă parola nouă</label>
+          <label class="form-label" for="confirm-password">Confirm new password</label>
           <input class="form-input" type="password" id="confirm-password" required minlength="6">
         </div>
         <div class="form-error" id="password-error"></div>
-        <div class="form-success" id="password-success">Parola a fost schimbată cu succes.</div>
-        <button class="btn btn-primary btn-small" type="submit" id="password-submit">Schimbă parola</button>
+        <div class="form-success" id="password-success">Password changed successfully.</div>
+        <button class="btn btn-primary btn-small" type="submit" id="password-submit">Change password</button>
       </form>
     </div>
 
     <!-- Forgot Password -->
     <div class="profile-section">
-      <div class="profile-section-title">Resetare parolă prin email</div>
-      <p style="font-size:0.85rem; color:#666; margin-bottom:1rem;">Trimite un link de resetare a parolei pe adresa ta de email.</p>
-      <div class="form-success" id="reset-success">Am trimis un link de resetare pe emailul tău.</div>
-      <button class="btn btn-secondary btn-small" id="reset-btn" onclick="handleResetPassword()">Trimite link de resetare</button>
+      <div class="profile-section-title">Reset password via email</div>
+      <p style="font-size:0.85rem; color:#666; margin-bottom:1rem;">Send a password reset link to your email address.</p>
+      <div class="form-success" id="reset-success">We've sent a reset link to your email.</div>
+      <button class="btn btn-secondary btn-small" id="reset-btn" onclick="handleResetPassword()">Send reset link</button>
     </div>
 
     <!-- Account Info -->
     <div class="profile-section">
-      <div class="profile-section-title">Informații cont</div>
+      <div class="profile-section-title">Account info</div>
       <div class="profile-info">
-        <span class="profile-info-label">Rol</span>
+        <span class="profile-info-label">Role</span>
         <span class="profile-info-value" id="info-role">--</span>
       </div>
       <div class="profile-info">
-        <span class="profile-info-label">Credite</span>
+        <span class="profile-info-label">Credits</span>
         <span class="profile-info-value" id="info-credits">--</span>
       </div>
       <div class="profile-info">
-        <span class="profile-info-label">Membru din</span>
+        <span class="profile-info-label">Member since</span>
         <span class="profile-info-value" id="info-created">--</span>
       </div>
     </div>
@@ -99,6 +100,8 @@
   <script src="/js/supabase-client.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/router.js"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
+  <script src="/js/buy-credits.js"></script>
   <script>
     function toggleMenu() {
       document.getElementById('user-menu').classList.toggle('active');
@@ -122,7 +125,7 @@
       errorEl.classList.remove('visible');
       successEl.classList.remove('visible');
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Se salvează...';
+      submitBtn.textContent = 'Saving...';
 
       try {
         await updateProfile({ display_name: name });
@@ -133,7 +136,7 @@
       }
 
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Salvează modificările';
+      submitBtn.textContent = 'Save changes';
     }
 
     async function handleChangePassword(e) {
@@ -148,13 +151,13 @@
       successEl.classList.remove('visible');
 
       if (newPass !== confirmPass) {
-        errorEl.textContent = 'Parolele nu se potrivesc';
+        errorEl.textContent = 'Passwords do not match';
         errorEl.classList.add('visible');
         return;
       }
 
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Se schimbă...';
+      submitBtn.textContent = 'Changing...';
 
       try {
         await changePassword(newPass);
@@ -167,7 +170,7 @@
       }
 
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Schimbă parola';
+      submitBtn.textContent = 'Change password';
     }
 
     async function handleResetPassword() {
@@ -175,7 +178,7 @@
       const successEl = document.getElementById('reset-success');
       successEl.classList.remove('visible');
       btn.disabled = true;
-      btn.textContent = 'Se trimite...';
+      btn.textContent = 'Sending...';
 
       try {
         const session = await getSession();
@@ -186,7 +189,7 @@
       }
 
       btn.disabled = false;
-      btn.textContent = 'Trimite link de resetare';
+      btn.textContent = 'Send reset link';
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
@@ -205,9 +208,9 @@
 
       if (profile) {
         document.getElementById('profile-name').value = profile.display_name || '';
-        document.getElementById('info-role').textContent = profile.role === 'admin' ? 'Administrator' : 'Utilizator';
+        document.getElementById('info-role').textContent = profile.role === 'admin' ? 'Administrator' : 'User';
         document.getElementById('info-credits').textContent = profile.credits;
-        document.getElementById('info-created').textContent = new Date(profile.created_at).toLocaleDateString('ro-RO', {
+        document.getElementById('info-created').textContent = new Date(profile.created_at).toLocaleDateString('en-US', {
           year: 'numeric', month: 'long', day: 'numeric'
         });
 
@@ -219,6 +222,19 @@
       showPage();
     });
   </script>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-links">
+        <a href="/about.html">About</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+        <a href="/privacy.html">Privacy Policy</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 StampaText. All rights reserved.</p>
+    </div>
+  </footer>
 
 </body>
 </html>

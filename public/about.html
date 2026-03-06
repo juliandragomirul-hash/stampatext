@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About - StampaText</title>
+  <link rel="stylesheet" href="/css/style.css?v=45">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions" id="header-actions">
+      <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <button class="btn btn-secondary btn-small" id="btn-login" onclick="window.location.href='/?login=1'">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup" onclick="window.location.href='/?signup=1'">Sign Up</button>
+      <div class="dropdown-wrapper" id="hamburger-wrapper" style="display:none;">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="static-page">
+    <h1>About StampaText</h1>
+
+    <section>
+      <h2>What We Do</h2>
+      <p>StampaText lets you create beautiful, professional text stamps in seconds. Type your text, pick a style, and download a high-quality image ready to use in your projects, social media, branding, or print materials.</p>
+    </section>
+
+    <section>
+      <h2>How It Works</h2>
+      <ol>
+        <li><strong>Type your text</strong> — Enter any word or phrase on the homepage.</li>
+        <li><strong>Browse designs</strong> — Our gallery instantly generates dozens of stamp variations with different fonts, colors, borders, and textures.</li>
+        <li><strong>Customize</strong> — Click any stamp to fine-tune the font, color, tilt, frame style, and texture on the product page.</li>
+        <li><strong>Download</strong> — Get your stamp as a high-resolution PNG (transparent) or JPG (white background). One credit per download.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Why StampaText?</h2>
+      <ul>
+        <li><strong>Instant results</strong> — No design skills needed. Type and go.</li>
+        <li><strong>Huge variety</strong> — 30+ templates, 10 fonts, 10 colors, multiple border styles, tilts, and textures create thousands of unique combinations.</li>
+        <li><strong>High quality</strong> — Every stamp is rendered as crisp vector graphics, then exported at up to 3000px resolution.</li>
+        <li><strong>Affordable</strong> — Start with 5 free credits on sign-up. Additional credits start at $0.50 each.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Who We Are</h2>
+      <p>StampaText is built by a small, passionate team that believes great design should be accessible to everyone. We combine SVG rendering technology with carefully crafted templates to deliver professional results without the complexity of traditional design tools.</p>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-links">
+        <a href="/about.html">About</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+        <a href="/privacy.html">Privacy Policy</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 StampaText. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts (auth + buy credits for header) -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
+  <script src="/js/buy-credits.js"></script>
+  <script>
+    (async function() {
+      try {
+        var session = await getSession();
+        if (session) {
+          document.getElementById('btn-login').style.display = 'none';
+          document.getElementById('btn-signup').style.display = 'none';
+          var hamburger = document.getElementById('hamburger-wrapper');
+          if (hamburger) hamburger.style.display = '';
+          var buyBtn = document.getElementById('btn-buy-credits');
+          if (buyBtn) buyBtn.style.display = 'inline-block';
+          var profile = await getProfile();
+          if (profile) {
+            var creditsEl = document.getElementById('user-credits');
+            if (creditsEl) {
+              creditsEl.textContent = profile.credits + ' credits';
+              creditsEl.style.display = 'inline-block';
+            }
+            var adminLink = document.getElementById('menu-admin');
+            if (adminLink && profile.role === 'admin') adminLink.style.display = '';
+          }
+        }
+      } catch (e) { console.error('Auth state error:', e); }
+    })();
+
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('user-menu');
+      var btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
+  </script>
+
+</body>
+</html>

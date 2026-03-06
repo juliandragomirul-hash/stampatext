@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buy Credits - StampaText</title>
+  <link rel="stylesheet" href="/css/style.css?v=46">
+</head>
+<body class="page-loading">
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions">
+      <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <div class="dropdown-wrapper">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Pricing Content -->
+  <div class="pricing-container">
+    <h1 class="page-title">Buy Credits</h1>
+    <p class="page-subtitle">Each download costs 1 credit. Pick the package that works for you.</p>
+    <p class="pricing-free-note">New here? You get <strong>5 free credits</strong> on signup — no credit card needed.</p>
+
+    <div class="pricing-cards">
+
+      <!-- Starter -->
+      <div class="pricing-card" id="card-pack_10">
+        <div class="pricing-card-header">
+          <h2 class="pricing-card-name">Starter</h2>
+          <div class="pricing-card-price">$29</div>
+          <div class="pricing-card-credits">10 credits</div>
+          <div class="pricing-card-unit">$2.90 per download</div>
+        </div>
+        <ul class="pricing-card-features">
+          <li>High-res PNG &amp; JPG downloads</li>
+          <li>Commercial use included</li>
+          <li>Credits never expire</li>
+        </ul>
+        <button class="btn btn-secondary pricing-card-btn" onclick="selectPackage('pack_10')">Select</button>
+      </div>
+
+      <!-- Popular -->
+      <div class="pricing-card pricing-card-popular" id="card-pack_50">
+        <div class="pricing-card-badge">Most Popular</div>
+        <div class="pricing-card-header">
+          <h2 class="pricing-card-name">Popular</h2>
+          <div class="pricing-card-price">$59</div>
+          <div class="pricing-card-credits">50 credits</div>
+          <div class="pricing-card-unit">$1.18 per download</div>
+        </div>
+        <ul class="pricing-card-features">
+          <li>High-res PNG &amp; JPG downloads</li>
+          <li>Commercial use included</li>
+          <li>Credits never expire</li>
+          <li>Save 59% vs Starter</li>
+        </ul>
+        <button class="btn btn-primary pricing-card-btn" onclick="selectPackage('pack_50')">Select</button>
+      </div>
+
+      <!-- Pro -->
+      <div class="pricing-card" id="card-pack_100">
+        <div class="pricing-card-header">
+          <h2 class="pricing-card-name">Pro</h2>
+          <div class="pricing-card-price">$99</div>
+          <div class="pricing-card-credits">100 credits</div>
+          <div class="pricing-card-unit">$0.99 per download</div>
+        </div>
+        <ul class="pricing-card-features">
+          <li>High-res PNG &amp; JPG downloads</li>
+          <li>Commercial use included</li>
+          <li>Credits never expire</li>
+          <li>Save 66% vs Starter</li>
+          <li>Best value</li>
+        </ul>
+        <button class="btn btn-secondary pricing-card-btn" onclick="selectPackage('pack_100')">Select</button>
+      </div>
+    </div>
+
+    <!-- PayPal + status area -->
+    <div class="pricing-checkout" id="pricing-checkout" style="display:none;">
+      <div class="pricing-checkout-summary" id="pricing-checkout-summary"></div>
+      <div class="form-error" id="pricing-error"></div>
+      <div id="pricing-paypal-container" style="min-height:45px;max-width:400px;margin:0 auto;"></div>
+    </div>
+
+    <!-- Success message -->
+    <div class="pricing-success" id="pricing-success" style="display:none;">
+      <div class="pricing-success-icon">&#10003;</div>
+      <div class="pricing-success-title">Payment Successful!</div>
+      <div class="pricing-success-msg" id="pricing-success-msg"></div>
+      <a href="/" class="btn btn-primary" style="margin-top:1rem;">Go stamp</a>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-links">
+        <a href="/about.html">About</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+        <a href="/privacy.html">Privacy Policy</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 StampaText. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/router.js"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
+  <script>
+    var CREDIT_PACKAGES = {
+      pack_10:  { credits: 10,  price: 29, label: '10 credits', priceLabel: '$29' },
+      pack_50:  { credits: 50,  price: 59, label: '50 credits', priceLabel: '$59' },
+      pack_100: { credits: 100, price: 99, label: '100 credits', priceLabel: '$99' }
+    };
+
+    var selectedPackageId = null;
+    var paypalRendered = false;
+
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('user-menu');
+      var btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
+
+    function selectPackage(pkgId) {
+      selectedPackageId = pkgId;
+      var pkg = CREDIT_PACKAGES[pkgId];
+
+      // Highlight selected card
+      document.querySelectorAll('.pricing-card').forEach(function(c) {
+        c.classList.remove('pricing-card-selected');
+      });
+      document.getElementById('card-' + pkgId).classList.add('pricing-card-selected');
+
+      // Show checkout area
+      var checkout = document.getElementById('pricing-checkout');
+      checkout.style.display = '';
+      document.getElementById('pricing-success').style.display = 'none';
+      document.getElementById('pricing-error').classList.remove('visible');
+      document.getElementById('pricing-checkout-summary').textContent =
+        'You selected: ' + pkg.label + ' for ' + pkg.priceLabel;
+
+      // Render PayPal buttons
+      var container = document.getElementById('pricing-paypal-container');
+      container.innerHTML = '';
+      paypalRendered = false;
+
+      if (window.paypal) {
+        renderPayPal();
+      } else {
+        container.innerHTML = '<p style="text-align:center;color:#888;font-size:0.85rem;">Loading payment options...</p>';
+        var attempts = 0;
+        var interval = setInterval(function() {
+          attempts++;
+          if (window.paypal) {
+            clearInterval(interval);
+            container.innerHTML = '';
+            renderPayPal();
+          } else if (attempts > 20) {
+            clearInterval(interval);
+            container.innerHTML = '<p style="text-align:center;color:#dc2626;font-size:0.85rem;">Failed to load PayPal. Please refresh.</p>';
+          }
+        }, 500);
+      }
+
+      // Smooth scroll to checkout
+      checkout.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function showPricingError(msg) {
+      var el = document.getElementById('pricing-error');
+      el.textContent = msg;
+      el.classList.add('visible');
+    }
+
+    function renderPayPal() {
+      if (paypalRendered) return;
+      paypalRendered = true;
+
+      paypal.Buttons({
+        style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal', height: 45 },
+
+        createOrder: async function() {
+          var session = await getSession();
+          if (!session) { showPricingError('Please log in first.'); throw new Error('Not authenticated'); }
+          if (!selectedPackageId) { showPricingError('Please select a package.'); throw new Error('No package'); }
+
+          var res = await fetch('/api/payments/paypal-create-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + session.access_token
+            },
+            body: JSON.stringify({ package_id: selectedPackageId })
+          });
+
+          if (!res.ok) {
+            var err = await res.json().catch(function() { return {}; });
+            showPricingError(err.error || 'Failed to create order');
+            throw new Error(err.error || 'Create order failed');
+          }
+
+          return (await res.json()).order_id;
+        },
+
+        onApprove: async function(data) {
+          var session = await getSession();
+          if (!session) { showPricingError('Session expired. Please log in again.'); return; }
+
+          document.getElementById('pricing-paypal-container').innerHTML =
+            '<p style="text-align:center;color:#888;font-size:0.85rem;">Processing payment...</p>';
+
+          var res = await fetch('/api/payments/paypal-capture-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + session.access_token
+            },
+            body: JSON.stringify({ order_id: data.orderID })
+          });
+
+          if (!res.ok) {
+            var err = await res.json().catch(function() { return {}; });
+            showPricingError(err.error || 'Payment capture failed');
+            document.getElementById('pricing-paypal-container').innerHTML = '';
+            paypalRendered = false;
+            renderPayPal();
+            return;
+          }
+
+          var result = await res.json();
+
+          // Update header credits
+          var creditsEl = document.getElementById('user-credits');
+          if (creditsEl) {
+            creditsEl.textContent = result.new_balance + ' credits';
+            creditsEl.style.display = 'inline-block';
+          }
+
+          // Show success
+          document.getElementById('pricing-checkout').style.display = 'none';
+          document.querySelectorAll('.pricing-card').forEach(function(c) {
+            c.classList.remove('pricing-card-selected');
+          });
+          var successEl = document.getElementById('pricing-success');
+          successEl.style.display = '';
+          document.getElementById('pricing-success-msg').textContent =
+            result.credits_added + ' credits added. You now have ' + result.new_balance + ' credits.';
+          successEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
+
+        onCancel: function() {},
+
+        onError: function(err) {
+          console.error('PayPal error:', err);
+          showPricingError('PayPal encountered an error. Please try again.');
+        }
+      }).render('#pricing-paypal-container');
+    }
+
+    // Auth gate — require login
+    document.addEventListener('DOMContentLoaded', async function() {
+      var session = await requireAuth();
+      if (!session) return;
+
+      var profile = await getProfile();
+      if (profile) {
+        var creditsEl = document.getElementById('user-credits');
+        if (creditsEl) {
+          creditsEl.textContent = profile.credits + ' credits';
+          creditsEl.style.display = 'inline-block';
+        }
+        if (profile.role === 'admin') {
+          document.getElementById('menu-admin').style.display = '';
+        }
+      }
+
+      showPage();
+    });
+  </script>
+
+</body>
+</html>
