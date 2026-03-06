@@ -1823,14 +1823,15 @@ const SvgRenderer = {
       // --- Exact addDoubleFrame geometry (addDoubleFrame lines 3818-3832) ---
       var innerSw = Math.max(4, Math.round(sw * 0.24));
       if (borderFlags.brush) innerSw = Math.max(6, Math.round(sw * 0.5));
-      if (borderFlags.stitch && !isFull) innerSw = Math.max(6, Math.round(sw * 0.7));
+      if (borderFlags.stitch && !isFull) innerSw = Math.max(6, Math.round(sw * 0.3));
       var frameInset;
       if (!borderFlags.stitch && isFull) {
         frameInset = sw / 2 + innerSw / 2;
       } else {
         frameInset = sw / 2 + innerSw * 1.5;
       }
-      if (borderFlags.stitch) frameInset = sw * 0.35;
+      // Stitch shapes extend outward — inner rect just needs minimal offset from rect edge
+      if (borderFlags.stitch) frameInset = innerSw / 2 + 2;
       if (borderFlags.border) {
         if (isFull) {
           frameInset = sw * 0.3;
@@ -1866,8 +1867,17 @@ const SvgRenderer = {
         totalInset = (borderFlags.filterDisplacement || 20) * 0.5;
       } else if (borderFlags.border) {
         totalInset = Math.max(sw / 2, borderFlags.borderRadius || 10);
+      } else if (borderFlags.stitch) {
+        // Stitch shapes extend OUTWARD from rect edge; rect stroke is set to "none".
+        // Text only needs minimal breathing room from the rect edge.
+        totalInset = 0;
       } else {
-        totalInset = sw / 2; // plain border + stitch (stitch extends outward)
+        totalInset = sw / 2; // plain border
+      }
+      // Filled single: stroke merges with fill (same color), so the visual border
+      // is less prominent — text can extend closer to the edge.
+      if (isFull) {
+        totalInset *= 0.25;
       }
     }
 
@@ -2763,14 +2773,15 @@ const SvgRenderer = {
         debugZoneW = newRectWidth - outerRectSw;
         debugZoneH = newRectHeight - outerRectSw;
       }
-      if (debugZoneW > 0 && debugZoneH > 0) {
-        var debugTextRect = '<rect x="' + debugZoneX.toFixed(2) +
-          '" y="' + debugZoneY.toFixed(2) +
-          '" width="' + debugZoneW.toFixed(2) +
-          '" height="' + debugZoneH.toFixed(2) +
-          '" fill="rgba(255,0,0,0.15)" stroke="red" stroke-width="2" />';
-        result = result.replace('</svg>', debugTextRect + '</svg>');
-      }
+      // Debug red rect disabled — re-enable for admin text-space tuning
+      // if (debugZoneW > 0 && debugZoneH > 0) {
+      //   var debugTextRect = '<rect x="' + debugZoneX.toFixed(2) +
+      //     '" y="' + debugZoneY.toFixed(2) +
+      //     '" width="' + debugZoneW.toFixed(2) +
+      //     '" height="' + debugZoneH.toFixed(2) +
+      //     '" fill="rgba(255,0,0,0.15)" stroke="red" stroke-width="2" />';
+      //   result = result.replace('</svg>', debugTextRect + '</svg>');
+      // }
 
       return result;
     } else {
@@ -3318,6 +3329,11 @@ const SvgRenderer = {
     var newW = vbW * cosA + vbH * sinA;
     var newH = vbW * sinA + vbH * cosA;
 
+    // Add breathing room so rotated stamp isn't clipped at edges
+    var pad = Math.max(newW, newH) * 0.03;
+    newW += pad * 2;
+    newH += pad * 2;
+
     // Shrink post-rotation viewBox to make tilted stamps appear larger.
     // Only for Category 2 (background image): clipping background edges is acceptable.
     // Category 1 (frame-based): no shrink — frame borders are the content, can't clip them.
@@ -3350,7 +3366,12 @@ const SvgRenderer = {
     var content = result.substring(svgTagEnd + 1, svgCloseIdx);
     var after = result.substring(svgCloseIdx);
 
+    // White background rect covering the expanded viewBox so corners aren't transparent
+    var bgRect = '<rect x="' + newVbX.toFixed(2) + '" y="' + newVbY.toFixed(2) +
+      '" width="' + newW.toFixed(2) + '" height="' + newH.toFixed(2) + '" fill="#ffffff"/>';
+
     return before +
+      bgRect +
       '<g transform="rotate(' + angleDeg + ' ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')">' +
       content +
       '</g>' +
@@ -3434,7 +3455,7 @@ const SvgRenderer = {
 
     // Single grey layer — visible on both light and dark stamps
     watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
-      'opacity="0.28" filter="url(#' + wmId + '-g)">' + tiles + '</g>';
+      'opacity="0.4" filter="url(#' + wmId + '-g)">' + tiles + '</g>';
 
     watermark += '</svg>';
 
@@ -3800,10 +3821,20 @@ const SvgRenderer = {
       '0 0 0 ' + preset.alphaSlope + ' ' + preset.alphaIntercept + '"/>' +
       '</filter></defs>';
 
-    // Overlay rect covering full viewBox, filtered to show white texture marks
-    var overlayRect = '<rect x="' + vbX + '" y="' + vbY + '" ' +
-      'width="' + vbW + '" height="' + vbH + '" ' +
-      'fill="white" filter="url(#' + filterId + ')"/>';
+    // Overlay rect covering full viewBox, filtered to show white texture marks.
+    // Scratched texture: rotate overlay at random angle for varied scratch directions.
+    var texRotate = '';
+    if (resolvedId === 'scratched') {
+      var texAngle = -25; // bottom-left to top-right
+      var texCx = (vbX + vbW / 2).toFixed(2);
+      var texCy = (vbY + vbH / 2).toFixed(2);
+      texRotate = ' transform="rotate(' + texAngle + ' ' + texCx + ' ' + texCy + ')"';
+    }
+    // Scale up rect by sqrt(2) to ensure full coverage when rotated
+    var texPad = texRotate ? Math.max(vbW, vbH) * 0.22 : 0;
+    var overlayRect = '<rect x="' + (vbX - texPad).toFixed(2) + '" y="' + (vbY - texPad).toFixed(2) + '" ' +
+      'width="' + (vbW + texPad * 2).toFixed(2) + '" height="' + (vbH + texPad * 2).toFixed(2) + '" ' +
+      'fill="white" filter="url(#' + filterId + ')"' + texRotate + '/>';
 
     // Inject filter def after <svg> tag, overlay rect before </svg>
     var result = svgString.replace(/(<svg[^>]*>)/i, '$1' + filterDef);
@@ -4142,14 +4173,15 @@ const SvgRenderer = {
     if (bi.stitch && isFull) return svgStr;
     var innerSw = Math.max(4, Math.round(osw * 0.24));
     if (bi.brush) innerSw = Math.max(6, Math.round(osw * 0.5));
-    if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.7));
+    if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.3));
     var inset;
     if (!bi.stitch && isFull) {
       inset = osw / 2 + innerSw / 2;
     } else {
       inset = osw / 2 + innerSw * 1.5;
     }
-    if (bi.stitch) inset = osw * 0.35;
+    // Stitch shapes extend outward — inner rect just needs minimal offset from rect edge
+    if (bi.stitch) inset = innerSw / 2 + 2;
     if (bi.border) inset = isFull ? osw * 0.3 : osw * 0.65;
     if (bi.brush) inset = Math.max(inset, osw * 0.95);
     if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);

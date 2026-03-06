@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StampaText - Product Details</title>
-  <link rel="stylesheet" href="/css/style.css?v=116">
+  <link rel="stylesheet" href="/css/style.css?v=45">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -161,7 +161,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=160"></script>
+  <script src="/js/svg-renderer.js?v=171"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -666,40 +666,34 @@
           svg = SvgRenderer.cropViewBoxToStamp(svg);
           svg = SvgRenderer.applyCornerRadius(svg, templateCornerType);
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
+          // Detect border info from post-autoFit SVG (matches gallery behavior).
+          // Post-autoFit SVG has proportional stroke applied — raw SVG has original
+          // stroke-width (50) which produces oversized inner rects in addDoubleFrame.
+          var frameBi = detectBorderType(svg);
+          SvgRenderer.supplementBorderInfo(frameBi, { border_type: templateBorderType, fill_type: templateFillType });
           if (currentFrame === 'double') {
-            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
-            var dblBi = Object.assign({}, borderInfo);
-            SvgRenderer.supplementBorderInfo(dblBi, { border_type: templateBorderType, fill_type: templateFillType });
-            svg = SvgRenderer.addDoubleFrame(svg, dblBi, currentColor);
+            svg = SvgRenderer.addDoubleFrame(svg, frameBi, currentColor, 'double');
           } else if (currentFrame === 'split') {
-            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
-            var ifBi = Object.assign({}, borderInfo);
-            SvgRenderer.supplementBorderInfo(ifBi, { border_type: templateBorderType, fill_type: templateFillType });
-            svg = SvgRenderer.addSplitBorder(svg, ifBi);
-          } else if (currentFrame === 'single' && templateFillType !== 'full') {
-            if (!borderInfo) borderInfo = detectBorderType(rawCleanedSvg);
-            var siBi = Object.assign({}, borderInfo);
-            SvgRenderer.supplementBorderInfo(siBi, { border_type: templateBorderType, fill_type: templateFillType });
-            if (siBi.border || siBi.stitch) {
-              svg = SvgRenderer.addDoubleFrame(svg, siBi, currentColor, 'single');
-            }
+            svg = SvgRenderer.addSplitBorder(svg, frameBi);
           }
           // Capture pre-tilt viewBox width for scale compensation
           var preTiltVbW = 0;
           var preTiltMatch = svg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+[\d.\-]+\s*["']/);
           if (preTiltMatch) preTiltVbW = parseFloat(preTiltMatch[1]);
 
-          if (currentTilt !== 0) {
-            svg = SvgRenderer.applyTilt(svg, currentTilt);
-          }
           if (currentTexture) {
             svg = await SvgRenderer.applyTexture(svg, currentTexture);
+          }
+          // Watermark before tilt — sized to stamp viewBox, rotates with stamp
+          svg = SvgRenderer.addWatermark(svg);
+          if (currentTilt !== 0) {
+            svg = SvgRenderer.applyTilt(svg, currentTilt);
           }
 
           currentSvg = svg;
 
           previewEl.innerHTML = '';
-          var img = SvgRenderer.createSvgImage(SvgRenderer.addWatermark(svg));
+          var img = SvgRenderer.createSvgImage(svg);
 
           // Compensate for viewBox expansion from tilt so preview stays same visual size
           if (currentTilt !== 0 && preTiltVbW > 0) {
@@ -733,7 +727,7 @@
           texture = preset ? preset.label.toLowerCase() : '';
         }
         var tilt = (currentTilt && currentTilt !== 0) ? 'tilted' : '';
-        var frame = '';
+        var frame = 'single border';
         if (currentFrame === 'double') frame = 'double border';
         else if (currentFrame === 'split') frame = 'split border';
         var shape = 'rectangle';
@@ -754,11 +748,12 @@
         else if (templateCornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
         else if (templateCornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
         var adjectives = [tilt, border, frame].filter(Boolean).join(' ');
-        var objPhrase = (adjectives ? adjectives + ' ' : '') + obj;
+        var objPhrase = (adjectives ? adjectives + ' ' : '') + fill + ' ' + obj;
         var withParts = [corners, texture ? texture + ' texture' : ''].filter(Boolean);
         var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
         var desc = '\u201C' + displayText + '\u201D written on ' +
-          fill + ' ' + colorName.toLowerCase() + ' ' + objPhrase + withClause;
+          colorName.toLowerCase() + ' ' + objPhrase + withClause + '.';
+        if (currentFont) desc += ' FONT: ' + currentFont;
         document.getElementById('product-description').textContent = desc;
       }
 

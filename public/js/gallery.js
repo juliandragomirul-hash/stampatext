@@ -423,8 +423,6 @@ const Gallery = {
             framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
           } else if (frameMode === 'split') {
             framed = SvgRenderer.addSplitBorder(cropped, bi);
-          } else if (frameMode === 'single' && (bi.border || bi.stitch) && base.fillType !== 'full') {
-            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'single');
           }
         } catch (err) {
           console.warn('Failed to apply frame "' + frameMode + '" to:', base.name, err);
@@ -433,7 +431,7 @@ const Gallery = {
 
         var result = {
           templateId: base.templateId,
-          svgString: framed,
+          svgString: SvgRenderer.addWatermark(framed),
           shape: base.shape,
           objectType: base.objectType,
           frameType: base.frameType,
@@ -588,20 +586,20 @@ const Gallery = {
             framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
           } else if (frameMode === 'split') {
             framed = SvgRenderer.addSplitBorder(cropped, bi);
-          } else if (frameMode === 'single' && (bi.border || bi.stitch) && base.fillType !== 'full') {
-            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'single');
           }
 
           for (var k = 0; k < tiltsToApply.length; k++) {
             var tilt = tiltsToApply[k];
-            var tilted = tilt !== 0 ? SvgRenderer.applyTilt(framed, tilt) : framed;
             for (var t = 0; t < texturesToApply.length; t++) {
               var textureId = texturesToApply[t];
               try {
-                var textured = textureId ? await SvgRenderer.applyTexture(tilted, textureId) : tilted;
+                // Texture + watermark before tilt so they're sized to stamp viewBox
+                var textured = textureId ? await SvgRenderer.applyTexture(framed, textureId) : framed;
                 if (!textured || textured.indexOf('<svg') === -1) {
-                  textured = tilted;
+                  textured = framed;
                 }
+                textured = SvgRenderer.addWatermark(textured);
+                if (tilt !== 0) textured = SvgRenderer.applyTilt(textured, tilt);
                 variants.push({
                   templateId: base.templateId,
                   svgString: textured,
@@ -715,7 +713,7 @@ const Gallery = {
       // Create preview with inline SVG
       var previewDiv = document.createElement('div');
       previewDiv.className = 'stamp-card-preview';
-      var img = SvgRenderer.createSvgImage(SvgRenderer.addWatermark(r.svgString));
+      var img = SvgRenderer.createSvgImage(r.svgString);
       previewDiv.appendChild(img);
 
       var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
@@ -723,7 +721,8 @@ const Gallery = {
         '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
         '&frame=' + encodeURIComponent(r.appliedFrame || r.frameType || 'single') +
         '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
-        (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
+        (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '') +
+        '&font=' + encodeURIComponent(r.fontKey || '');
 
       var colorName = self.getColorName(r.appliedColor);
       var description = self.buildDescription(
@@ -826,7 +825,7 @@ const Gallery = {
 
         var previewDiv = document.createElement('div');
         previewDiv.className = 'stamp-card-preview';
-        var img = SvgRenderer.createSvgImage(SvgRenderer.addWatermark(r.svgString));
+        var img = SvgRenderer.createSvgImage(r.svgString);
         previewDiv.appendChild(img);
 
         var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
@@ -834,7 +833,8 @@ const Gallery = {
           '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
           '&frame=' + encodeURIComponent(r.appliedFrame || r.frameType || 'single') +
           '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
-          (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '');
+          (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '') +
+          '&font=' + encodeURIComponent(r.fontKey || '');
 
         var colorName = self.getColorName(r.appliedColor);
         var description = self.buildDescription(
@@ -1061,14 +1061,13 @@ const Gallery = {
 
     var overlay = document.createElement('div');
     overlay.className = 'stamp-zoom-overlay';
-    overlay.innerHTML = SvgRenderer.addWatermark(svgString);
+    overlay.innerHTML = svgString;
 
-    // Make the SVG responsive — CSS handles max-width/height via .stamp-zoom-overlay svg
+    // White background is baked into the SVG by applyTilt (for tilted stamps)
     var svgEl = overlay.querySelector('svg');
     if (svgEl) {
       svgEl.removeAttribute('width');
       svgEl.removeAttribute('height');
-      svgEl.style.background = '#ffffff';
       svgEl.style.borderRadius = '4px';
     }
 
@@ -1145,17 +1144,15 @@ const Gallery = {
           framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c, 'double');
         } else if (vp.f === 'split') {
           framed = SvgRenderer.addSplitBorder(cropped, rbi);
-        } else if (vp.f === 'single' && rbi.border && base.fillType !== 'full') {
-          framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c, 'single');
         }
-        var tilted = vp.i !== 0 ? SvgRenderer.applyTilt(framed, vp.i) : framed;
-        var textured = vp.x ? await SvgRenderer.applyTexture(tilted, vp.x) : tilted;
-
-        if (!textured || textured.indexOf('<svg') === -1) textured = tilted;
+        var textured = vp.x ? await SvgRenderer.applyTexture(framed, vp.x) : framed;
+        if (!textured || textured.indexOf('<svg') === -1) textured = framed;
+        textured = SvgRenderer.addWatermark(textured);
+        var tilted = vp.i !== 0 ? SvgRenderer.applyTilt(textured, vp.i) : textured;
 
         batch.push({
           templateId: base.templateId,
-          svgString: textured,
+          svgString: tilted,
           shape: base.shape,
           objectType: base.objectType,
           frameType: base.frameType,

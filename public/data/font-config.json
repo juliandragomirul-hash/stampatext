@@ -30,7 +30,7 @@
       "wb": 1.02,
       "hb": 1.1,
       "stroke": 5,
-      "lineSpacing": 0.95,
+      "lineSpacing": 1,
       "ws": 0
     },
     "multiDiacrit": {
@@ -41,7 +41,7 @@
       "wb": 1.03,
       "hb": 1,
       "stroke": 5,
-      "lineSpacing": 0.95,
+      "lineSpacing": 1,
       "ws": 0
     }
   },
@@ -76,7 +76,7 @@
       "wb": 1.02,
       "hb": 1.1,
       "stroke": 5,
-      "lineSpacing": 0.7,
+      "lineSpacing": 0.75,
       "ws": 0
     },
     "multiDiacrit": {
@@ -122,7 +122,7 @@
       "wb": 1.02,
       "hb": 1.12,
       "stroke": 5,
-      "lineSpacing": 0.8,
+      "lineSpacing": 0.9,
       "ws": 0
     },
     "multiDiacrit": {
@@ -168,7 +168,7 @@
       "wb": 1.01,
       "hb": 1.16,
       "stroke": 7,
-      "lineSpacing": 0.9,
+      "lineSpacing": 0.95,
       "ws": 0
     },
     "multiDiacrit": {
@@ -214,7 +214,7 @@
       "wb": 1.02,
       "hb": 1.09,
       "stroke": 1,
-      "lineSpacing": 0.7,
+      "lineSpacing": 0.8,
       "ws": 0
     },
     "multiDiacrit": {
@@ -225,7 +225,7 @@
       "wb": 1.02,
       "hb": 1,
       "stroke": -1,
-      "lineSpacing": 1,
+      "lineSpacing": 0.95,
       "ws": 0
     }
   },
@@ -260,7 +260,7 @@
       "wb": 1.01,
       "hb": 1.1,
       "stroke": 0,
-      "lineSpacing": 0.8,
+      "lineSpacing": 0.85,
       "ws": 0
     },
     "multiDiacrit": {
@@ -271,7 +271,7 @@
       "wb": 1.02,
       "hb": 1,
       "stroke": 0,
-      "lineSpacing": 1,
+      "lineSpacing": 0.95,
       "ws": 0
     }
   },
@@ -306,7 +306,7 @@
       "wb": 1.01,
       "hb": 1.1,
       "stroke": 5,
-      "lineSpacing": 0.85,
+      "lineSpacing": 0.9,
       "ws": 0
     },
     "multiDiacrit": {
@@ -317,7 +317,7 @@
       "wb": 1.02,
       "hb": 1,
       "stroke": 5,
-      "lineSpacing": 1.05,
+      "lineSpacing": 1,
       "ws": 0
     }
   },
@@ -352,7 +352,7 @@
       "wb": 1.01,
       "hb": 1.1,
       "stroke": 3,
-      "lineSpacing": 0.8,
+      "lineSpacing": 0.9,
       "ws": 0
     },
     "multiDiacrit": {
@@ -398,7 +398,7 @@
       "wb": 1.01,
       "hb": 1.1,
       "stroke": 5,
-      "lineSpacing": 0.9,
+      "lineSpacing": 1,
       "ws": 0
     },
     "multiDiacrit": {
@@ -444,7 +444,7 @@
       "wb": 1.01,
       "hb": 1.1,
       "stroke": 0,
-      "lineSpacing": 0.8,
+      "lineSpacing": 0.85,
       "ws": 0
     },
     "multiDiacrit": {
@@ -455,7 +455,7 @@
       "wb": 1.02,
       "hb": 1,
       "stroke": 0,
-      "lineSpacing": 1,
+      "lineSpacing": 0.95,
       "ws": 0
     }
   }
