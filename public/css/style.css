@@ -681,9 +681,15 @@ a:hover {
   font-size: 2.5rem;
   font-weight: 300;
   color: #1a1a1a;
-  margin-bottom: 2.5rem;
+  margin-bottom: 0.5rem;
   line-height: 1.4;
   letter-spacing: 0.01em;
+}
+
+.stamp-hero-subtitle {
+  font-size: 1.2rem;
+  color: #888;
+  margin-bottom: 2rem;
 }
 
 .stamp-hero-input-wrapper {
@@ -914,22 +920,22 @@ a:hover {
 
 /* ========== FILTER MODAL ========== */
 .filter-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .filter-section-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.4rem;
 }
 
 .filter-section-title {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #888;
+  letter-spacing: 0.08em;
+  color: #aaa;
 }
 
 .filter-select-all {
@@ -946,12 +952,12 @@ a:hover {
 .color-palette {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .color-swatch {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 4px;
   border: 2px solid transparent;
   cursor: pointer;
@@ -964,7 +970,7 @@ a:hover {
 }
 
 .color-swatch.selected {
-  transform: scale(1.15);
+  transform: scale(1.1);
 }
 
 .color-swatch.selected::after {
@@ -974,7 +980,7 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
   color: #000;
   pointer-events: none;
@@ -1083,9 +1089,9 @@ a:hover {
 
 .product-layout {
   display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 2rem;
-  align-items: start;
+  grid-template-columns: 1fr 260px;
+  gap: 1.5rem;
+  align-items: stretch;
 }
 
 .product-preview {
@@ -1144,67 +1150,68 @@ a:hover {
 }
 
 .product-sidebar {
-  background-color: #fafafa;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  padding: 1.5rem;
+  background-color: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 1.25rem;
 }
 
 .product-sidebar-title {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 500;
   color: #1a1a1a;
-  margin: 0 0 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e5e5;
+  margin: 0 0 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.product-toggle-group {
+.product-radio-group {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
-.product-toggle-btn {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #fff;
-  color: #555;
-  font-size: 0.85rem;
-  font-family: inherit;
+.product-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  font-size: 0.8rem;
+  color: #999;
+  transition: color 0.15s;
 }
 
-.product-toggle-btn:hover {
-  border-color: #999;
+.product-radio:hover {
+  color: #555;
+}
+
+.product-radio input[type="radio"] {
+  accent-color: #dc2626;
+  margin: 0;
+  width: 13px;
+  height: 13px;
+}
+
+.product-radio input[type="radio"]:checked + span {
   color: #1a1a1a;
-}
-
-.product-toggle-btn.active {
-  border-color: #dc2626;
-  background-color: #fef2f2;
-  color: #dc2626;
   font-weight: 500;
 }
 
 .font-picker {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .font-picker-display {
   flex: 1;
-  padding: 8px 12px;
+  padding: 5px 10px;
   border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #fff;
   color: #1a1a1a;
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1.3;
-  min-height: 42px;
+  min-height: 32px;
   text-align: center;
   cursor: default;
   user-select: none;
@@ -1222,13 +1229,13 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #e0e0e0;
+  border-radius: 5px;
   background: #fafafa;
-  color: #555;
-  font-size: 16px;
+  color: #888;
+  font-size: 13px;
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
@@ -1246,10 +1253,64 @@ a:hover {
   line-height: 1.5;
 }
 
+.product-download-section {
+  margin-top: 1.5rem;
+  max-width: 520px;
+}
+
+.product-download-section .product-radio-group {
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.product-download-section .product-radio {
+  justify-content: flex-start;
+  gap: 0.4rem;
+}
+
+.download-credit {
+  font-size: 0.72rem;
+  color: #16a34a;
+  font-weight: 500;
+  margin-left: 0.25rem;
+}
+
+.download-formats {
+  display: flex;
+  gap: 0;
+  width: fit-content;
+}
+
+.download-format-col {
+  padding-right: 1rem;
+}
+
+.download-format-col + .download-format-col {
+  padding-right: 0;
+  padding-left: 1rem;
+  border-left: 1px solid #e5e5e5;
+}
+
 .product-download-btn {
   margin-top: 1rem;
-  padding: 0.75rem 2rem;
-  font-size: 1rem;
+  padding: 0.6rem 2rem;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 600px) {
+  .download-formats {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .download-format-col {
+    padding-right: 0;
+  }
+  .download-format-col + .download-format-col {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid #e5e5e5;
+    padding-top: 0.5rem;
+  }
 }
 
 .download-options {
@@ -1293,6 +1354,70 @@ a:hover {
 .download-option-size {
   font-size: 0.75rem;
   color: #888;
+}
+
+/* ========== AUTH PROMPT MODAL ========== */
+.auth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: zoomFadeIn 0.2s ease;
+}
+
+.auth-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem 2.5rem;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.auth-modal-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.auth-modal-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 0.5rem;
+}
+
+.auth-modal-text {
+  font-size: 0.88rem;
+  color: #666;
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+}
+
+.auth-modal-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+}
+
+.auth-modal-btn {
+  flex: 1;
+  padding: 0.55rem 1rem;
+  font-size: 0.88rem;
+}
+
+.auth-modal-promo {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #555;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
 }
 
 /* ========== BUY CREDITS MODAL ========== */

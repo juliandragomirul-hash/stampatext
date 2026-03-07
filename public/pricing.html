@@ -30,7 +30,7 @@
   <!-- Pricing Content -->
   <div class="pricing-container">
     <h1 class="page-title">Buy Credits</h1>
-    <p class="page-subtitle">Each download costs 1 credit. Pick the package that works for you.</p>
+    <p class="page-subtitle">Pick the package that works for you.</p>
     <p class="pricing-free-note">New here? You get <strong>5 free credits</strong> on signup — no credit card needed.</p>
 
     <div class="pricing-cards">
@@ -39,9 +39,9 @@
       <div class="pricing-card" id="card-pack_10">
         <div class="pricing-card-header">
           <h2 class="pricing-card-name">Starter</h2>
-          <div class="pricing-card-price">$29</div>
+          <div class="pricing-card-price">$19</div>
           <div class="pricing-card-credits">10 credits</div>
-          <div class="pricing-card-unit">$2.90 per download</div>
+          <div class="pricing-card-unit">$1.90 per credit</div>
         </div>
         <ul class="pricing-card-features">
           <li>High-res PNG &amp; JPG downloads</li>
@@ -58,13 +58,13 @@
           <h2 class="pricing-card-name">Popular</h2>
           <div class="pricing-card-price">$59</div>
           <div class="pricing-card-credits">50 credits</div>
-          <div class="pricing-card-unit">$1.18 per download</div>
+          <div class="pricing-card-unit">$1.18 per credit</div>
         </div>
         <ul class="pricing-card-features">
           <li>High-res PNG &amp; JPG downloads</li>
           <li>Commercial use included</li>
           <li>Credits never expire</li>
-          <li>Save 59% vs Starter</li>
+          <li>Save 38% vs Starter</li>
         </ul>
         <button class="btn btn-primary pricing-card-btn" onclick="selectPackage('pack_50')">Select</button>
       </div>
@@ -75,13 +75,13 @@
           <h2 class="pricing-card-name">Pro</h2>
           <div class="pricing-card-price">$99</div>
           <div class="pricing-card-credits">100 credits</div>
-          <div class="pricing-card-unit">$0.99 per download</div>
+          <div class="pricing-card-unit">$0.99 per credit</div>
         </div>
         <ul class="pricing-card-features">
           <li>High-res PNG &amp; JPG downloads</li>
           <li>Commercial use included</li>
           <li>Credits never expire</li>
-          <li>Save 66% vs Starter</li>
+          <li>Save 48% vs Starter</li>
           <li>Best value</li>
         </ul>
         <button class="btn btn-secondary pricing-card-btn" onclick="selectPackage('pack_100')">Select</button>
@@ -126,7 +126,7 @@
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script>
     var CREDIT_PACKAGES = {
-      pack_10:  { credits: 10,  price: 29, label: '10 credits', priceLabel: '$29' },
+      pack_10:  { credits: 10,  price: 19, label: '10 credits', priceLabel: '$19' },
       pack_50:  { credits: 50,  price: 59, label: '50 credits', priceLabel: '$59' },
       pack_100: { credits: 100, price: 99, label: '100 credits', priceLabel: '$99' }
     };

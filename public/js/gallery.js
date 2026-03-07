@@ -25,14 +25,16 @@ const Gallery = {
 
   // Palette colors (same as stamp-app.js)
   PALETTE_COLORS: [
-    '#000000', '#8B0000', '#003366', '#2D572C', '#4B0082',
-    '#FF0000', '#FF6600', '#1E90FF', '#FF1493', '#32CD32'
+    '#000000', '#8B0000', '#CC0000', '#FF0000',
+    '#2D572C', '#32CD32',
+    '#003366', '#1E90FF',
+    '#4B0082', '#FF6600', '#DAA520', '#FF1493'
   ],
 
   COLOR_NAMES: {
-    '#000000': 'Black', '#8B0000': 'Dark Red', '#003366': 'Navy',
+    '#000000': 'Black', '#8B0000': 'Dark Red', '#CC0000': 'Crimson', '#003366': 'Navy',
     '#2D572C': 'Forest Green', '#4B0082': 'Indigo',
-    '#FF0000': 'Red', '#FF6600': 'Orange', '#1E90FF': 'Dodger Blue',
+    '#FF0000': 'Red', '#FF6600': 'Orange', '#DAA520': 'Goldenrod', '#1E90FF': 'Dodger Blue',
     '#FF1493': 'Hot Pink', '#32CD32': 'Lime Green'
   },
 

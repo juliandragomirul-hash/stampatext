@@ -27,8 +27,8 @@
     <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
     <div class="header-actions" id="header-actions">
       <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
-      <button class="btn btn-secondary btn-small" id="btn-login" onclick="window.location.href='/?login=1'">Login</button>
-      <button class="btn btn-primary btn-small" id="btn-signup" onclick="window.location.href='/?signup=1'">Sign Up</button>
+      <button class="btn btn-secondary btn-small" id="btn-login" onclick="openModal('login')">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup" onclick="openModal('signup')">Sign Up</button>
       <div class="dropdown-wrapper" id="hamburger-wrapper" style="display:none;">
         <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
         <div class="dropdown-menu" id="user-menu">
@@ -76,10 +76,10 @@
           <div class="filter-section-header">
             <span class="filter-section-title">BORDER COUNT</span>
           </div>
-          <div class="product-toggle-group" id="product-frame-toggle">
-            <button class="product-toggle-btn active" data-value="single">Single</button>
-            <button class="product-toggle-btn" data-value="double">Double</button>
-            <button class="product-toggle-btn" data-value="split">Split</button>
+          <div class="product-radio-group" id="product-frame-toggle">
+            <label class="product-radio"><input type="radio" name="frame" value="single" checked><span>Single</span></label>
+            <label class="product-radio"><input type="radio" name="frame" value="double"><span>Double</span></label>
+            <label class="product-radio"><input type="radio" name="frame" value="split"><span>Split</span></label>
           </div>
         </div>
 
@@ -87,9 +87,9 @@
           <div class="filter-section-header">
             <span class="filter-section-title">TILT</span>
           </div>
-          <div class="product-toggle-group" id="product-tilt-toggle">
-            <button class="product-toggle-btn active" data-value="0">Straight</button>
-            <button class="product-toggle-btn" data-value="-20">20 degrees</button>
+          <div class="product-radio-group" id="product-tilt-toggle">
+            <label class="product-radio"><input type="radio" name="tilt" value="0" checked><span>Straight</span></label>
+            <label class="product-radio"><input type="radio" name="tilt" value="-20"><span>20 degrees</span></label>
           </div>
         </div>
 
@@ -105,65 +105,79 @@
     <!-- Description below image -->
     <div class="product-description" id="product-description">Loading...</div>
 
-    <!-- Download options button -->
-    <button class="btn btn-primary product-download-btn" id="btn-download-options">Download options</button>
-  </section>
+    <!-- Auth Modal (Login / Sign Up) -->
+    <div class="modal-overlay" id="auth-modal">
+      <div class="modal">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
 
-  <!-- Download Modal -->
-  <div class="modal-overlay" id="download-modal">
-    <div class="modal" style="max-width:480px;">
-      <button class="modal-close" id="download-modal-close">&times;</button>
-      <h3 class="modal-title">Download options</h3>
+        <div class="auth-modal-promo">
+          &#128274; Log in to download<br>Get <strong>5 free credits</strong> on signup!
+        </div>
 
-      <div class="filter-section">
-        <div class="filter-section-header">
-          <span class="filter-section-title">JPG (WHITE BACKGROUND)</span>
+        <div class="modal-tabs">
+          <button class="modal-tab active" id="tab-login" onclick="switchTab('login')">Login</button>
+          <button class="modal-tab" id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
         </div>
-        <div class="download-options">
-          <label class="download-option-card">
-            <input type="radio" name="download-choice" value="jpg-small">
-            <span class="download-option-label">Small</span>
-            <span class="download-option-size">up to 500 px</span>
-          </label>
-          <label class="download-option-card">
-            <input type="radio" name="download-choice" value="jpg-medium" checked>
-            <span class="download-option-label">Medium</span>
-            <span class="download-option-size">up to 1000 px</span>
-          </label>
-          <label class="download-option-card">
-            <input type="radio" name="download-choice" value="jpg-large">
-            <span class="download-option-label">Large</span>
-            <span class="download-option-size">up to 3000 px</span>
-          </label>
-        </div>
+
+        <form id="form-login" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="login-email">Email</label>
+            <input class="form-input" type="email" id="login-email" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-password">Password</label>
+            <input class="form-input" type="password" id="login-password" required>
+          </div>
+          <div class="form-error" id="login-error"></div>
+          <button class="btn btn-primary form-submit" type="submit" id="login-submit">Login</button>
+        </form>
+
+        <form id="form-signup" style="display:none;" onsubmit="handleSignup(event)">
+          <div class="form-group">
+            <label class="form-label" for="signup-email">Email</label>
+            <input class="form-input" type="email" id="signup-email" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="signup-password">Password</label>
+            <input class="form-input" type="password" id="signup-password" required minlength="6">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="signup-confirm">Confirm Password</label>
+            <input class="form-input" type="password" id="signup-confirm" required minlength="6">
+          </div>
+          <div class="form-error" id="signup-error"></div>
+          <button class="btn btn-primary form-submit" type="submit" id="signup-submit">Create Account</button>
+        </form>
       </div>
-
-      <div class="filter-section">
-        <div class="filter-section-header">
-          <span class="filter-section-title">TRANSPARENT PNG</span>
-        </div>
-        <div class="download-options">
-          <label class="download-option-card">
-            <input type="radio" name="download-choice" value="png-small">
-            <span class="download-option-label">Small</span>
-            <span class="download-option-size">up to 500 px</span>
-          </label>
-          <label class="download-option-card">
-            <input type="radio" name="download-choice" value="png-medium">
-            <span class="download-option-label">Medium</span>
-            <span class="download-option-size">up to 1000 px</span>
-          </label>
-          <label class="download-option-card">
-            <input type="radio" name="download-choice" value="png-large">
-            <span class="download-option-label">Large</span>
-            <span class="download-option-size">up to 3000 px</span>
-          </label>
-        </div>
-      </div>
-
-      <button class="btn btn-primary" id="btn-download-confirm" style="width:100%;margin-top:1rem;">Download</button>
     </div>
-  </div>
+
+    <!-- Inline download options -->
+    <div class="product-download-section" id="product-download-section">
+      <div class="download-formats">
+        <div class="download-format-col">
+          <div class="filter-section-header">
+            <span class="filter-section-title">JPG (WHITE BACKGROUND)</span>
+          </div>
+          <div class="product-radio-group">
+            <label class="product-radio"><input type="radio" name="download-choice" value="jpg-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
+            <label class="product-radio"><input type="radio" name="download-choice" value="jpg-medium" checked><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
+            <label class="product-radio"><input type="radio" name="download-choice" value="jpg-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
+          </div>
+        </div>
+        <div class="download-format-col">
+          <div class="filter-section-header">
+            <span class="filter-section-title">TRANSPARENT PNG</span>
+          </div>
+          <div class="product-radio-group">
+            <label class="product-radio"><input type="radio" name="download-choice" value="png-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
+            <label class="product-radio"><input type="radio" name="download-choice" value="png-medium"><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
+            <label class="product-radio"><input type="radio" name="download-choice" value="png-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary product-download-btn" id="btn-download-confirm">Download</button>
+    </div>
+  </section>
 
   <!-- Scripts -->
   <script src="/js/supabase.umd.js"></script>
@@ -177,14 +191,16 @@
     (async function() {
       // ---- Constants ----
       var PALETTE_COLORS = [
-        '#000000', '#8B0000', '#003366', '#2D572C', '#4B0082',
-        '#FF0000', '#FF6600', '#1E90FF', '#FF1493', '#32CD32'
+        '#000000', '#8B0000', '#CC0000', '#FF0000',
+        '#2D572C', '#32CD32',
+        '#003366', '#1E90FF',
+        '#4B0082', '#FF6600', '#DAA520', '#FF1493'
       ];
 
       var COLOR_NAMES = {
-        '#000000': 'Black', '#8B0000': 'Dark Red', '#003366': 'Navy',
+        '#000000': 'Black', '#8B0000': 'Dark Red', '#CC0000': 'Crimson', '#003366': 'Navy',
         '#2D572C': 'Forest Green', '#4B0082': 'Indigo',
-        '#FF0000': 'Red', '#FF6600': 'Orange', '#1E90FF': 'Dodger Blue',
+        '#FF0000': 'Red', '#FF6600': 'Orange', '#DAA520': 'Goldenrod', '#1E90FF': 'Dodger Blue',
         '#FF1493': 'Hot Pink', '#32CD32': 'Lime Green'
       };
 
@@ -271,12 +287,12 @@
       }
 
       var DOWNLOAD_SIZES = {
-        'jpg-small':  { maxSize: 500,  scale: 1, format: 'jpeg', ext: 'jpg' },
-        'jpg-medium': { maxSize: 1000, scale: 1, format: 'jpeg', ext: 'jpg' },
-        'jpg-large':  { maxSize: 1000, scale: 3, format: 'jpeg', ext: 'jpg' },
-        'png-small':  { maxSize: 500,  scale: 1, format: 'png',  ext: 'png' },
-        'png-medium': { maxSize: 1000, scale: 1, format: 'png',  ext: 'png' },
-        'png-large':  { maxSize: 1000, scale: 3, format: 'png',  ext: 'png' }
+        'jpg-small':  { maxSize: 500,  scale: 1, format: 'jpeg', ext: 'jpg', credits: 1 },
+        'jpg-medium': { maxSize: 1000, scale: 1, format: 'jpeg', ext: 'jpg', credits: 2 },
+        'jpg-large':  { maxSize: 1000, scale: 3, format: 'jpeg', ext: 'jpg', credits: 3 },
+        'png-small':  { maxSize: 500,  scale: 1, format: 'png',  ext: 'png', credits: 1 },
+        'png-medium': { maxSize: 1000, scale: 1, format: 'png',  ext: 'png', credits: 2 },
+        'png-large':  { maxSize: 1000, scale: 3, format: 'png',  ext: 'png', credits: 3 }
       };
 
       // ---- State ----
@@ -439,27 +455,17 @@
         renderPreview();
       });
 
-      // Frame (border count) toggle
-      document.getElementById('product-frame-toggle').addEventListener('click', function(e) {
-        var btn = e.target.closest('.product-toggle-btn');
-        if (!btn) return;
-        this.querySelectorAll('.product-toggle-btn').forEach(function(b) {
-          b.classList.remove('active');
-        });
-        btn.classList.add('active');
-        currentFrame = btn.dataset.value;
+      // Frame (border count) radio
+      document.getElementById('product-frame-toggle').addEventListener('change', function(e) {
+        if (e.target.type !== 'radio') return;
+        currentFrame = e.target.value;
         renderPreview();
       });
 
-      // Tilt toggle
-      document.getElementById('product-tilt-toggle').addEventListener('click', function(e) {
-        var btn = e.target.closest('.product-toggle-btn');
-        if (!btn) return;
-        this.querySelectorAll('.product-toggle-btn').forEach(function(b) {
-          b.classList.remove('active');
-        });
-        btn.classList.add('active');
-        currentTilt = parseInt(btn.dataset.value, 10) || 0;
+      // Tilt radio
+      document.getElementById('product-tilt-toggle').addEventListener('change', function(e) {
+        if (e.target.type !== 'radio') return;
+        currentTilt = parseInt(e.target.value, 10) || 0;
         renderPreview();
       });
 
@@ -469,21 +475,6 @@
       document.getElementById('texture-display').addEventListener('keydown', function(e) {
         if (e.key === 'ArrowUp') { e.preventDefault(); cycleTexture(-1); }
         else if (e.key === 'ArrowDown') { e.preventDefault(); cycleTexture(1); }
-      });
-
-      // Download modal open
-      document.getElementById('btn-download-options').addEventListener('click', function() {
-        document.getElementById('download-modal').classList.add('active');
-      });
-
-      // Download modal close
-      document.getElementById('download-modal-close').addEventListener('click', function() {
-        document.getElementById('download-modal').classList.remove('active');
-      });
-
-      // Click outside modal to close
-      document.getElementById('download-modal').addEventListener('click', function(e) {
-        if (e.target === this) this.classList.remove('active');
       });
 
       // Download confirm
@@ -618,8 +609,8 @@
 
       function setToggleState(containerId, value) {
         var container = document.getElementById(containerId);
-        container.querySelectorAll('.product-toggle-btn').forEach(function(btn) {
-          btn.classList.toggle('active', btn.dataset.value === value);
+        container.querySelectorAll('input[type="radio"]').forEach(function(radio) {
+          radio.checked = (radio.value === value);
         });
       }
 
@@ -805,22 +796,20 @@
         // Check auth
         var session = await getSession();
         if (!session) {
-          alert('Please log in to download. Redirecting...');
-          window.location.href = '/?login=1';
-          return;
-        }
-
-        // Check credits
-        var profile = await getProfile();
-        if (!profile || profile.credits < 1) {
-          document.getElementById('download-modal').classList.remove('active');
-          openBuyCreditsModal();
+          openModal('login');
           return;
         }
 
         var choice = selected.value;
         var config = DOWNLOAD_SIZES[choice];
         if (!config || !currentSvg) return;
+
+        // Check credits
+        var profile = await getProfile();
+        if (!profile || profile.credits < config.credits) {
+          openBuyCreditsModal();
+          return;
+        }
 
         var btn = document.getElementById('btn-download-confirm');
         btn.disabled = true;
@@ -842,7 +831,8 @@
             },
             body: JSON.stringify({
               template_id: params.get('id') || null,
-              input_data: { text: params.get('text') || '' }
+              input_data: { text: params.get('text') || '' },
+              credits_cost: config.credits
             })
           });
 
@@ -861,7 +851,6 @@
             if (creditsEl) creditsEl.textContent = updatedProfile.credits + ' credits';
           }
 
-          document.getElementById('download-modal').classList.remove('active');
         } catch (err) {
           console.error('Download error:', err);
           alert('Download failed: ' + err.message);
@@ -905,6 +894,88 @@
       if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
         menu.classList.remove('active');
       }
+    });
+
+    function openModal(tab) {
+      document.getElementById('auth-modal').classList.add('active');
+      switchTab(tab || 'login');
+    }
+
+    function closeModal() {
+      document.getElementById('auth-modal').classList.remove('active');
+      document.getElementById('login-error').classList.remove('visible');
+      document.getElementById('signup-error').classList.remove('visible');
+    }
+
+    function switchTab(tab) {
+      var tabLogin = document.getElementById('tab-login');
+      var tabSignup = document.getElementById('tab-signup');
+      var formLogin = document.getElementById('form-login');
+      var formSignup = document.getElementById('form-signup');
+      if (tab === 'login') {
+        tabLogin.classList.add('active');
+        tabSignup.classList.remove('active');
+        formLogin.style.display = 'block';
+        formSignup.style.display = 'none';
+      } else {
+        tabSignup.classList.add('active');
+        tabLogin.classList.remove('active');
+        formSignup.style.display = 'block';
+        formLogin.style.display = 'none';
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      var email = document.getElementById('login-email').value;
+      var password = document.getElementById('login-password').value;
+      var errorEl = document.getElementById('login-error');
+      var submitBtn = document.getElementById('login-submit');
+      errorEl.classList.remove('visible');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Logging in...';
+      try {
+        await signIn(email, password);
+        closeModal();
+        window.location.reload();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.add('visible');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Login';
+      }
+    }
+
+    async function handleSignup(e) {
+      e.preventDefault();
+      var email = document.getElementById('signup-email').value;
+      var password = document.getElementById('signup-password').value;
+      var confirm = document.getElementById('signup-confirm').value;
+      var errorEl = document.getElementById('signup-error');
+      var submitBtn = document.getElementById('signup-submit');
+      errorEl.classList.remove('visible');
+      if (password !== confirm) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.classList.add('visible');
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating account...';
+      try {
+        await signUp(email, password);
+        closeModal();
+        window.location.reload();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.add('visible');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Account';
+      }
+    }
+
+    // Close modal on overlay click
+    document.getElementById('auth-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
     });
   </script>
 

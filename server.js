@@ -48,14 +48,17 @@ app.post('/api/generations/record', async (req, res) => {
     if (profileError || !profile) {
       return res.status(404).json({ error: 'Profile not found' });
     }
-    if (profile.credits < 1) {
+    // Validate credits_cost (1, 2, or 3)
+    const creditsCost = [1, 2, 3].includes(req.body.credits_cost) ? req.body.credits_cost : 1;
+
+    if (profile.credits < creditsCost) {
       return res.status(403).json({ error: 'Insufficient credits' });
     }
 
-    // 3. Deduct 1 credit
+    // 3. Deduct credits
     const { error: updateError } = await supabase
       .from('profiles')
-      .update({ credits: profile.credits - 1 })
+      .update({ credits: profile.credits - creditsCost })
       .eq('id', user.id);
 
     if (updateError) {
@@ -78,7 +81,7 @@ app.post('/api/generations/record', async (req, res) => {
       console.error('Generation logging failed:', insertError);
     }
 
-    return res.json({ success: true, credits_remaining: profile.credits - 1 });
+    return res.json({ success: true, credits_remaining: profile.credits - creditsCost });
   } catch (err) {
     console.error('Generation record error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -87,7 +90,7 @@ app.post('/api/generations/record', async (req, res) => {
 
 // ---- Credit Packages (hardcoded for MVP) ----
 const CREDIT_PACKAGES = {
-  pack_10:  { credits: 10,  price: '29.00', name: '10 Credits' },
+  pack_10:  { credits: 10,  price: '19.00', name: '10 Credits' },
   pack_50:  { credits: 50,  price: '59.00', name: '50 Credits' },
   pack_100: { credits: 100, price: '99.00', name: '100 Credits' }
 };

@@ -5,7 +5,7 @@
  */
 (function () {
   var CREDIT_PACKAGES = [
-    { id: 'pack_10',  credits: 10,  price: 29, label: '10 Credits',  priceLabel: '$29' },
+    { id: 'pack_10',  credits: 10,  price: 19, label: '10 Credits',  priceLabel: '$19' },
     { id: 'pack_50',  credits: 50,  price: 59, label: '50 Credits',  priceLabel: '$59' },
     { id: 'pack_100', credits: 100, price: 99, label: '100 Credits', priceLabel: '$99' }
   ];
