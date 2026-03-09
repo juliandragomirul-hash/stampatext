@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StampaText - Stamp Your Text on Beautiful Templates</title>
+  <meta name="description" content="Create custom text stamps instantly. Choose from dozens of border styles, 10 fonts, 12 colors, and download high-res transparent PNG or white background JPG.">
+  <meta property="og:title" content="StampaText - Stamp Your Text on Beautiful Templates">
+  <meta property="og:description" content="Create custom text stamps instantly. Dozens of styles, fonts and colors. Download in high-res PNG or JPG.">
+  <meta property="og:image" content="/logo.png">
+  <meta property="og:type" content="website">
   <link rel="stylesheet" href="/css/style.css?v=45">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -298,10 +303,6 @@
   <script src="/js/svg-renderer.js?v=172"></script>
   <script src="/js/gallery.js?v=65"></script>
   <script>
-    // Diagnostic session marker — unique per page load, proves console isn't preserved
-    window.__diagSession = Math.random().toString(36).substring(2, 6);
-    console.warn('[PAGE] LOAD | session=' + window.__diagSession + ' url=' + location.search.substring(0, 60));
-
     // Inline restore check — runs BEFORE stamp-app.js, cannot be cached separately
     (function() {
       var p = new URLSearchParams(window.location.search);

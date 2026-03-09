@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StampaText - Product Details</title>
+  <title>StampaText - Customize & Download</title>
+  <meta name="description" content="Customize your stamp with fonts, colors, borders and tilt. Download in high-res transparent PNG or white background JPG.">
+  <meta property="og:title" content="StampaText - Customize & Download">
+  <meta property="og:description" content="Customize your stamp and download in high-res PNG or JPG. Choose fonts, colors, borders and more.">
+  <meta property="og:image" content="/logo.png">
+  <meta property="og:type" content="website">
   <link rel="stylesheet" href="/css/style.css?v=45">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -151,6 +156,19 @@
       </div>
     </div>
 
+    <!-- Not enough credits modal -->
+    <div class="auth-modal-overlay" id="credits-modal" style="display:none;">
+      <div class="auth-modal">
+        <div class="auth-modal-icon">&#9888;</div>
+        <h3 class="auth-modal-title">Not enough credits</h3>
+        <p class="auth-modal-text" id="credits-modal-text"></p>
+        <div class="auth-modal-actions">
+          <a href="/pricing.html" class="btn btn-primary auth-modal-btn">Buy Credits</a>
+          <button class="btn btn-secondary auth-modal-btn" id="credits-modal-close">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Inline download options -->
     <div class="product-download-section" id="product-download-section">
       <div class="download-formats">
@@ -175,7 +193,10 @@
           </div>
         </div>
       </div>
-      <button class="btn btn-primary product-download-btn" id="btn-download-confirm">Download</button>
+      <div class="download-footer">
+        <button class="btn btn-primary product-download-btn" id="btn-download-confirm">Download</button>
+        <span class="inline-credits" id="inline-credits"></span>
+      </div>
     </div>
   </section>
 
@@ -480,6 +501,14 @@
       // Download confirm
       document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
 
+      // Credits modal close
+      document.getElementById('credits-modal-close').addEventListener('click', function() {
+        document.getElementById('credits-modal').style.display = 'none';
+      });
+      document.getElementById('credits-modal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+      });
+
       // Zoom lightbox: click preview to enlarge
       document.getElementById('product-preview').addEventListener('click', function() {
         var svgEl = this.querySelector('svg');
@@ -495,6 +524,18 @@
       });
 
       // ---- Helper functions ----
+
+      function showToast(msg) {
+        var toast = document.createElement('div');
+        toast.className = 'toast-success';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.classList.add('toast-visible'); }, 10);
+        setTimeout(function() {
+          toast.classList.remove('toast-visible');
+          setTimeout(function() { toast.remove(); }, 300);
+        }, 3000);
+      }
 
       function isColorDark(hex) {
         var c = hex.replace('#', '');
@@ -806,8 +847,16 @@
 
         // Check credits
         var profile = await getProfile();
-        if (!profile || profile.credits < config.credits) {
-          openBuyCreditsModal();
+        var userCredits = profile ? profile.credits : 0;
+        if (userCredits < config.credits) {
+          var msg = 'This download costs ' + config.credits + ' credit' + (config.credits > 1 ? 's' : '') + '. ';
+          if (userCredits === 0) {
+            msg += 'You have no credits.';
+          } else {
+            msg += 'You only have ' + userCredits + '.';
+          }
+          document.getElementById('credits-modal-text').textContent = msg;
+          document.getElementById('credits-modal').style.display = 'flex';
           return;
         }
 
@@ -849,7 +898,13 @@
           if (updatedProfile) {
             var creditsEl = document.getElementById('user-credits');
             if (creditsEl) creditsEl.textContent = updatedProfile.credits + ' credits';
+            // Update inline credit display
+            var inlineCredits = document.getElementById('inline-credits');
+            if (inlineCredits) inlineCredits.textContent = updatedProfile.credits + ' credits remaining';
           }
+
+          // Success toast
+          showToast('Download started! ' + config.credits + ' credit' + (config.credits > 1 ? 's' : '') + ' used.');
 
         } catch (err) {
           console.error('Download error:', err);
@@ -877,6 +932,8 @@
               creditsEl.textContent = profile.credits + ' credits';
               creditsEl.style.display = 'inline-block';
             }
+            var inlineCredits = document.getElementById('inline-credits');
+            if (inlineCredits) inlineCredits.textContent = profile.credits + ' credits remaining';
             var adminLink = document.getElementById('menu-admin');
             if (adminLink && profile.role === 'admin') adminLink.style.display = '';
           }

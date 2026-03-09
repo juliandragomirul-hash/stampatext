@@ -1517,13 +1517,6 @@ const SvgRenderer = {
     originalScaleX = originalScaleX || 1;
     frameMode = frameMode || 'single';
 
-    // Diagnostic: show actual tspan content entering autoFit
-    var _diagTspans = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi);
-    if (_diagTspans) {
-      var _diagText = _diagTspans.map(function(t) { return t.replace(/<[^>]+>/g, ''); }).join('|');
-      console.warn('[autoFit] ENTRY | tspans="' + _diagText.substring(0, 50) + '"');
-    }
-
     // ============================================================
     // CATEGORY DETECTION: Check if this is a Fixed Frame template
     // Category 2 = has <image> element (illustrated background)
@@ -1534,7 +1527,6 @@ const SvgRenderer = {
 
     if (isFixedFrame) {
       // Category 2: always auto-fit using container rect from SVG (no bounding_width needed)
-      console.log('Category 2 (Fixed Frame) template detected');
       return this._autoFitTextFixedFrame(svgString, textIndex, maxWidth, originalFontSize, originalScaleX);
     }
 
@@ -1553,10 +1545,8 @@ const SvgRenderer = {
     }
     var cacheKey = svgString.length + '_' + textIndex + '_' + cacheFont + '_' + cacheTextContent.substring(0, 40) + '_' + svgString.slice(0, 80);
     if (this._autoFitMeasureCache && this._autoFitMeasureCache.key === cacheKey) {
-      console.warn('[autoFit] CACHE HIT | font=' + cacheFont + ' text="' + cacheTextContent.substring(0, 25) + '"');
       return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, this._autoFitMeasureCache, fillType, cornerType, borderType);
     }
-    console.warn('[autoFit] CACHE MISS | font=' + cacheFont + ' text="' + cacheTextContent.substring(0, 25) + '"');
 
     // Category 1: Dynamic Frame - TEXT-FIRST approach
     // Create an HTML wrapper with fonts to measure text accurately.
@@ -1634,24 +1624,15 @@ const SvgRenderer = {
           // For multi-line text (<tspan> children), measure the longest line
           var tspans = textEl.querySelectorAll('tspan');
           var measuredWidth;
-          // Diagnostic: verify tspan detection and per-tspan measurements
-          var tspanDiag = 'tspans=' + tspans.length;
           if (tspans.length > 1) {
             measuredWidth = 0;
             for (var ti = 0; ti < tspans.length; ti++) {
               var tw = tspans[ti].getComputedTextLength();
-              tspanDiag += ' | ts' + ti + '="' + (tspans[ti].textContent || '').substring(0, 18) + '"(' + (tspans[ti].textContent || '').length + 'ch) w=' + tw.toFixed(1);
               if (tw > measuredWidth) measuredWidth = tw;
             }
           } else {
             measuredWidth = textEl.getComputedTextLength();
-            tspanDiag += ' | FULL textEl w=' + measuredWidth.toFixed(1);
           }
-          // Also show what font the browser resolved + textEl total length for comparison
-          var resolvedFF = '';
-          try { resolvedFF = iframe.contentWindow.getComputedStyle(textEl).fontFamily || ''; } catch(e2){}
-          tspanDiag += ' | textElTotal=' + textEl.getComputedTextLength().toFixed(1) + ' resolvedFont=' + resolvedFF.substring(0, 30);
-          console.warn('[iframe-MEASURE] ' + tspanDiag);
 
           // Measure actual ink bounding box for precise height and centering
           var bbox = textEl.getBBox();
@@ -2026,26 +2007,6 @@ const SvgRenderer = {
       }
       var newScaleX = originalScaleX;
 
-      // Diagnostic: compare sizing across different text inputs
-      // Show WIDEST tspan (the one that determines measuredW), not just the first
-      var diagWidest = ''; var diagWidestLen = 0;
-      var diagAllTspans = svgString.match(/<tspan[^>]*>([^<]*)<\/tspan>/gi) || [];
-      diagAllTspans.forEach(function(t) {
-        var inner = t.replace(/<[^>]+>/g, '');
-        if (inner.length > diagWidestLen) { diagWidestLen = inner.length; diagWidest = inner; }
-      });
-      console.warn('[autoFit] TEXT-SIZE | font=' + detectedFont +
-        ' widest="' + diagWidest.substring(0, 25) + '"(' + diagWidestLen + 'ch)' +
-        ' lines=' + numTspans +
-        ' measuredW=' + measuredWidth.toFixed(1) +
-        ' effMaxW=' + effectiveMaxWidth.toFixed(1) +
-        ' ratio=' + ratio.toFixed(3) +
-        ' newFS=' + newFontSize.toFixed(1) +
-        ' origFS=' + originalFontSize +
-        ' lsExtra=' + lsExtra.toFixed(1) +
-        ' heightConst=' + (heightAtNewFont > effectiveMaxWidth ? 'YES' : 'no') +
-        ' frame=' + frameMode);
-
       if (newFontSize < minFontSize) {
         newFontSize = minFontSize;
         // At min font size, calculate horizontal compression
@@ -2176,15 +2137,9 @@ const SvgRenderer = {
         // Cache for gallery variant reuse
         measurements.remeasuredWidth = exactWidth;
         measurements.remeasuredFontSize = newFontSize;
-        // Diagnostic: compare exact vs estimated (remove after debugging)
-        console.warn('[autoFit] EXACT path | font=' + detectedFont + ' exact=' + (exactWidth * newScaleX).toFixed(1) +
-          ' est=' + estimatedWidth.toFixed(1) + ' newFS=' + newFontSize.toFixed(1) +
-          ' origFS=' + originalFontSize + ' wb=' + fontTune.wb);
       } else {
         // Estimation fallback (no iframe, no cached re-measurement)
         textBlockWidth = estimatedWidth;
-        console.warn('[autoFit] ESTIMATION path | font=' + detectedFont + ' est=' + estimatedWidth.toFixed(1) +
-          ' newFS=' + newFontSize.toFixed(1) + ' origFS=' + originalFontSize + ' wb=' + fontTune.wb);
       }
       // wb: breathing room multiplier (per-font, calibrated via admin tuning).
       // No floor — each font's wb is trusted as-is for full admin control.
@@ -2237,9 +2192,6 @@ const SvgRenderer = {
       // lineHeight includes ink, so the visible gap between lines ≈ lineHeight * 0.5.
       if (numLines > 1) {
         var maxVPad = lineHeight * 0.5;
-        console.warn('[autoFit] vPadCap | lines=' + numLines + ' vPad=' + vPadding.toFixed(1) +
-          ' maxVPad=' + maxVPad.toFixed(1) + ' lineH=' + lineHeight.toFixed(1) +
-          ' inset=' + actualInset.toFixed(1) + ' gap=' + vInnerGap);
         if (vPadding > maxVPad) {
           vInnerGap = Math.max(0, maxVPad - actualInset);
           vPadding = vInnerGap + actualInset;
@@ -2247,10 +2199,6 @@ const SvgRenderer = {
       }
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
-      console.warn('[autoFit] SIZING | font=' + detectedFont + ' textBlockW=' + textBlockWidth.toFixed(1) +
-        ' rectW=' + newRectWidth.toFixed(1) + ' hPad=' + hPadding.toFixed(1) +
-        ' inset=' + actualInset.toFixed(1) + ' gap=' + hInnerGap +
-        ' stroke=' + effectiveStroke + ' frame=' + frameMode);
 
       // Aspect ratio enforcement: compress wide one-liners horizontally
       // to produce less squat stamps. Without this, wide fonts (Montserrat,
