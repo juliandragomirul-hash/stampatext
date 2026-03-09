@@ -79,6 +79,7 @@ const SvgRenderer = {
     'Exo2':            { url: '/fonts/Exo2-Bold.ttf',                        format: 'truetype' },
     'Comfortaa':       { url: '/fonts/Comfortaa-Bold.ttf',                   format: 'truetype' },
     'FuzzyBubbles':    { url: '/fonts/FuzzyBubbles-Bold.ttf',               format: 'truetype' },
+    'BebasNeue':       { url: '/fonts/BebasNeue-Regular.ttf',              format: 'truetype' },
     // Legacy (kept for backward compat with saved designs)
     'RobotoBlack':     { url: '/fonts/Roboto-Bold.ttf',                      format: 'truetype' },
     'PlayfairDisplay': { url: '/fonts/PlayfairDisplay-Bold.ttf',             format: 'truetype' },
@@ -1568,6 +1569,7 @@ const SvgRenderer = {
       '@font-face{font-family:"Exo2";src:url("' + _fontBase + '/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
       '@font-face{font-family:"Comfortaa";src:url("' + _fontBase + '/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
       '@font-face{font-family:"FuzzyBubbles";src:url("' + _fontBase + '/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
+      '@font-face{font-family:"BebasNeue";src:url("' + _fontBase + '/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:400;}' +
       '*{margin:0;padding:0;}' +
       '</style>' +
       '</head><body>' + svgString + '</body></html>';
@@ -2769,7 +2771,6 @@ const SvgRenderer = {
           containerY = yMatch ? parseFloat(yMatch[1]) : 0;
           containerWidth = parseFloat(wMatch[1]);
           containerHeight = parseFloat(hMatch[1]);
-          console.log('Fixed Frame: Found container rect at (' + containerX + ',' + containerY + ') size:', containerWidth, 'x', containerHeight);
           break;
         }
       }
@@ -2798,7 +2799,6 @@ const SvgRenderer = {
       var txParts = textTransformMatch[1].trim().split(/[\s,]+/);
       if (txParts.length >= 1) textScaleX = parseFloat(txParts[0]) || 1;
     }
-    console.log('Fixed Frame: text scaleX =', textScaleX);
 
     // Detect font from SVG to use appropriate charWidthFactor
     var detectedFont = '';
@@ -2814,7 +2814,6 @@ const SvgRenderer = {
     } else {
       charWidthFactor = 0.50;  // Standard width (default)
     }
-    console.log('Fixed Frame: font="' + detectedFont + '", charWidthFactor=' + charWidthFactor);
 
     var horizontalPadding = 0.98;
     var verticalPadding = 1.0;
@@ -2882,7 +2881,6 @@ const SvgRenderer = {
 
     var lineHeightFactor = numLines < LINE_HEIGHT_FACTORS.length ? LINE_HEIGHT_FACTORS[numLines] : 0.60;
 
-    console.log('Fixed Frame: Best=' + numLines + ' lines, fontSize=' + optimalFontSize.toFixed(2), lines);
 
     // Extract styling from original tspans
     var tspanStyle = '';
@@ -2948,7 +2946,6 @@ const SvgRenderer = {
       }
     );
 
-    console.log('Fixed Frame: Generated', numLines, 'lines at font size', optimalFontSize.toFixed(2), '| text center:', textCenterX.toFixed(2), textCenterY.toFixed(2));
 
     return result;
   },
@@ -3094,7 +3091,6 @@ const SvgRenderer = {
               parseInt(parts[1]).toString(16).padStart(2, '0') +
               parseInt(parts[2]).toString(16).padStart(2, '0');
             hex = hex.toUpperCase();
-            console.log('Image dominant color detected:', hex, '(count=' + bestCount + ')');
             self._imageDominantColorCache[cacheKey] = hex;
             resolve(hex);
           } else {
@@ -3190,10 +3186,6 @@ const SvgRenderer = {
             cropH: Math.min(svgImgH, (maxY - minY + 2 * padY) * scaleY)
           };
 
-          console.log('ArtworkBounds: detected (' + bounds.cropX.toFixed(0) + ',' + bounds.cropY.toFixed(0) +
-            ') ' + bounds.cropW.toFixed(0) + 'x' + bounds.cropH.toFixed(0) +
-            ' (from ' + svgImgW + 'x' + svgImgH + ')');
-
           self._artworkBoundsCache[cacheKey] = bounds;
           resolve(bounds);
         } catch (e) {
@@ -3243,7 +3235,6 @@ const SvgRenderer = {
       cropH = origH * (1 - 2 * cropPercent);
     }
 
-    console.log('CropViewBox: crop to (' + cropX.toFixed(0) + ',' + cropY.toFixed(0) + ',' + cropW.toFixed(0) + ',' + cropH.toFixed(0) + ')');
 
     // Update viewBox
     var newViewBox = cropX.toFixed(2) + ' ' + cropY.toFixed(2) + ' ' + cropW.toFixed(2) + ' ' + cropH.toFixed(2);
@@ -3537,6 +3528,7 @@ const SvgRenderer = {
         '@font-face{font-family:"Exo2";src:url("' + _fontBase2 + '/fonts/Exo2-Bold.ttf") format("truetype");font-weight:700;}' +
         '@font-face{font-family:"Comfortaa";src:url("' + _fontBase2 + '/fonts/Comfortaa-Bold.ttf") format("truetype");font-weight:700;}' +
         '@font-face{font-family:"FuzzyBubbles";src:url("' + _fontBase2 + '/fonts/FuzzyBubbles-Bold.ttf") format("truetype");font-weight:700;}' +
+        '@font-face{font-family:"BebasNeue";src:url("' + _fontBase2 + '/fonts/BebasNeue-Regular.ttf") format("truetype");font-weight:400;}' +
         '*{margin:0;padding:0;}body{overflow:hidden;width:' + fullW + 'px;height:' + fullH + 'px;}' +
         '</style>' +
         '</head><body>' + svgString + '</body></html>';

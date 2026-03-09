@@ -188,7 +188,8 @@ const Gallery = {
       { key: 'Exo2',          weight: '700' },
       { key: 'Bitter',        weight: '500' },
       { key: 'Comfortaa',     weight: '700' },
-      { key: 'FuzzyBubbles',  weight: '700' }
+      { key: 'FuzzyBubbles',  weight: '700' },
+      { key: 'BebasNeue',    weight: '400' }
     ];
     var fontCycleIdx = 0;
 

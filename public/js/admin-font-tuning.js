@@ -14,7 +14,7 @@ const FontTuning = {
   // Font display order (matches product page roster)
   FONT_ORDER: [
     'Oswald', 'CourierPrime', 'Montserrat', 'Yomogi', 'BlackOpsOne',
-    'Nunito', 'Exo2', 'Bitter', 'Comfortaa', 'FuzzyBubbles'
+    'Nunito', 'Exo2', 'Bitter', 'Comfortaa', 'FuzzyBubbles', 'BebasNeue'
   ],
 
   // 4 preview cases per font
@@ -29,7 +29,8 @@ const FontTuning = {
   FONT_WEIGHTS: {
     'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700', 'Yomogi': '400',
     'BlackOpsOne': '400', 'Nunito': '900',
-    'Exo2': '700', 'Bitter': '500', 'Comfortaa': '700', 'FuzzyBubbles': '700'
+    'Exo2': '700', 'Bitter': '500', 'Comfortaa': '700', 'FuzzyBubbles': '700',
+    'BebasNeue': '400'
   },
 
   // Font display names
@@ -37,7 +38,8 @@ const FontTuning = {
     'Oswald': 'Oswald', 'CourierPrime': 'Courier Prime', 'Montserrat': 'Montserrat',
     'Yomogi': 'Yomogi', 'BlackOpsOne': 'Black Ops One',
     'Nunito': 'Nunito', 'Exo2': 'Exo 2',
-    'Bitter': 'Bitter', 'Comfortaa': 'Comfortaa', 'FuzzyBubbles': 'Fuzzy Bubbles'
+    'Bitter': 'Bitter', 'Comfortaa': 'Comfortaa', 'FuzzyBubbles': 'Fuzzy Bubbles',
+    'BebasNeue': 'Bebas Neue'
   },
 
   // Parameter definitions: key, label, min, max, step, decimals
@@ -85,24 +87,34 @@ const FontTuning = {
 
   async loadPreviewTemplate() {
     try {
-      // Fetch templates, pick a simple one (plain border, filled, soft round, double frame)
+      // Fetch outlined template: stroke visible against white bg, easier to spot clipping
       var { data: templates, error } = await sb
         .from('templates')
         .select('*, text_zones(*)')
         .eq('is_active', true)
         .is('border_type', null)
-        .eq('fill_type', 'full')
-        .eq('frame_type', 'double')
-        .eq('corner_type', 'soft_round')
+        .eq('fill_type', 'empty')
+        .eq('frame_type', 'single')
+        .eq('corner_type', 'straight')
         .limit(1);
 
       if (error || !templates || templates.length === 0) {
-        // Fallback: just pick any active template
+        // Fallback: outlined with any corner, then any active template
         var { data: fallback } = await sb
           .from('templates')
           .select('*, text_zones(*)')
           .eq('is_active', true)
+          .is('border_type', null)
+          .eq('fill_type', 'empty')
+          .eq('frame_type', 'single')
           .limit(1);
+        if (!fallback || fallback.length === 0) {
+          var { data: fallback } = await sb
+            .from('templates')
+            .select('*, text_zones(*)')
+            .eq('is_active', true)
+            .limit(1);
+        }
         templates = fallback;
       }
 
@@ -113,6 +125,7 @@ const FontTuning = {
 
       var tpl = templates[0];
       this.templateZone = tpl.text_zones && tpl.text_zones[0] ? tpl.text_zones[0] : null;
+      this.currentTemplate = tpl;
 
       var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
       var svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
@@ -251,8 +264,8 @@ const FontTuning = {
       var weight = this.FONT_WEIGHTS[fontKey] || '400';
       var svg = this.templateSvg;
 
-      // Clear measurement cache for fresh sizing
-      SvgRenderer._autoFitMeasureCache = null;
+      // Uniquify SVG IDs to prevent collisions across 40+ previews
+      svg = SvgRenderer.uniquifySvgIds(svg);
 
       // Replace font
       svg = svg.replace(/font-family=["']'?[^"']*'?["']/g,
@@ -263,13 +276,17 @@ const FontTuning = {
       // Replace text
       svg = SvgRenderer.replaceTextInString(svg, 0, cs.text);
 
-      // Auto-fit
+      // Auto-fit with actual template metadata
       if (this.templateZone && this.templateZone.bounding_width) {
         var origSx = this.templateZone.transform_matrix
           ? parseFloat(this.templateZone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1 : 1;
+        var tpl = this.currentTemplate || {};
         svg = await SvgRenderer.autoFitTextInString(
           svg, 0, this.templateZone.bounding_width,
-          this.templateZone.font_size, origSx, 'single', 'full', 'soft_round', null
+          this.templateZone.font_size, origSx, 'single',
+          tpl.fill_type || 'empty',
+          'straight',
+          null
         );
       }
 
@@ -282,11 +299,13 @@ const FontTuning = {
       // Crop viewBox
       svg = SvgRenderer.cropViewBoxToStamp(svg);
 
-      // Corner radius
-      svg = SvgRenderer.applyCornerRadius(svg, 'soft_round');
+      // Force straight corners for tuning previews (no rounding applied)
 
-      // Double frame
-      svg = SvgRenderer.addDoubleFrame(svg);
+      // Frame (match template)
+      var tplFrame = (this.currentTemplate && this.currentTemplate.frame_type) || 'single';
+      if (tplFrame === 'double' || tplFrame === 'split') {
+        svg = SvgRenderer.addDoubleFrame(svg);
+      }
 
       // Display
       previewEl.innerHTML = '';

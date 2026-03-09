@@ -3,7 +3,7 @@
     "single": {
       "scaleY": 1,
       "letterSpacing": 3,
-      "dx": 0.005,
+      "dx": 0,
       "dy": 0,
       "wb": 1,
       "hb": 1.2,
@@ -15,7 +15,7 @@
       "scaleY": 1,
       "letterSpacing": 3,
       "dx": 0,
-      "dy": 0.005,
+      "dy": 0,
       "wb": 1.02,
       "hb": 0.96,
       "stroke": 5,
@@ -25,8 +25,8 @@
     "multi": {
       "scaleY": 1,
       "letterSpacing": 3,
-      "dx": 0.005,
-      "dy": 0.015,
+      "dx": 0,
+      "dy": 0,
       "wb": 1.02,
       "hb": 1.1,
       "stroke": 5,
@@ -61,7 +61,7 @@
       "scaleY": 1.4,
       "letterSpacing": 3,
       "dx": 0,
-      "dy": -0.01,
+      "dy": 0,
       "wb": 1,
       "hb": 1,
       "stroke": 5,
@@ -72,7 +72,7 @@
       "scaleY": 1.4,
       "letterSpacing": 3,
       "dx": 0,
-      "dy": -0.135,
+      "dy": -0.14,
       "wb": 1.02,
       "hb": 1.1,
       "stroke": 5,
@@ -85,9 +85,9 @@
       "dx": 0,
       "dy": -0.135,
       "wb": 1,
-      "hb": 1.03,
+      "hb": 1.02,
       "stroke": 5,
-      "lineSpacing": 0.9,
+      "lineSpacing": 0.95,
       "ws": 0
     }
   },
@@ -128,7 +128,7 @@
     "multiDiacrit": {
       "scaleY": 1.4,
       "letterSpacing": 2,
-      "dx": 0.01,
+      "dx": 0.005,
       "dy": -0.085,
       "wb": 1.02,
       "hb": 1,
@@ -174,7 +174,7 @@
     "multiDiacrit": {
       "scaleY": 1,
       "letterSpacing": 3,
-      "dx": 0.01,
+      "dx": 0.005,
       "dy": -0.03,
       "wb": 1,
       "hb": 1,
@@ -202,7 +202,7 @@
       "dy": -0.01,
       "wb": 1.02,
       "hb": 0.98,
-      "stroke": -1,
+      "stroke": 1,
       "lineSpacing": 1,
       "ws": 0
     },
@@ -224,7 +224,7 @@
       "dy": -0.145,
       "wb": 1.02,
       "hb": 1,
-      "stroke": -1,
+      "stroke": 1,
       "lineSpacing": 0.95,
       "ws": 0
     }
@@ -234,7 +234,7 @@
       "scaleY": 1.4,
       "letterSpacing": 0,
       "dx": -0.01,
-      "dy": 0.01,
+      "dy": 0.005,
       "wb": 1.01,
       "hb": 1.1,
       "stroke": 0,
@@ -245,7 +245,7 @@
       "scaleY": 1.4,
       "letterSpacing": 0,
       "dx": -0.01,
-      "dy": 0.015,
+      "dy": 0.005,
       "wb": 1.02,
       "hb": 1,
       "stroke": 0,
@@ -266,7 +266,7 @@
     "multiDiacrit": {
       "scaleY": 1.4,
       "letterSpacing": 0,
-      "dx": -0.015,
+      "dx": -0.01,
       "dy": -0.06,
       "wb": 1.02,
       "hb": 1,
@@ -409,7 +409,7 @@
       "wb": 1.02,
       "hb": 1.01,
       "stroke": 5,
-      "lineSpacing": 1.05,
+      "lineSpacing": 1,
       "ws": 0
     }
   },
@@ -418,7 +418,7 @@
       "scaleY": 1.3,
       "letterSpacing": 0,
       "dx": 0,
-      "dy": -0.01,
+      "dy": 0,
       "wb": 1.01,
       "hb": 1.1,
       "stroke": 0,
@@ -429,7 +429,7 @@
       "scaleY": 1.3,
       "letterSpacing": 0,
       "dx": 0,
-      "dy": 0.005,
+      "dy": 0,
       "wb": 1,
       "hb": 1,
       "stroke": 0,
@@ -455,6 +455,52 @@
       "wb": 1.02,
       "hb": 1,
       "stroke": 0,
+      "lineSpacing": 0.95,
+      "ws": 0
+    }
+  },
+  "BebasNeue": {
+    "single": {
+      "scaleY": 1,
+      "letterSpacing": 3,
+      "dx": 0,
+      "dy": 0,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 5,
+      "lineSpacing": 1,
+      "ws": 0
+    },
+    "singleDiacrit": {
+      "scaleY": 1,
+      "letterSpacing": 3,
+      "dx": 0,
+      "dy": 0,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 5,
+      "lineSpacing": 1,
+      "ws": 0
+    },
+    "multi": {
+      "scaleY": 1,
+      "letterSpacing": 3,
+      "dx": 0,
+      "dy": -0.035,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 5,
+      "lineSpacing": 0.8,
+      "ws": 0
+    },
+    "multiDiacrit": {
+      "scaleY": 1,
+      "letterSpacing": 3,
+      "dx": 0,
+      "dy": -0.035,
+      "wb": 1,
+      "hb": 1,
+      "stroke": 5,
       "lineSpacing": 0.95,
       "ws": 0
     }
