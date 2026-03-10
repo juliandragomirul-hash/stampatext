@@ -129,6 +129,12 @@
 
     // Show results area with loading
     document.getElementById('stamp-results').style.display = 'block';
+    // Rescue filter bar before clearing (it may have been moved into results-batches)
+    var filterBar = document.getElementById('stamp-filter-bar');
+    if (filterBar) {
+      document.getElementById('stamp-results').insertBefore(filterBar, document.getElementById('results-batches'));
+      filterBar.style.display = 'none';
+    }
     document.getElementById('results-batches').innerHTML =
       '<div class="stamp-loading">Processing templates...</div>';
 
@@ -161,6 +167,11 @@
     btn.textContent = 'Restoring...';
 
     document.getElementById('stamp-results').style.display = 'block';
+    var filterBar2 = document.getElementById('stamp-filter-bar');
+    if (filterBar2) {
+      document.getElementById('stamp-results').insertBefore(filterBar2, document.getElementById('results-batches'));
+      filterBar2.style.display = 'none';
+    }
     document.getElementById('results-batches').innerHTML =
       '<div class="stamp-loading">Restoring your gallery...</div>';
 

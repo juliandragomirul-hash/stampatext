@@ -9,7 +9,7 @@
   <meta property="og:description" content="Customize your stamp and download in high-res PNG or JPG. Choose fonts, colors, borders and more.">
   <meta property="og:image" content="/logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="/css/style.css?v=45">
+  <link rel="stylesheet" href="/css/style.css?v=48">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -86,6 +86,24 @@
             <label class="product-radio"><input type="radio" name="frame" value="single" checked><span>Single</span></label>
             <label class="product-radio"><input type="radio" name="frame" value="double"><span>Double</span></label>
             <label class="product-radio"><input type="radio" name="frame" value="split"><span>Split</span></label>
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-section-header">
+            <span class="filter-section-title">STYLE</span>
+          </div>
+          <div class="product-radio-group" id="product-fill-toggle">
+            <label class="product-radio"><input type="radio" name="fill" value="empty" checked><span>Outlined</span></label>
+            <label class="product-radio"><input type="radio" name="fill" value="full"><span>Filled</span></label>
+          </div>
+        </div>
+
+        <!-- Shape is set from gallery URL, not togglable on product page -->
+        <div class="filter-section" id="product-shape-section" style="display:none">
+          <div class="product-radio-group" id="product-shape-toggle">
+            <label class="product-radio"><input type="radio" name="shape" value="rectangle" checked><span>Rectangle</span></label>
+            <label class="product-radio"><input type="radio" name="shape" value="lined"><span>Lined</span></label>
           </div>
         </div>
 
@@ -208,7 +226,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=172"></script>
+  <script src="/js/svg-renderer.js?v=178"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -248,10 +266,10 @@
       };
 
       var BORDER_LABELS = {
-        wavy: 'wavy', brushstroke: 'brushstroke',
+        wavy: 'wavy', zigzag: 'zigzag', brushstroke: 'brushstroke',
         stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
         torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
-        perforated: 'perforated', zigzag: 'zigzag'
+        perforated: 'perforated', sawtooth: 'sawtooth', chalk: 'chalk'
       };
 
       var TEXTURE_OPTIONS = [
@@ -274,8 +292,9 @@
         frameMode = frameMode || 'single';
         var weight = FONT_WEIGHTS[fontKey] || '400';
 
-        // Start from raw template, replace font-family + weight
-        var svg = rawCleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
+        // Start from raw template, apply fill conversion, replace font-family + weight
+        var svg = convertFill(rawCleanedSvg, currentFill);
+        svg = svg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + fontKey + "'\"");
         svg = svg.replace(/font-weight=["'][^"']*["']/g,
           'font-weight="' + weight + '"');
@@ -294,8 +313,8 @@
             svg = await SvgRenderer.autoFitTextInString(
               svg, idx, zone.bounding_width,
               zone.font_size, originalScaleX,
-              frameMode, templateFillType || 'full', templateCornerType || 'straight',
-              templateBorderType || null
+              frameMode, currentFill || 'empty', templateCornerType || 'straight',
+              templateBorderType || null, currentShape
             );
             didAutoFit = true;
           }
@@ -307,6 +326,62 @@
         }
 
         return svg;
+      }
+
+      // Convert outlined SVG ↔ filled SVG
+      function convertFill(svgString, targetFill) {
+        if (targetFill === 'empty') {
+          // Filled → Outlined: rect fill="#COLOR" → fill="none", text fill="#FFFFFF" → fill="#COLOR"
+          // Find the outer rect's fill color first
+          var rectM = svgString.match(/<rect[^>]*\bfill=["']#([0-9A-Fa-f]{6})["'][^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)/);
+          if (!rectM) rectM = svgString.match(/<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*\bfill=["']#([0-9A-Fa-f]{6})["']/);
+          if (!rectM) {
+            // Simple case: find the panoplii rect with a non-"none" fill
+            rectM = svgString.match(/<g[^>]*id=["']panoplii["'][^]*?<rect[^>]*\bfill=["']#([0-9A-Fa-f]{6})["']/);
+          }
+          if (rectM) {
+            var rectColor = '#' + rectM[1];
+            // Change outer rect fill to "none"
+            svgString = svgString.replace(
+              /(<rect[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/,
+              '$1$2none$3$4'
+            );
+            // Also try reverse attr order
+            svgString = svgString.replace(
+              /(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])/,
+              '$1$2none$3'
+            );
+            // Change text fill from white to the rect color
+            svgString = svgString.replace(
+              /(<text[^>]*)(fill=["'])#[Ff]{6}(["'])/,
+              '$1$2' + rectColor + '$3'
+            );
+            svgString = svgString.replace(
+              /(<text[^>]*)(fill=["'])#[Ff]{3}(["'])/,
+              '$1$2' + rectColor + '$3'
+            );
+          }
+        } else if (targetFill === 'full') {
+          // Outlined → Filled: rect fill="none" → fill="#BE1E2D", text fill="#COLOR" → fill="#FFFFFF"
+          // Get text color to use as fill
+          var textM = svgString.match(/<text[^>]*\bfill=["']#([0-9A-Fa-f]{3,6})["']/);
+          var fillColor = textM ? '#' + textM[1] : '#BE1E2D';
+          // Change outer rect fill from "none" to color
+          svgString = svgString.replace(
+            /(<rect[^>]*)(fill=["'])none(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/,
+            '$1$2' + fillColor + '$3$4'
+          );
+          svgString = svgString.replace(
+            /(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])none(["'])/,
+            '$1$2' + fillColor + '$3'
+          );
+          // Change text fill to white
+          svgString = svgString.replace(
+            /(<text[^>]*)(fill=["'])#[0-9A-Fa-f]{3,6}(["'])/,
+            '$1$2#FFFFFF$3'
+          );
+        }
+        return svgString;
       }
 
       var DOWNLOAD_SIZES = {
@@ -332,6 +407,8 @@
       var currentTilt = 0;
       var currentTexture = '';
       var currentFrame = 'single';
+      var currentFill = 'empty';
+      var currentShape = 'rectangle';
       var borderInfo = null;
       var isProcessing = false;
 
@@ -348,6 +425,8 @@
         currentTexture = SvgRenderer._textureAliases[currentTexture];
       }
       currentFrame = params.get('frame') || 'single';
+      currentFill = params.get('fill') || 'empty';
+      currentShape = params.get('shape') || 'rectangle';
 
       if (!templateId) {
         document.getElementById('product-preview').innerHTML =
@@ -385,7 +464,7 @@
         wavy: 'Wavy', brushstroke: 'Brushstroke', stitch_line: 'Stitch Line',
         stitch_square: 'Stitch Square', stitch_circle: 'Stitch Dot',
         torn_edge: 'Torn Edge', perforated_spaced: 'Spaced Perforated',
-        perforated: 'Perforated', zigzag: 'Zigzag'
+        perforated: 'Perforated', sawtooth: 'Sawtooth', zigzag: 'Zigzag', chalk: 'Chalk'
       }[templateBorderType] || 'Plain';
       var cornerLabel = {
         medium_round: 'Medium Round', soft_round: 'Soft Round', strong_round: 'Strong Round',
@@ -453,6 +532,9 @@
       buildTexturePicker();
       setToggleState('product-tilt-toggle', String(currentTilt));
       setToggleState('product-frame-toggle', currentFrame);
+      setToggleState('product-fill-toggle', currentFill);
+      setToggleState('product-shape-toggle', currentShape);
+      updateShapeConstraints();
       await renderPreview();
 
       // ---- Event listeners ----
@@ -492,6 +574,21 @@
         renderPreview();
       });
 
+      // Fill (style) radio
+      document.getElementById('product-fill-toggle').addEventListener('change', function(e) {
+        if (e.target.type !== 'radio') return;
+        currentFill = e.target.value;
+        renderPreview();
+      });
+
+      // Shape radio
+      document.getElementById('product-shape-toggle').addEventListener('change', function(e) {
+        if (e.target.type !== 'radio') return;
+        currentShape = e.target.value;
+        updateShapeConstraints();
+        renderPreview();
+      });
+
       // Texture picker arrows
       document.getElementById('texture-arrow-up').addEventListener('click', function() { cycleTexture(-1); });
       document.getElementById('texture-arrow-down').addEventListener('click', function() { cycleTexture(1); });
@@ -515,9 +612,22 @@
       document.getElementById('product-preview').addEventListener('click', function() {
         var svgEl = this.querySelector('svg');
         if (!svgEl) return;
+        var existing = document.querySelector('.stamp-zoom-overlay');
+        if (existing) existing.remove();
         var overlay = document.createElement('div');
         overlay.className = 'stamp-zoom-overlay';
-        overlay.appendChild(svgEl.cloneNode(true));
+        overlay.innerHTML = svgEl.outerHTML;
+        var zoomSvg = overlay.querySelector('svg');
+        if (zoomSvg) {
+          zoomSvg.removeAttribute('width');
+          zoomSvg.removeAttribute('height');
+          zoomSvg.style.maxWidth = '90vw';
+          zoomSvg.style.maxHeight = '85vh';
+          zoomSvg.style.width = 'auto';
+          zoomSvg.style.height = 'auto';
+          zoomSvg.style.background = '#ffffff';
+          zoomSvg.style.borderRadius = '4px';
+        }
         overlay.addEventListener('click', function() { overlay.remove(); });
         document.addEventListener('keydown', function onEsc(e) {
           if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); }
@@ -652,9 +762,26 @@
 
       function setToggleState(containerId, value) {
         var container = document.getElementById(containerId);
+        if (!container) return;
         container.querySelectorAll('input[type="radio"]').forEach(function(radio) {
           radio.checked = (radio.value === value);
         });
+      }
+
+      // When shape is "lined": force fill to empty (no enclosed area), disable fill toggle
+      function updateShapeConstraints() {
+        var fillSection = document.getElementById('product-fill-toggle');
+        if (!fillSection) return;
+        if (currentShape === 'lined') {
+          // Force empty fill — lined has no enclosed area
+          if (currentFill !== 'empty') {
+            currentFill = 'empty';
+            setToggleState('product-fill-toggle', 'empty');
+          }
+          fillSection.classList.add('filter-disabled');
+        } else {
+          fillSection.classList.remove('filter-disabled');
+        }
       }
 
       function detectBorderType(svgStr) {
@@ -721,23 +848,23 @@
           svg = SvgRenderer.colorize(svg, currentColor);
           svg = SvgRenderer.applyThinStroke(svg);
           svg = SvgRenderer.cropViewBoxToStamp(svg);
-          svg = SvgRenderer.applyCornerRadius(svg, templateCornerType);
+          // Lined: convert rect to 2 horizontal lines, skip corner radius
+          if (currentShape === 'lined') {
+            svg = SvgRenderer.convertToLined(svg);
+          } else {
+            svg = SvgRenderer.applyCornerRadius(svg, templateCornerType);
+          }
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
           // Detect border info from post-autoFit SVG (matches gallery behavior).
           // Post-autoFit SVG has proportional stroke applied — raw SVG has original
           // stroke-width (50) which produces oversized inner rects in addDoubleFrame.
           var frameBi = detectBorderType(svg);
-          SvgRenderer.supplementBorderInfo(frameBi, { border_type: templateBorderType, fill_type: templateFillType });
+          SvgRenderer.supplementBorderInfo(frameBi, { border_type: templateBorderType, fill_type: currentFill });
           if (currentFrame === 'double') {
             svg = SvgRenderer.addDoubleFrame(svg, frameBi, currentColor, 'double');
           } else if (currentFrame === 'split') {
             svg = SvgRenderer.addSplitBorder(svg, frameBi);
           }
-          // Capture pre-tilt viewBox width for scale compensation
-          var preTiltVbW = 0;
-          var preTiltMatch = svg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+[\d.\-]+\s*["']/);
-          if (preTiltMatch) preTiltVbW = parseFloat(preTiltMatch[1]);
-
           if (currentTexture) {
             svg = await SvgRenderer.applyTexture(svg, currentTexture);
           }
@@ -751,15 +878,10 @@
 
           previewEl.innerHTML = '';
           var img = SvgRenderer.createSvgImage(svg);
-
-          // Compensate for viewBox expansion from tilt so preview stays same visual size
-          if (currentTilt !== 0 && preTiltVbW > 0) {
-            var postTiltMatch = svg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+[\d.\-]+\s*["']/);
-            if (postTiltMatch) {
-              var postTiltVbW = parseFloat(postTiltMatch[1]);
-              var scaleFactor = postTiltVbW / preTiltVbW;
-              img.querySelector('svg').style.transform = 'scale(' + scaleFactor.toFixed(4) + ')';
-            }
+          var pvSvg = img.querySelector('svg');
+          if (pvSvg) {
+            pvSvg.style.maxWidth = '90%';
+            pvSvg.style.maxHeight = '500px';
           }
           previewEl.appendChild(img);
 
@@ -776,7 +898,7 @@
       function updateDescription() {
         var colorName = getColorName(currentColor);
         var border = BORDER_LABELS[templateBorderType] || 'plain';
-        var fill = (templateFillType === 'empty') ? 'outlined' : 'filled';
+        var fill = (currentFill === 'empty') ? 'outlined' : 'filled';
         var texture = '';
         if (currentTexture) {
           var resolved = SvgRenderer._textureAliases[currentTexture] || currentTexture;
@@ -787,8 +909,8 @@
         var frame = 'single border';
         if (currentFrame === 'double') frame = 'double border';
         else if (currentFrame === 'split') frame = 'split border';
-        var shape = 'rectangle';
-        if (currentSvg) {
+        var shape = currentShape || 'rectangle';
+        if (shape === 'rectangle' && currentSvg) {
           var vbM = currentSvg.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+([\d.\-]+)/);
           if (vbM) {
             var ratio = parseFloat(vbM[1]) / parseFloat(vbM[2]);
@@ -796,14 +918,17 @@
           }
         }
         var obj = (shape + ' ' + (templateObjectType || 'stamp')).replace(/_/g, ' ');
-        var corners = 'straight corners';
-        if (templateCornerType === 'strong_round') corners = 'strong round corners';
-        else if (templateCornerType === 'medium_round') corners = 'medium round corners';
-        else if (templateCornerType === 'soft_round') corners = 'soft round corners';
-        else if (templateCornerType === 'mixed_top_straight') corners = 'mixed corners (top straight)';
-        else if (templateCornerType === 'mixed_top_round') corners = 'mixed corners (top round)';
-        else if (templateCornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
-        else if (templateCornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
+        var corners = '';
+        if (shape !== 'lined') {
+          corners = 'straight corners';
+          if (templateCornerType === 'strong_round') corners = 'strong round corners';
+          else if (templateCornerType === 'medium_round') corners = 'medium round corners';
+          else if (templateCornerType === 'soft_round') corners = 'soft round corners';
+          else if (templateCornerType === 'mixed_top_straight') corners = 'mixed corners (top straight)';
+          else if (templateCornerType === 'mixed_top_round') corners = 'mixed corners (top round)';
+          else if (templateCornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
+          else if (templateCornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
+        }
         var adjectives = [tilt, border, frame].filter(Boolean).join(' ');
         var objPhrase = (adjectives ? adjectives + ' ' : '') + fill + ' ' + obj;
         var withParts = [corners, texture ? texture + ' texture' : ''].filter(Boolean);
@@ -820,6 +945,8 @@
           '&color=' + encodeURIComponent(currentColor.replace('#', '')) +
           '&font=' + encodeURIComponent(currentFont) +
           '&frame=' + encodeURIComponent(currentFrame) +
+          '&fill=' + encodeURIComponent(currentFill) +
+          '&shape=' + encodeURIComponent(currentShape) +
           '&tilt=' + encodeURIComponent(currentTilt) +
           (currentTexture ? '&texture=' + encodeURIComponent(currentTexture) : '');
         window.history.replaceState(null, '', newUrl);

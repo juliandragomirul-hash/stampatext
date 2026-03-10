@@ -140,7 +140,7 @@ const SvgRenderer = {
    */
   // SVG template version — bump this when you upload new/changed templates to Supabase.
   // Lets browser + CDN cache SVGs across sessions (no more Date.now() per-request busting).
-  _svgVersion: 1,
+  _svgVersion: 4,
 
   async fetchSvg(svgUrl) {
     // Return from in-memory cache if available (same session, same URL)
@@ -755,6 +755,11 @@ const SvgRenderer = {
     } else if (/data-filter=["']ripped/i.test(svgString)) {
       var fMatch = svgString.match(/data-filter=["']ripped-(\d+)["']/i);
       decoMargin = fMatch ? parseFloat(fMatch[1]) : 20;
+    } else if (/data-filter=["']chalk/i.test(svgString)) {
+      var fMatch2 = svgString.match(/data-filter=["']chalk-(\d+)["']/i);
+      decoMargin = fMatch2 ? Math.ceil(parseFloat(fMatch2[1]) / 2) : 10;
+    } else if (/data-wavy-gen=["']zigzag["']/i.test(svgString)) {
+      decoMargin = 60; // zigzag: depth 20 + strokeW/2 (30) + breathing
     } else if (/data-wavy-gen=["']strong["']/i.test(svgString)) {
       decoMargin = 50; // strong wavy: depth 20 + strokeW/2 (20) + breathing
     } else if (/data-wavy-gen=/i.test(svgString)) {
@@ -804,7 +809,7 @@ const SvgRenderer = {
    * Generate white border shapes (circles or diamonds) along all 4 edges of a rect.
    * Used for "winding" (scalloped) and "zig-zag" (saw-tooth) border effects.
    */
-  _generateBorderShapes: function(x, y, w, h, shapeType, radius, spacingMult) {
+  _generateBorderShapes: function(x, y, w, h, shapeType, radius, spacingMult, shape) {
     var shapes = '';
     var spacing = radius * (spacingMult || 2.5);
 
@@ -818,12 +823,15 @@ const SvgRenderer = {
     }
 
     // Vertical edges (left + right), skip corners (already covered by horizontal)
-    var numV = Math.max(1, Math.round(h / spacing));
-    var vSpacing = h / numV;
-    for (var i = 1; i < numV; i++) {
-      var cy = y + i * vSpacing;
-      shapes += this._borderShape(shapeType, x, cy, radius);
-      shapes += this._borderShape(shapeType, x + w, cy, radius);
+    // Skip for lined shape (no vertical sides)
+    if (shape !== 'lined') {
+      var numV = Math.max(1, Math.round(h / spacing));
+      var vSpacing = h / numV;
+      for (var i = 1; i < numV; i++) {
+        var cy = y + i * vSpacing;
+        shapes += this._borderShape(shapeType, x, cy, radius);
+        shapes += this._borderShape(shapeType, x + w, cy, radius);
+      }
     }
 
     return shapes;
@@ -847,7 +855,7 @@ const SvgRenderer = {
    * @param {string} variant - "gentle" (d=7) or "strong" (d=12)
    * @param {boolean} filled - if true, path has fill (for full-frame templates)
    */
-  _generateWavyBorder: function(x, y, w, h, color, strokeW, variant, filled) {
+  _generateWavyBorder: function(x, y, w, h, color, strokeW, variant, filled, shape) {
     var F = function(n) { return n.toFixed(2); };
     var scWidth = (variant === 'strong') ? 80 : 35;
     var depth = (variant === 'strong') ? 20 : 7;
@@ -856,6 +864,19 @@ const SvgRenderer = {
     var numH = Math.max(3, Math.round(w / scWidth));
     if (numH % 2 === 0) numH++;   // force ODD for smooth corners
     var segW = w / numH;
+
+    // Lined: two separate open paths (top + bottom only)
+    if (shape === 'lined') {
+      var dTop = 'M ' + F(x) + ',' + F(y);
+      for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + i * segW;
+        dTop += ' C '+F(sx+segW*0.3)+','+F(y-fl*depth)+' '+F(sx+segW*0.7)+','+F(y-fl*depth)+' '+F(sx+segW)+','+F(y); }
+      var dBot = 'M ' + F(x) + ',' + F(y + h);
+      for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + i * segW;
+        dBot += ' C '+F(sx+segW*0.3)+','+F(y+h+fl*depth)+' '+F(sx+segW*0.7)+','+F(y+h+fl*depth)+' '+F(sx+segW)+','+F(y+h); }
+      return '<path d="' + dTop + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<path d="' + dBot + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+
     var numV = Math.max(3, Math.round(h / segW));
     if (numV % 2 === 0) numV++;   // force ODD
     var segH = h / numV;
@@ -880,11 +901,127 @@ const SvgRenderer = {
     return '<path d="' + d + '" fill="' + fillAttr + '" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round"/>';
   },
 
-  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color) {
+  // True zigzag border: like wavy but with straight V-shaped segments.
+  // Single closed path around all 4 edges, peaks only (no corner points).
+  _generateZigzagBorder: function(x, y, w, h, color, strokeW, filled, shape) {
+    var F = function(n) { return n.toFixed(2); };
+    var scWidth = 60;   // segment width target (wider = fewer teeth)
+    var depth = 20;
+    strokeW = strokeW || 22;
+
+    var numH = Math.max(3, Math.round(w / scWidth));
+    if (numH % 2 === 0) numH++;
+    var segW = w / numH;
+
+    // Lined: two separate open zigzag paths (top + bottom only)
+    if (shape === 'lined') {
+      var topPts = [];
+      topPts.push(F(x) + ',' + F(y));
+      for (var i = 0; i < numH; i++) {
+        var mid = x + (i + 0.5) * segW;
+        var d = (i % 2 === 0) ? -depth : depth;
+        topPts.push(F(mid) + ',' + F(y + d));
+      }
+      topPts.push(F(x + w) + ',' + F(y));
+      var botPts = [];
+      botPts.push(F(x) + ',' + F(y + h));
+      for (var i = 0; i < numH; i++) {
+        var mid = x + (i + 0.5) * segW;
+        var d = (i % 2 === 0) ? depth : -depth;
+        botPts.push(F(mid) + ',' + F(y + h + d));
+      }
+      botPts.push(F(x + w) + ',' + F(y + h));
+      var topD = 'M' + topPts[0]; for (var i = 1; i < topPts.length; i++) topD += ' L' + topPts[i];
+      var botD = 'M' + botPts[0]; for (var i = 1; i < botPts.length; i++) botD += ' L' + botPts[i];
+      return '<path d="' + topD + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter" stroke-linecap="square"/>' +
+        '<path d="' + botD + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter" stroke-linecap="square"/>';
+    }
+
+    var numV = Math.max(3, Math.round(h / segW));
+    if (numV % 2 === 0) numV++;
+    var segH = h / numV;
+    var vD = depth * segH / segW;  // aspect-compensated depth for vertical edges
+
+    var points = [];
+
+    // Top edge: left to right
+    for (var i = 0; i < numH; i++) {
+      var mid = x + (i + 0.5) * segW;
+      var d = (i % 2 === 0) ? -depth : depth;
+      points.push(F(mid) + ',' + F(y + d));
+    }
+    // Right edge: top to bottom
+    for (var i = 0; i < numV; i++) {
+      var mid = y + (i + 0.5) * segH;
+      var d = (i % 2 === 0) ? vD : -vD;
+      points.push(F(x + w + d) + ',' + F(mid));
+    }
+    // Bottom edge: right to left
+    for (var i = numH - 1; i >= 0; i--) {
+      var mid = x + (i + 0.5) * segW;
+      var d = (i % 2 === 0) ? depth : -depth;
+      points.push(F(mid) + ',' + F(y + h + d));
+    }
+    // Left edge: bottom to top
+    for (var i = numV - 1; i >= 0; i--) {
+      var mid = y + (i + 0.5) * segH;
+      var d = (i % 2 === 0) ? -vD : vD;
+      points.push(F(x + d) + ',' + F(mid));
+    }
+
+    var pathD = 'M' + points[0];
+    for (var i = 1; i < points.length; i++) {
+      pathD += ' L' + points[i];
+    }
+    pathD += ' Z';
+
+    var fillAttr = filled ? color : 'none';
+    return '<path d="' + pathD + '" fill="' + fillAttr + '" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter"/>';
+  },
+
+  // Programmatic brush border for lined stamps: dashed lines + turbulence filter.
+  // Dashes create paint-gap effect, filter adds rough organic edges.
+  _generateBrushBorder: function(x, y, w, h, color, strokeW, filled, shape) {
+    if (shape !== 'lined') return '';
+    var F = function(n) { return n.toFixed(2); };
+    // Scale factor: dash/filter values relative to stamp width
+    var s = w / 100; // e.g. w=1200 → s=12, so dash "4" becomes 48
+    // SVG filter for rough/displaced edges — filterUnits=userSpaceOnUse for absolute coords
+    var fId = 'brush-lined-f';
+    var disp = Math.max(8, Math.round(strokeW * 0.25)); // displacement proportional to stroke
+    var freq = (0.5 / w).toFixed(6); // low frequency relative to stamp width
+    var filterDef = '<filter id="' + fId + '" x="-10%" y="-50%" width="120%" height="200%">' +
+      '<feTurbulence type="turbulence" baseFrequency="' + freq + ',0.002" numOctaves="3" seed="2"/>' +
+      '<feDisplacementMap in="SourceGraphic" scale="' + disp + '" xChannelSelector="R" yChannelSelector="G"/>' +
+      '</filter>';
+    // Dash patterns scaled to stamp size: long dashes with short gaps
+    var dash1 = F(s*4.5)+','+F(s*0.8)+','+F(s*3)+','+F(s*1.2)+','+F(s*5.5)+','+F(s*0.6)+','+F(s*2)+','+F(s*1)+','+F(s*6)+','+F(s*0.7);
+    var dash2 = F(s*3.5)+','+F(s*1)+','+F(s*5)+','+F(s*0.7)+','+F(s*2.5)+','+F(s*1.2)+','+F(s*4)+','+F(s*0.9)+','+F(s*5.5)+','+F(s*0.6);
+    var paths = '';
+    var edges = [y, y + h];
+    for (var e = 0; e < 2; e++) {
+      var edgeY = edges[e];
+      var off = strokeW * 0.15 * (e === 0 ? -1 : 1);
+      // Main stroke
+      paths += '<path d="M' + F(x) + ',' + F(edgeY) + ' H' + F(x + w) +
+        '" fill="none" stroke="' + color + '" stroke-width="' + F(strokeW * 0.7) +
+        '" stroke-dasharray="' + dash1 +
+        '" stroke-linecap="round" filter="url(#' + fId + ')"/>';
+      // Accent stroke (offset, thinner, different dash phase)
+      paths += '<path d="M' + F(x) + ',' + F(edgeY + off) + ' H' + F(x + w) +
+        '" fill="none" stroke="' + color + '" stroke-width="' + F(strokeW * 0.35) +
+        '" stroke-dasharray="' + dash2 +
+        '" stroke-dashoffset="' + F(s * 2) + '" stroke-linecap="round" filter="url(#' + fId + ')"/>';
+    }
+    return filterDef + paths;
+  },
+
+  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape) {
     var shapes = '';
     var half = size / 2;
     var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
+    var isLined = (shape === 'lined');
 
     function addShape(cx, cy, angle) {
       if (shapeType === 'circle') {
@@ -900,26 +1037,28 @@ const SvgRenderer = {
       }
     }
 
-    // Corners
-    if (shapeType === 'line') {
-      var arm = dashLen * 0.6;
-      // Top-left
-      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-      // Top-right
-      shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-      shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-      // Bottom-left
-      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-      shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-      // Bottom-right
-      shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-      shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-    } else {
-      addShape(x, y, 0);
-      addShape(x + w, y, 0);
-      addShape(x, y + h, 0);
-      addShape(x + w, y + h, 0);
+    // Corners — skip for lined (no corners when no vertical sides)
+    if (!isLined) {
+      if (shapeType === 'line') {
+        var arm = dashLen * 0.6;
+        // Top-left
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+        // Top-right
+        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+        // Bottom-left
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+        // Bottom-right
+        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+      } else {
+        addShape(x, y, 0);
+        addShape(x + w, y, 0);
+        addShape(x, y + h, 0);
+        addShape(x + w, y + h, 0);
+      }
     }
 
     // Top edge
@@ -928,12 +1067,13 @@ const SvgRenderer = {
     for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
     // Bottom edge
     for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
-    // Left edge
-    var numV = Math.max(1, Math.round(h / step));
-    var vStep = h / numV;
-    for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
-    // Right edge
-    for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
+    // Left + Right edges — skip for lined
+    if (!isLined) {
+      var numV = Math.max(1, Math.round(h / step));
+      var vStep = h / numV;
+      for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
+      for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
+    }
 
     return shapes;
   },
@@ -1514,7 +1654,7 @@ const SvgRenderer = {
   // Measurement cache: avoids re-creating iframe for same template with different frameMode
   _autoFitMeasureCache: null,
 
-  async autoFitTextInString(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, fillType, cornerType, borderType) {
+  async autoFitTextInString(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, fillType, cornerType, borderType, stampShape) {
     originalScaleX = originalScaleX || 1;
     frameMode = frameMode || 'single';
 
@@ -1546,7 +1686,7 @@ const SvgRenderer = {
     }
     var cacheKey = svgString.length + '_' + textIndex + '_' + cacheFont + '_' + cacheTextContent.substring(0, 40) + '_' + svgString.slice(0, 80);
     if (this._autoFitMeasureCache && this._autoFitMeasureCache.key === cacheKey) {
-      return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, this._autoFitMeasureCache, fillType, cornerType, borderType);
+      return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, this._autoFitMeasureCache, fillType, cornerType, borderType, null, stampShape);
     }
 
     // Category 1: Dynamic Frame - TEXT-FIRST approach
@@ -1748,7 +1888,7 @@ const SvgRenderer = {
             }
           } catch (e) {}
 
-          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, SvgRenderer._autoFitMeasureCache, fillType, cornerType, borderType, remeasureFn));
+          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, SvgRenderer._autoFitMeasureCache, fillType, cornerType, borderType, remeasureFn, stampShape));
           return;
 
         } catch (e) {
@@ -1839,15 +1979,17 @@ const SvgRenderer = {
       // --- Single frame + split (split adds thin white stroke inside outer border,
       //     decorative elements stay in same positions — text zone is identical) ---
       if (borderFlags.wavy) {
-        var wavySw = 40, depth = borderFlags.wavyStrong ? 20 : 7;
+        var wavySw = 40; // base stroke for both wavy and zigzag
+        var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 10;
         totalInset = depth + wavySw / 2;
       } else if (borderFlags.brush) {
         // Brush templates have sw=0 (brush <g> is the border, not rect stroke)
         // Brush strokes intrude ~35px visually from rect edge
         totalInset = Math.max(35, sw * 1.5);
       } else if (borderFlags.filter) {
-        // Filter displacement creates ragged edges outward; interior is mostly clear
-        totalInset = (borderFlags.filterDisplacement || 20) * 0.5;
+        // Filter displacement creates ragged edges; chalk needs more interior clearance
+        var fDisp = borderFlags.filterDisplacement || 20;
+        totalInset = borderFlags.filterChalk ? fDisp * 1.2 : fDisp * 0.5;
       } else if (borderFlags.border) {
         totalInset = Math.max(sw / 2, borderFlags.borderRadius || 10);
       } else if (borderFlags.stitch) {
@@ -1899,7 +2041,7 @@ const SvgRenderer = {
    * @param {Function|null} remeasureFn - optional closure to re-measure text at target font size (iframe must be alive)
    * @returns {string} modified SVG string
    */
-  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType, remeasureFn) {
+  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType, remeasureFn, stampShape) {
     var measuredWidth = measurements.measuredWidth;
     var bbox = measurements.bbox;
     var numTspans = measurements.numTspans;
@@ -1921,6 +2063,7 @@ const SvgRenderer = {
       stitch: /data-stitch=/i.test(svgString),
       wavy: /data-wavy=/i.test(svgString),
       wavyStrong: /data-wavy=["']strong["']/i.test(svgString),
+      wavyZigzag: /data-wavy=["']zigzag["']/i.test(svgString),
       border: /data-border=/i.test(svgString),
       brush: /data-brush-border=/i.test(svgString),
       filter: /data-filter=/i.test(svgString)
@@ -1930,8 +2073,9 @@ const SvgRenderer = {
       borderFlags.borderRadius = bm ? parseFloat(bm[1]) : 10;
     }
     if (borderFlags.filter) {
-      var fm = svgString.match(/data-filter=["']ripped-(\d+)["']/i);
+      var fm = svgString.match(/data-filter=["'](?:ripped|chalk)-(\d+)["']/i);
       borderFlags.filterDisplacement = fm ? parseFloat(fm[1]) : 20;
+      borderFlags.filterChalk = /data-filter=["']chalk/i.test(svgString);
     }
     // Supplement borderFlags from database metadata (SVG may lack data attributes)
     if (!borderFlags.brush && borderType === 'brushstroke') borderFlags.brush = true;
@@ -1942,7 +2086,11 @@ const SvgRenderer = {
     if (!borderFlags.wavy && borderType === 'wavy') {
       borderFlags.wavy = true;
     }
-    if (!borderFlags.border && (borderType === 'perforated' || borderType === 'perforated_spaced' || borderType === 'zigzag')) {
+    if (!borderFlags.wavy && borderType === 'zigzag') {
+      borderFlags.wavy = true;
+      borderFlags.wavyZigzag = true;
+    }
+    if (!borderFlags.border && (borderType === 'perforated' || borderType === 'perforated_spaced' || borderType === 'sawtooth')) {
       borderFlags.border = true;
       borderFlags.borderRadius = borderType === 'perforated_spaced' ? 25 : 20;
     }
@@ -2524,7 +2672,7 @@ const SvgRenderer = {
         var shapesHtml = SvgRenderer._generateBorderShapes(
           borderShapeData.x, borderShapeData.y,
           borderShapeData.w, borderShapeData.h,
-          bShape, bRadius, bSpacingMult
+          bShape, bRadius, bSpacingMult, stampShape
         );
         result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
       }
@@ -2540,21 +2688,31 @@ const SvgRenderer = {
         var stitchHtml = SvgRenderer._generateStitchShapes(
           stitchData.x - sOffset, stitchData.y - sOffset,
           stitchData.w + sOffset * 2, stitchData.h + sOffset * 2,
-          sType, sSize, sSpacing, stitchData.color
+          sType, sSize, sSpacing, stitchData.color, stampShape
         );
         result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
         // Tag SVG so cropViewBoxToStamp can add stitch margin
         result = result.replace(/<svg /, '<svg data-stitch-gen="' + sType + '" ');
       }
 
-      // ---- WAVY BORDER ----
+      // ---- WAVY / ZIGZAG BORDER ----
       if (wavyData) {
-        // Wavy: 30-60 range
-        var scaledWavySw = Math.max(30, Math.min(60, Math.round(46 * decorWeightRatio)));
-        var wavyHtml = SvgRenderer._generateWavyBorder(
-          wavyData.x, wavyData.y, wavyData.w, wavyData.h,
-          wavyData.color, scaledWavySw, wavyData.variant, wavyData.filled
-        );
+        var wavyHtml;
+        if (wavyData.variant === 'zigzag') {
+          // True zigzag: 30-60 stroke range (same as wavy)
+          var scaledZzSw = Math.max(30, Math.min(60, Math.round(40 * decorWeightRatio)));
+          wavyHtml = SvgRenderer._generateZigzagBorder(
+            wavyData.x, wavyData.y, wavyData.w, wavyData.h,
+            wavyData.color, scaledZzSw, wavyData.filled, stampShape
+          );
+        } else {
+          // Wavy curves: 30-60 range
+          var scaledWavySw = Math.max(30, Math.min(60, Math.round(46 * decorWeightRatio)));
+          wavyHtml = SvgRenderer._generateWavyBorder(
+            wavyData.x, wavyData.y, wavyData.w, wavyData.h,
+            wavyData.color, scaledWavySw, wavyData.variant, wavyData.filled, stampShape
+          );
+        }
         result = result.replace(/<text/, wavyHtml + '<text');
       }
       // Tag SVG so cropViewBoxToStamp can add wavy margin
@@ -2579,15 +2737,67 @@ const SvgRenderer = {
             '<feDisplacementMap in="SourceGraphic" scale="' + fScale + '" xChannelSelector="R" yChannelSelector="R"/>' +
             '</filter></defs>';
           result = result.replace(/(<svg[^>]*>)/i, '$1' + filterDef);
-          // Apply filter to the outer rect (first non-white rect with matching dimensions)
+          var filterRectRe = new RegExp('(<rect[^>]*width="' + newRectWidth.toFixed(2) + '"[^>]*)(\/?>)');
+          result = result.replace(filterRectRe, '$1 filter="url(#' + fId + ')"$2');
+        } else if (fType === 'chalk') {
+          // Chalk border: rough, grainy edge like chalk on a blackboard
+          fScale = Math.max(8, Math.round(fScale * decorWeightRatio));
+          var fId = 'border-chalk-' + Date.now() + '-' + Math.round(Math.random() * 9999);
+          var fMargin = Math.ceil(fScale / 2);
+          // Two-layer filter: displacement for wobbly edges + coarse noise punches holes
+          var filterDef = '<defs><filter id="' + fId + '" x="-' + fMargin + '%" y="-' + fMargin + '%" width="' + (100 + fMargin * 2) + '%" height="' + (100 + fMargin * 2) + '%">' +
+            '<feTurbulence type="fractalNoise" baseFrequency="0.03 0.05" numOctaves="4" seed="7" result="warp"/>' +
+            '<feDisplacementMap in="SourceGraphic" in2="warp" scale="' + fScale + '" xChannelSelector="R" yChannelSelector="G" result="displaced"/>' +
+            '<feTurbulence type="fractalNoise" baseFrequency="0.25 0.25" numOctaves="3" seed="3" result="grain"/>' +
+            '<feColorMatrix in="grain" type="saturate" values="0" result="grainBW"/>' +
+            '<feComponentTransfer in="grainBW" result="grainThresh"><feFuncA type="discrete" tableValues="0 0 0 0.2 0.75 1 1 1"/></feComponentTransfer>' +
+            '<feComposite in="displaced" in2="grainThresh" operator="in"/>' +
+            '</filter></defs>';
+          result = result.replace(/(<svg[^>]*>)/i, '$1' + filterDef);
           var filterRectRe = new RegExp('(<rect[^>]*width="' + newRectWidth.toFixed(2) + '"[^>]*)(\/?>)');
           result = result.replace(filterRectRe, '$1 filter="url(#' + fId + ')"$2');
         }
       }
 
-      // ---- BRUSH BORDER SCALING ----
+      // ---- BRUSH BORDER ----
       var brushMatch = result.match(/data-brush-border=["']([^"']+)["']/);
-      if (brushMatch) {
+      if (brushMatch && stampShape === 'lined') {
+        // Lined: remove template brush groups, generate programmatic brush strokes
+        result = result.replace(/<g[^>]*data-brush-border[^>]*>[\s\S]*?<\/g>/g, '');
+        // Use a placeholder color that colorize() will replace (NOT #000000 — that's protected)
+        var brushColor = '#010101';
+        var brushSw = Math.max(30, Math.min(75, Math.round(outerRectSw)));
+        var brushHtml = SvgRenderer._generateBrushBorder(
+          newRectX, newRectY, newRectWidth, newRectHeight,
+          brushColor, brushSw, false, 'lined'
+        );
+        if (brushHtml) {
+          // Separate filter def from path elements
+          var bfEnd = brushHtml.indexOf('</filter>') + '</filter>'.length;
+          var brushFilter = brushHtml.substring(0, bfEnd);
+          var brushPaths = brushHtml.substring(bfEnd);
+          if (/<defs[^>]*>/i.test(result)) {
+            result = result.replace(/<defs[^>]*>/i, '$&' + brushFilter);
+          } else {
+            result = result.replace(/<svg([^>]*)>/, '<svg$1><defs>' + brushFilter + '</defs>');
+          }
+          result = result.replace(/<text/, brushPaths + '<text');
+        }
+        // Set a thin stroke on outer rect so convertToLined produces a subtle base line
+        var thinSw = Math.max(3, Math.round(brushSw * 0.1));
+        result = result.replace(
+          new RegExp('(<rect[^>]*width="' + newRectWidth.toFixed(2) + '"[^>]*)(/?>)', 'i'),
+          function(m, pre, end) {
+            if (/stroke-width=["']/.test(pre)) {
+              pre = pre.replace(/stroke-width=["'][^"']*["']/, 'stroke-width="' + thinSw + '"');
+            } else {
+              pre += ' stroke-width="' + thinSw + '"';
+            }
+            return pre + end;
+          }
+        );
+      } else if (brushMatch) {
+        // Rectangle: scale template brush groups as before
         var bbParts = brushMatch[1].split(',');
         var origBX = parseFloat(bbParts[0]);
         var origBY = parseFloat(bbParts[1]);
@@ -3273,15 +3483,14 @@ const SvgRenderer = {
     var newH = vbW * sinA + vbH * cosA;
 
     // Add breathing room so rotated stamp isn't clipped at edges
-    var pad = Math.max(newW, newH) * 0.03;
+    var pad = Math.max(newW, newH) * 0.02;
     newW += pad * 2;
     newH += pad * 2;
 
     // Shrink post-rotation viewBox to make tilted stamps appear larger.
-    // Only for Category 2 (background image): clipping background edges is acceptable.
-    // Category 1 (frame-based): no shrink — frame borders are the content, can't clip them.
     var isFixedFrame = svgString.indexOf('<image') !== -1;
     if (isFixedFrame) {
+      // Category 2 (background image): clipping background edges is acceptable
       var aspect = Math.max(vbW, vbH) / Math.min(vbW, vbH);
       var shrink = Math.min(1.0, 0.80 + (aspect - 1) * 0.13);
       newW *= shrink;
@@ -3343,7 +3552,7 @@ const SvgRenderer = {
     if (svgEl) {
       svgEl.removeAttribute('width');
       svgEl.removeAttribute('height');
-      // Let CSS handle sizing via max-width/max-height
+      // Let CSS handle sizing via max-width/max-height per context
     }
     return wrapper;
   },
@@ -3869,9 +4078,13 @@ const SvgRenderer = {
     }
     if (tpl.border_type === 'perforated_spaced') bi.border = 'circle-25-4';
     if (tpl.border_type === 'perforated') bi.border = 'circle-20-2';
-    if (!bi.border && tpl.border_type === 'zigzag') bi.border = 'diamond-20';
+    // Sawtooth (formerly "zigzag" in DB — diamond shapes along border)
+    if (!bi.border && tpl.border_type === 'sawtooth') bi.border = 'diamond-20';
     if (!bi.filter && tpl.border_type === 'torn_edge') bi.filter = 'ripped-20';
+    if (!bi.filter && tpl.border_type === 'chalk') { bi.filter = 'chalk-12'; bi.filterChalk = true; }
     if (!bi.wavy && tpl.border_type === 'wavy') bi.wavy = 'gentle';
+    // New true zigzag (wavy-style closed path with straight angles)
+    if (!bi.wavy && tpl.border_type === 'zigzag') bi.wavy = 'zigzag';
     bi.fillType = tpl.fill_type || null;
     return bi;
   },
@@ -4020,6 +4233,39 @@ const SvgRenderer = {
     bi = bi || {};
     var isCat1Border = bi.wavy || bi.brush || bi.stitch || bi.border || bi.filter;
     if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
+
+    // ---- LINED PATH: inner frame is also 2 horizontal lines ----
+    var linedPathM = svgStr.match(/<path([^>]*data-lined="1"[^>]*)\/>/);
+    if (linedPathM) {
+      var la = linedPathM[1];
+      var ldM = la.match(/\bd="([^"]+)"/);
+      if (!ldM) return svgStr;
+      // Parse: M ox,oy H ox+ow M ox,oy+oh H ox+ow
+      var lParts = ldM[1].match(/M([\d.\-]+),([\d.\-]+)\s*H([\d.\-]+)\s*M([\d.\-]+),([\d.\-]+)\s*H([\d.\-]+)/);
+      if (!lParts) return svgStr;
+      var lox = parseFloat(lParts[1]), loy = parseFloat(lParts[2]), lx2 = parseFloat(lParts[3]);
+      var lby = parseFloat(lParts[5]);
+      var swML = la.match(/stroke-width=["']([\d.]+)["']/);
+      var losw = swML ? parseFloat(swML[1]) : 20;
+      var stML = la.match(/\bstroke=["']([^"']+)["']/);
+      var loStroke = stML ? stML[1] : '#000000';
+      var innerSw = Math.max(4, Math.round(losw * 0.24));
+      var inset = losw / 2 + innerSw * 1.5;
+      if (bi.stitch) inset = innerSw / 2 + 2;
+      if (bi.border) inset = losw * 0.65;
+      if (bi.filter && bi.fillType !== 'full') inset = Math.max(inset, losw * 0.95);
+      var innerColor = appliedColor || loStroke;
+      var iPathD = 'M' + (lox + inset).toFixed(2) + ',' + (loy + inset).toFixed(2) +
+        ' H' + (lx2 - inset).toFixed(2) +
+        ' M' + (lox + inset).toFixed(2) + ',' + (lby - inset).toFixed(2) +
+        ' H' + (lx2 - inset).toFixed(2);
+      var innerPath = '<path d="' + iPathD + '" fill="none" stroke="' + innerColor +
+        '" stroke-width="' + innerSw + '" stroke-linecap="square"/>';
+      var textPos = svgStr.search(/<text[\s>]/i);
+      if (textPos !== -1) return svgStr.slice(0, textPos) + innerPath + svgStr.slice(textPos);
+      return svgStr.replace(/<\/svg>/, innerPath + '</svg>');
+    }
+
     var rects = [];
     var re = /<rect([^>]*)\/?>/gi;
     var m;
@@ -4104,10 +4350,10 @@ const SvgRenderer = {
         innerColor = outerStroke && outerStroke !== 'none' ? outerStroke : '#000000';
       }
     }
-    // Read wavy path stroke-width for inset calculation
+    // Read wavy/zigzag path stroke-width for inset calculation
     var wavySw = 0;
     if (bi.wavy) {
-      var wavyPathM = svgStr.match(/<path[^>]*stroke-linejoin="round"[^>]*>/i);
+      var wavyPathM = svgStr.match(/<path[^>]*stroke-linejoin="(?:round|miter)"[^>]*>/i);
       if (wavyPathM) {
         var wswM = wavyPathM[0].match(/stroke-width="([\d.]+)"/);
         if (wswM) wavySw = parseFloat(wswM[1]);
@@ -4162,7 +4408,7 @@ const SvgRenderer = {
     };
 
     var innerRect = _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, inset);
-    // Outlined zigzag/perforated: white gap + colored inner rect
+    // Outlined sawtooth/perforated: white gap + colored inner rect
     if (bi.border && !isFull) {
       var whiteGapSw = Math.max(8, Math.round(osw * 0.15)); // proportional white gap
       var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteGapSw, inset);
@@ -4185,32 +4431,52 @@ const SvgRenderer = {
    * Add split border effect: carve a white stroke through the thick border,
    * splitting it into two thinner strokes with white between them.
    * Supports: wavy (clone path), stitch (hollow shapes), simple/rounded rect, ripped paper.
-   * Skips: perforated, zigzag, brushstroke, Cat 2 (image) templates.
+   * Skips: perforated, sawtooth, brushstroke, Cat 2 (image) templates.
    */
   addSplitBorder(svgStr, bi) {
     bi = bi || {};
-    // Skip perforated/zigzag
+    // Skip perforated/sawtooth (diamond shapes)
     if (bi.border) return svgStr;
     // Skip brushstroke
     if (bi.brush) return svgStr;
     var isCat1Border = bi.wavy || bi.stitch || bi.filter;
     if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
 
+    // ---- LINED PATH: split with white thin stroke ----
+    var linedPathM = svgStr.match(/<path([^>]*data-lined="1"[^>]*)\/>/);
+    if (linedPathM) {
+      var la = linedPathM[1];
+      var ldM = la.match(/\bd="([^"]+)"/);
+      var swML = la.match(/stroke-width=["']([\d.]+)["']/);
+      var losw = swML ? parseFloat(swML[1]) : 20;
+      var whiteSw = Math.max(4, Math.round(losw * 0.24));
+      if (ldM) {
+        var splitPath = '<path d="' + ldM[1] + '" fill="none" stroke="#FFFFFF" stroke-width="' + whiteSw + '" stroke-linecap="square"/>';
+        var textPos = svgStr.search(/<text[\s>]/i);
+        if (textPos !== -1) return svgStr.slice(0, textPos) + splitPath + svgStr.slice(textPos);
+        return svgStr.replace(/<\/svg>/, splitPath + '</svg>');
+      }
+      return svgStr;
+    }
+
     var innerHtml = '';
 
-    // ==== WAVY: clone the wavy <path> with white thin stroke ====
+    // ==== WAVY / ZIGZAG: clone the path with white thin stroke ====
     if (bi.wavy) {
-      var wavyRe = /<path[^>]*stroke-linejoin="round"[^>]*\/?>/gi;
+      var wavyRe = /<path[^>]*stroke-linejoin="(?:round|miter)"[^>]*\/?>/gi;
       var wavyAll = svgStr.match(wavyRe);
       if (wavyAll) {
-        var wavyPath = wavyAll[wavyAll.length - 1];
-        var wavySwM = wavyPath.match(/stroke-width="([\d.]+)"/);
+        // For lined mode there may be 2 separate paths (top + bottom) — handle all
+        var wavySwM = wavyAll[0].match(/stroke-width="([\d.]+)"/);
         var wavyOsw = wavySwM ? parseFloat(wavySwM[1]) : (bi.origStrokeWidth || 50);
         var wavyWhiteSw = Math.max(4, Math.round(wavyOsw * 0.24));
-        innerHtml = wavyPath
-          .replace(/fill="[^"]*"/, 'fill="none"')
-          .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
-          .replace(/stroke-width="[^"]*"/, 'stroke-width="' + wavyWhiteSw + '"');
+        innerHtml = '';
+        for (var wi = 0; wi < wavyAll.length; wi++) {
+          innerHtml += wavyAll[wi]
+            .replace(/fill="[^"]*"/, 'fill="none"')
+            .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
+            .replace(/stroke-width="[^"]*"/, 'stroke-width="' + wavyWhiteSw + '"');
+        }
       }
     }
 
@@ -4334,5 +4600,75 @@ const SvgRenderer = {
     var textPos = svgStr.search(/<text[\s>]/i);
     if (textPos !== -1) return svgStr.slice(0, textPos) + innerHtml + svgStr.slice(textPos);
     return svgStr.replace(/<\/svg>/, innerHtml + '</svg>');
+  },
+
+  /**
+   * Convert a rectangle-based stamp to "lined" shape: only top + bottom horizontal strokes.
+   * Finds the outer rect (largest non-white rect with stroke) and replaces it with a
+   * <path> containing two horizontal line segments. All attributes (stroke, data-*, filter)
+   * are preserved on the new path element.
+   */
+  convertToLined: function(svgString) {
+    // Find all rects, pick the outer (largest width)
+    var rects = [];
+    var re = /<rect([^>]*)\/?>/gi;
+    var m;
+    while ((m = re.exec(svgString)) !== null) {
+      var attrs = m[1];
+      // Skip white background rects without colored stroke
+      if (/fill=["'](?:#FFF(?:FFF)?|white)["']/i.test(attrs)) {
+        var hasColoredStroke = /stroke=["'](?!none|#FFF|#FFFFFF|white)#?[A-Fa-f0-9]+["']/i.test(attrs);
+        if (!hasColoredStroke) continue;
+      }
+      if (/display=["']none["']/i.test(attrs)) continue;
+      var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+      var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
+      if (!wM || !hM) continue;
+      rects.push({ full: m[0], attrs: attrs, w: parseFloat(wM[1]), h: parseFloat(hM[1]) });
+    }
+    if (rects.length === 0) return svgString;
+    rects.sort(function(a, b) { return b.w - a.w; });
+    var outer = rects[0];
+    var a = outer.attrs;
+
+    // Extract geometry
+    var xM = a.match(/\bx=["']([\d.\-]+)["']/);
+    var yM = a.match(/\by=["']([\d.\-]+)["']/);
+    var ox = xM ? parseFloat(xM[1]) : 0;
+    var oy = yM ? parseFloat(yM[1]) : 0;
+    var ow = outer.w, oh = outer.h;
+
+    // Build attributes string: keep stroke, stroke-width, data-*, filter, stroke-miterlimit
+    // but drop x, y, width, height, fill, rx, ry
+    var keepAttrs = '';
+    var swM2 = a.match(/stroke-width=["']([\d.]+)["']/);
+    var stM = a.match(/\bstroke=["']([^"']+)["']/);
+    var sw = swM2 ? parseFloat(swM2[1]) : 0;
+    var strokeColor = stM ? stM[1] : '#000000';
+
+    // Collect data-* attributes
+    var dataAttrs = a.match(/data-[a-z\-]+=["'][^"']*["']/gi) || [];
+    keepAttrs = dataAttrs.join(' ');
+    // Collect filter attribute
+    var filterM = a.match(/filter=["'][^"']*["']/);
+    if (filterM) keepAttrs += ' ' + filterM[0];
+    // stroke-miterlimit
+    var miterM = a.match(/stroke-miterlimit=["'][^"']*["']/);
+    if (miterM) keepAttrs += ' ' + miterM[0];
+
+    // Two horizontal lines: top (ox,oy → ox+ow,oy) and bottom (ox,oy+oh → ox+ow,oy+oh)
+    var pathD = 'M' + ox.toFixed(2) + ',' + oy.toFixed(2) +
+      ' H' + (ox + ow).toFixed(2) +
+      ' M' + ox.toFixed(2) + ',' + (oy + oh).toFixed(2) +
+      ' H' + (ox + ow).toFixed(2);
+
+    var linedPath = '<path d="' + pathD + '" fill="none" stroke="' + strokeColor + '"';
+    if (sw > 0) linedPath += ' stroke-width="' + sw.toFixed(2) + '"';
+    linedPath += ' stroke-linecap="square" data-lined="1"';
+    if (keepAttrs) linedPath += ' ' + keepAttrs;
+    linedPath += '/>';
+
+    // Replace the outer rect with the lined path
+    return svgString.replace(outer.full, linedPath);
   }
 };

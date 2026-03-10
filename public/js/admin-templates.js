@@ -330,10 +330,11 @@
     stitch_line:       { family: 2, sub: 1 },
     stitch_square:     { family: 2, sub: 2 },
     stitch_circle:     { family: 2, sub: 3 },
-    zigzag:            { family: 3, sub: 1 },
+    sawtooth:          { family: 3, sub: 1 },
     perforated:        { family: 3, sub: 2 },
     perforated_spaced: { family: 3, sub: 3 },
     wavy:              { family: 3, sub: 4 },
+    zigzag:            { family: 3, sub: 5 },
     brushstroke:       { family: 4, sub: 1 },
     torn_edge:         { family: 4, sub: 2 }
   };

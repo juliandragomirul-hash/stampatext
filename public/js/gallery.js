@@ -43,10 +43,10 @@ const Gallery = {
   },
 
   BORDER_LABELS: {
-    wavy: 'wavy', brushstroke: 'brushstroke',
+    wavy: 'wavy', zigzag: 'zigzag', brushstroke: 'brushstroke',
     stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
     torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
-    perforated: 'perforated', zigzag: 'zigzag'
+    perforated: 'perforated', sawtooth: 'sawtooth', chalk: 'chalk'
   },
 
   // Border style family grouping (mirrors admin-templates.js)
@@ -55,12 +55,14 @@ const Gallery = {
     stitch_line:       { family: 2, sub: 1 },
     stitch_square:     { family: 2, sub: 2 },
     stitch_circle:     { family: 2, sub: 3 },
-    zigzag:            { family: 3, sub: 1 },
+    sawtooth:          { family: 3, sub: 1 },
     perforated:        { family: 3, sub: 2 },
     perforated_spaced: { family: 3, sub: 3 },
     wavy:              { family: 3, sub: 4 },
+    zigzag:            { family: 3, sub: 5 },
     brushstroke:       { family: 4, sub: 1 },
-    torn_edge:         { family: 4, sub: 2 }
+    torn_edge:         { family: 4, sub: 2 },
+    chalk:             { family: 4, sub: 3 }
   },
 
   FAMILY_NAMES: {
@@ -81,17 +83,20 @@ const Gallery = {
     stitch_line:       ['single', 'double', 'split'],
     stitch_square:     ['single', 'double', 'split'],
     stitch_circle:     ['single', 'double', 'split'],
-    zigzag:            ['single', 'double'],
+    sawtooth:          ['single', 'double'],
     perforated:        ['single', 'double'],
     perforated_spaced: ['single', 'double'],
     wavy:              ['single', 'split'],
+    zigzag:            ['single', 'split'],
     brushstroke:       ['single', 'double'],
-    torn_edge:         ['single', 'double', 'split']
+    torn_edge:         ['single', 'double', 'split'],
+    chalk:             ['single', 'double', 'split']
   },
 
   buildDescription(text, colorName, borderType, fillType, cornerType, objectType, appliedTilt, appliedTexture, appliedFrame, svgString, fontKey) {
     var border = this.BORDER_LABELS[borderType] || 'plain';
-    var fill = (fillType === 'empty') ? 'outlined' : 'filled';
+    // Fill is now a product-page toggle; gallery always shows outlined
+    var fill = 'outlined';
     var texture = '';
     if (appliedTexture) {
       var resolved = SvgRenderer._textureAliases[appliedTexture] || appliedTexture;
@@ -104,21 +109,29 @@ const Gallery = {
     else if (appliedFrame === 'split') frame = 'split border';
     var shape = '';
     if (svgString) {
-      var vbM = svgString.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+([\d.\-]+)/);
-      if (vbM) {
-        var ratio = parseFloat(vbM[1]) / parseFloat(vbM[2]);
-        shape = (ratio >= 0.85 && ratio <= 1.15) ? 'square' : 'rectangle';
+      // Check for lined shape (data-lined="1" marker on path)
+      if (/data-lined="1"/.test(svgString)) {
+        shape = 'lined';
+      } else {
+        var vbM = svgString.match(/viewBox=["']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.\-]+)\s+([\d.\-]+)/);
+        if (vbM) {
+          var ratio = parseFloat(vbM[1]) / parseFloat(vbM[2]);
+          shape = (ratio >= 0.85 && ratio <= 1.15) ? 'square' : 'rectangle';
+        }
       }
     }
     var obj = ((shape || 'rectangle') + ' ' + (objectType || 'stamp')).replace(/_/g, ' ');
-    var corners = 'straight corners';
-    if (cornerType === 'strong_round') corners = 'strong round corners';
-    else if (cornerType === 'medium_round') corners = 'medium round corners';
-    else if (cornerType === 'soft_round') corners = 'soft round corners';
-    else if (cornerType === 'mixed_top_straight') corners = 'mixed corners (top straight)';
-    else if (cornerType === 'mixed_top_round') corners = 'mixed corners (top round)';
-    else if (cornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
-    else if (cornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
+    var corners = '';
+    if (shape !== 'lined') {
+      corners = 'straight corners';
+      if (cornerType === 'strong_round') corners = 'strong round corners';
+      else if (cornerType === 'medium_round') corners = 'medium round corners';
+      else if (cornerType === 'soft_round') corners = 'soft round corners';
+      else if (cornerType === 'mixed_top_straight') corners = 'mixed corners (top straight)';
+      else if (cornerType === 'mixed_top_round') corners = 'mixed corners (top round)';
+      else if (cornerType === 'mixed_diag_down') corners = 'mixed corners (diagonal down)';
+      else if (cornerType === 'mixed_diag_up') corners = 'mixed corners (diagonal up)';
+    }
     // Build: "TEXT" written on [color] [tilt?] [border style?] [frame?] [filled/outlined] [shape] [objectType] with [corners] [and texture?]. FONT: [name]
     var adjectives = [tilt, border, frame].filter(Boolean).join(' ');
     var objPhrase = (adjectives ? adjectives + ' ' : '') + fill + ' ' + obj;
@@ -138,7 +151,8 @@ const Gallery = {
     const { data, error } = await sb
       .from('templates')
       .select('*, text_zones(*)')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .eq('fill_type', 'empty');
 
     if (error) throw new Error('Failed to fetch templates: ' + error.message);
     return data || [];
@@ -204,10 +218,7 @@ const Gallery = {
       if (fa.sub !== fb.sub) return fa.sub - fb.sub;
       var ca = self.CORNER_ORDER[a.tpl.corner_type || 'straight'] || 99;
       var cb = self.CORNER_ORDER[b.tpl.corner_type || 'straight'] || 99;
-      if (ca !== cb) return ca - cb;
-      var filla = a.tpl.fill_type === 'full' ? 0 : 1;
-      var fillb = b.tpl.fill_type === 'full' ? 0 : 1;
-      return filla - fillb;
+      return ca - cb;
     });
 
     // Process auto-fit sequentially (each creates an iframe for measurement)
@@ -349,14 +360,11 @@ const Gallery = {
       if (fa.sub !== fb.sub) return fa.sub - fb.sub;
       var ca = self.CORNER_ORDER[a.cornerType || 'straight'] || 99;
       var cb = self.CORNER_ORDER[b.cornerType || 'straight'] || 99;
-      if (ca !== cb) return ca - cb;
-      // Full before empty
-      var filla = a.fillType === 'full' ? 0 : 1;
-      var fillb = b.fillType === 'full' ? 0 : 1;
-      return filla - fillb;
+      return ca - cb;
     });
 
-    // Build family groups: { familyId: { name, results[] } }
+    // Build family groups keyed by shape prefix + familyId (e.g. 'R1', 'L2')
+    // Rectangle groups (R*) render first, then Lined groups (L*)
     var familyGroups = {};
     var allResults = [];
 
@@ -365,99 +373,118 @@ const Gallery = {
       var familyInfo = this.BORDER_STYLE_FAMILIES[base.borderType || 'simple'] || { family: 1, sub: 1 };
       var familyId = familyInfo.family;
 
-      if (!familyGroups[familyId]) {
-        var shapeLabel = (base.shape || 'rectangle').replace(/_/g, '/');
-        familyGroups[familyId] = {
-          name: this.FAMILY_NAMES[familyId] + ' ' + shapeLabel + ' stamps',
-          results: []
-        };
-      }
-
       // Detect border info once per template (needed for double + split)
       var bi = SvgRenderer.detectBorderType(base.svgString);
       SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: base.fillType });
 
-      // Generate border count variants (filtered by compatibility)
+      // Generate shape × border count variants
       var allowedFrames = this.FRAME_COMPAT[base.borderType || 'simple'] || this.FRAME_ORDER;
-      for (var f = 0; f < allowedFrames.length; f++) {
-        var frameMode = allowedFrames[f];
-        // Skip double frame for filled stitch — too visually dense / redundant with single
-        if (frameMode === 'double' && bi.stitch && base.fillType === 'full') continue;
-        // Skip double frame for outlined torn edge — poor visual result
-        if (frameMode === 'double' && bi.filter && base.fillType !== 'full') continue;
+      var shapes = ['rectangle', 'lined'];
 
-        // Random color per variant
-        var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
+      for (var s = 0; s < shapes.length; s++) {
+        var stampShape = shapes[s];
 
-        // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
-        var variantSvg = base.svgString;
-        var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
-        if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners)) {
+        // Lined: skip non-straight corners (round/mixed have no meaning without vertical sides)
+        if (stampShape === 'lined' && base.cornerType && base.cornerType !== 'straight') continue;
+
+        var groupKey = (stampShape === 'lined' ? 'L' : 'R') + familyId;
+        if (!familyGroups[groupKey]) {
+          var shapeLabel = stampShape === 'lined' ? 'Lined' : 'Rectangle';
+          familyGroups[groupKey] = {
+            name: shapeLabel + ' \u2014 ' + this.FAMILY_NAMES[familyId] + ' stamps',
+            numericFamily: familyId,
+            results: []
+          };
+        }
+
+        for (var f = 0; f < allowedFrames.length; f++) {
+          var frameMode = allowedFrames[f];
+          // Skip double frame for filled stitch — too visually dense / redundant with single
+          if (frameMode === 'double' && bi.stitch && base.fillType === 'full') continue;
+          // Skip double frame for outlined torn edge — poor visual result
+          if (frameMode === 'double' && bi.filter && base.fillType !== 'full') continue;
+
+          // Random color per variant
+          var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
+
+          // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
+          var variantSvg = base.svgString;
+          var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
+          if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined')) {
+            try {
+              variantSvg = SvgRenderer._applyAutoFitSizing(
+                base.preAutoFitSvg,
+                base.autoFitZoneInfo.idx,
+                base.autoFitZoneInfo.boundingWidth,
+                base.autoFitZoneInfo.fontSize,
+                base.autoFitZoneInfo.originalScaleX,
+                frameMode,
+                base.autoFitMeasurements,
+                base.fillType,
+                base.cornerType,
+                base.borderType,
+                null,
+                stampShape
+              );
+            } catch (err) {
+              console.warn('Per-variant sizing failed for', base.name, frameMode, err);
+            }
+          }
+
+          var colorized, cropped;
           try {
-            variantSvg = SvgRenderer._applyAutoFitSizing(
-              base.preAutoFitSvg,
-              base.autoFitZoneInfo.idx,
-              base.autoFitZoneInfo.boundingWidth,
-              base.autoFitZoneInfo.fontSize,
-              base.autoFitZoneInfo.originalScaleX,
-              frameMode,
-              base.autoFitMeasurements,
-              base.fillType,
-              base.cornerType,
-              base.borderType
-            );
+            colorized = SvgRenderer.colorize(variantSvg, color);
+            colorized = SvgRenderer.applyThinStroke(colorized);
+            colorized = SvgRenderer.cropViewBoxToStamp(colorized);
+            // Lined: convert rect to 2 horizontal lines, skip corner radius
+            if (stampShape === 'lined') {
+              colorized = SvgRenderer.convertToLined(colorized);
+            } else {
+              colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
+            }
+            cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
           } catch (err) {
-            console.warn('Per-variant sizing failed for', base.name, frameMode, err);
+            console.warn('Failed to process template:', base.name, err);
+            cropped = SvgRenderer.colorize(variantSvg, color);
           }
-        }
 
-        var colorized, cropped;
-        try {
-          colorized = SvgRenderer.colorize(variantSvg, color);
-          colorized = SvgRenderer.applyThinStroke(colorized);
-          colorized = SvgRenderer.cropViewBoxToStamp(colorized);
-          colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
-          cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
-        } catch (err) {
-          console.warn('Failed to process template:', base.name, err);
-          cropped = SvgRenderer.colorize(variantSvg, color);
-        }
-
-        var framed = cropped;
-        try {
-          if (frameMode === 'double') {
-            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
-          } else if (frameMode === 'split') {
-            framed = SvgRenderer.addSplitBorder(cropped, bi);
+          var framed = cropped;
+          try {
+            if (frameMode === 'double') {
+              framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
+            } else if (frameMode === 'split') {
+              framed = SvgRenderer.addSplitBorder(cropped, bi);
+            }
+          } catch (err) {
+            console.warn('Failed to apply frame "' + frameMode + '" to:', base.name, err);
+            framed = cropped;
           }
-        } catch (err) {
-          console.warn('Failed to apply frame "' + frameMode + '" to:', base.name, err);
-          framed = cropped;
+
+          var result = {
+            templateId: base.templateId,
+            svgString: SvgRenderer.addWatermark(framed),
+            shape: base.shape,
+            objectType: base.objectType,
+            frameType: base.frameType,
+            borderType: base.borderType,
+            fillType: base.fillType,
+            cornerType: base.cornerType,
+            colors: base.colors,
+            width: base.width,
+            height: base.height,
+            name: base.name,
+            displayText: base.displayText,
+            fontKey: base.fontKey,
+            appliedColor: color,
+            appliedFrame: frameMode,
+            appliedShape: stampShape,
+            appliedTilt: 0,
+            appliedTexture: null
+          };
+
+          familyGroups[groupKey].results.push(result);
+          allResults.push(result);
         }
-
-        var result = {
-          templateId: base.templateId,
-          svgString: SvgRenderer.addWatermark(framed),
-          shape: base.shape,
-          objectType: base.objectType,
-          frameType: base.frameType,
-          borderType: base.borderType,
-          fillType: base.fillType,
-          cornerType: base.cornerType,
-          colors: base.colors,
-          width: base.width,
-          height: base.height,
-          name: base.name,
-          displayText: base.displayText,
-          fontKey: base.fontKey,
-          appliedColor: color,
-          appliedFrame: frameMode,
-          appliedTilt: 0,
-          appliedTexture: null
-        };
-
-        familyGroups[familyId].results.push(result);
-        allResults.push(result);
       }
     }
 
@@ -790,8 +817,8 @@ const Gallery = {
     headerTitle.className = 'stamp-results-title';
     var timeLabel = isRestore ? 'Restored at' : 'Generated at';
     var headerMsg = isRestore
-      ? 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Use the filters to narrow down.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
-      : 'Showing <strong>' + totalCount + '</strong> results for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Use the filters to narrow down.<br>Click on the model you like and play with color, border count, font, tilt and texture.';
+      ? 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
+      : 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.';
     headerTitle.innerHTML = headerMsg + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
     headerSection.appendChild(headerTitle);
     container.appendChild(headerSection);
@@ -802,14 +829,18 @@ const Gallery = {
       container.insertBefore(filterBar, headerSection.nextSibling);
     }
 
-    // Render each family group in order
-    var familyIds = Object.keys(familyGroups).sort(function(a, b) { return parseInt(a) - parseInt(b); });
+    // Render each family group: R1,R2,R3,R4 then L1,L2,L3,L4
+    var familyIds = Object.keys(familyGroups).sort(function(a, b) {
+      // R before L, then numeric within each shape
+      if (a[0] !== b[0]) return a[0] === 'R' ? -1 : 1;
+      return parseInt(a.slice(1)) - parseInt(b.slice(1));
+    });
     for (var i = 0; i < familyIds.length; i++) {
       var group = familyGroups[familyIds[i]];
 
       var section = document.createElement('div');
       section.className = 'stamp-batch-section';
-      section.dataset.family = familyIds[i];
+      section.dataset.family = group.numericFamily || parseInt(familyIds[i].slice(1));
 
       // Family header
       var familyHeader = document.createElement('div');
@@ -828,6 +859,7 @@ const Gallery = {
         card.dataset.frame = r.appliedFrame || 'single';
         card.dataset.corners = r.cornerType || 'straight';
         card.dataset.fill = r.fillType || 'full';
+        card.dataset.shape = r.appliedShape || 'rectangle';
 
         var previewDiv = document.createElement('div');
         previewDiv.className = 'stamp-card-preview';
@@ -838,6 +870,8 @@ const Gallery = {
           '&text=' + encodeURIComponent(self.currentText) +
           '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
           '&frame=' + encodeURIComponent(r.appliedFrame || r.frameType || 'single') +
+          '&fill=empty' +
+          '&shape=' + encodeURIComponent(r.appliedShape || 'rectangle') +
           '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
           (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '') +
           '&font=' + encodeURIComponent(r.fontKey || '');
@@ -876,6 +910,7 @@ const Gallery = {
           t: r.templateId,
           c: r.appliedColor || '',
           f: r.appliedFrame || r.frameType || 'single',
+          s: r.appliedShape || 'rectangle',
           i: r.appliedTilt || 0,
           x: r.appliedTexture || ''
         };
@@ -908,12 +943,14 @@ const Gallery = {
     if (filterBar) {
       filterBar.style.display = 'flex';
       this.initFilterBar();
-      // Default to "Single" border count for a cleaner initial gallery
+      // Default filters for a cleaner initial gallery
+      var shapeSelect = document.getElementById('filter-shape');
+      if (shapeSelect) shapeSelect.value = '';  // All shapes
       var frameSelect = document.getElementById('filter-border-count');
-      if (frameSelect && !frameSelect.value) {
-        frameSelect.value = 'single';
-        this.applyFilterBar();
-      }
+      if (frameSelect && !frameSelect.value) frameSelect.value = 'single';
+      var fillSelect = document.getElementById('filter-fill');
+      if (fillSelect) fillSelect.value = 'empty';
+      this.applyFilterBar();
     }
   },
 
@@ -922,7 +959,7 @@ const Gallery = {
    */
   initFilterBar() {
     var self = this;
-    var selects = ['filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
+    var selects = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
     selects.forEach(function(id) {
       var el = document.getElementById(id);
       if (el && !el.dataset.bound) {
@@ -947,6 +984,7 @@ const Gallery = {
    * Apply filter bar dropdowns to show/hide cards and family sections.
    */
   applyFilterBar() {
+    var shapeVal = document.getElementById('filter-shape') ? document.getElementById('filter-shape').value : '';
     var familyVal = document.getElementById('filter-border-style').value;
     var frameVal = document.getElementById('filter-border-count').value;
     var cornersVal = document.getElementById('filter-corners').value;
@@ -955,6 +993,7 @@ const Gallery = {
     var visibleCount = 0;
     cards.forEach(function(card) {
       var show = true;
+      if (shapeVal && card.dataset.shape !== shapeVal) show = false;
       if (familyVal && card.dataset.family !== familyVal) show = false;
       if (frameVal && card.dataset.frame !== frameVal) show = false;
       if (cornersVal) {
@@ -982,8 +1021,8 @@ const Gallery = {
 
     // Cascading filters: disable options that would produce 0 results
     var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
-    var filterIds = ['filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
-    var dataKeys = ['family', 'frame', 'corners', 'fill'];
+    var filterIds = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
+    var dataKeys = ['shape', 'family', 'frame', 'corners', 'fill'];
 
     for (var fi = 0; fi < filterIds.length; fi++) {
       var sel = document.getElementById(filterIds[fi]);
@@ -1055,11 +1094,15 @@ const Gallery = {
     overlay.className = 'stamp-zoom-overlay';
     overlay.innerHTML = svgString;
 
-    // White background is baked into the SVG by applyTilt (for tilted stamps)
     var svgEl = overlay.querySelector('svg');
     if (svgEl) {
       svgEl.removeAttribute('width');
       svgEl.removeAttribute('height');
+      svgEl.style.maxWidth = '90vw';
+      svgEl.style.maxHeight = '85vh';
+      svgEl.style.width = 'auto';
+      svgEl.style.height = 'auto';
+      svgEl.style.background = '#ffffff';
       svgEl.style.borderRadius = '4px';
     }
 
@@ -1106,8 +1149,9 @@ const Gallery = {
 
         // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
         var variantSvg = base.svgString;
+        var vpShape = vp.s || 'rectangle';
         var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
-        if (base.autoFitZoneInfo && base.autoFitMeasurements && (vp.f !== 'single' || hasRoundedCorners)) {
+        if (base.autoFitZoneInfo && base.autoFitMeasurements && (vp.f !== 'single' || hasRoundedCorners || vpShape === 'lined')) {
           try {
             variantSvg = SvgRenderer._applyAutoFitSizing(
               base.preAutoFitSvg,
@@ -1119,7 +1163,9 @@ const Gallery = {
               base.autoFitMeasurements,
               base.fillType,
               base.cornerType,
-              base.borderType
+              base.borderType,
+              null,
+              vpShape
             );
           } catch (err2) {
             console.warn('Per-variant sizing failed (restore):', base.name, vp.f, err2);
@@ -1129,7 +1175,12 @@ const Gallery = {
         var colorized = SvgRenderer.colorize(variantSvg, vp.c);
         colorized = SvgRenderer.applyThinStroke(colorized);
         colorized = SvgRenderer.cropViewBoxToStamp(colorized);
-        colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
+        // Lined: convert rect to 2 horizontal lines, skip corner radius
+        if (vpShape === 'lined') {
+          colorized = SvgRenderer.convertToLined(colorized);
+        } else {
+          colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
+        }
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
         var framed = cropped;
         if (vp.f === 'double') {
@@ -1159,6 +1210,7 @@ const Gallery = {
           fontKey: base.fontKey,
           appliedColor: vp.c,
           appliedFrame: vp.f || base.frameType || 'single',
+          appliedShape: vp.s || 'rectangle',
           appliedTilt: vp.i,
           appliedTexture: vp.x || null
         });
@@ -1189,14 +1241,16 @@ const Gallery = {
       var r = batch[i];
       var familyInfo = this.BORDER_STYLE_FAMILIES[r.borderType || 'simple'] || { family: 1, sub: 1 };
       var familyId = familyInfo.family;
-      if (!familyGroups[familyId]) {
-        var shapeLabel = (r.shape || 'rectangle').replace(/_/g, '/');
-        familyGroups[familyId] = {
-          name: this.FAMILY_NAMES[familyId] + ' ' + shapeLabel + ' stamps',
+      var groupKey = (r.appliedShape === 'lined' ? 'L' : 'R') + familyId;
+      if (!familyGroups[groupKey]) {
+        var shapeLabel = r.appliedShape === 'lined' ? 'Lined' : 'Rectangle';
+        familyGroups[groupKey] = {
+          name: shapeLabel + ' \u2014 ' + this.FAMILY_NAMES[familyId] + ' stamps',
+          numericFamily: familyId,
           results: []
         };
       }
-      familyGroups[familyId].results.push(r);
+      familyGroups[groupKey].results.push(r);
     }
 
     this.appendGroupedBatchSections(familyGroups, batch.length, true);
