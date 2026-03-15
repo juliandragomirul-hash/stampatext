@@ -22,6 +22,9 @@ const Gallery = {
   filteredResults: [],
   displayedCount: 0,
   isFirstShowMore: true,
+  isShowcase: false,
+  selectedColor: null,
+  currentFill: 'empty',
 
   // Palette colors (same as stamp-app.js)
   PALETTE_COLORS: [
@@ -156,6 +159,19 @@ const Gallery = {
 
     if (error) throw new Error('Failed to fetch templates: ' + error.message);
     return data || [];
+  },
+
+  /**
+   * Show showcase stamps on virgin homepage (before user stamps anything).
+   * All models in red with "Your text here".
+   */
+  async showShowcase() {
+    this.isShowcase = true;
+    document.getElementById('stamp-results').style.display = 'block';
+    document.getElementById('results-batches').innerHTML =
+      '<div class="stamp-loading">Loading stamp models...</div>';
+    await this.processAll('Your text here');
+    await this.showInitialRandom();
   },
 
   /**
@@ -387,12 +403,12 @@ const Gallery = {
         // Lined: skip non-straight corners (round/mixed have no meaning without vertical sides)
         if (stampShape === 'lined' && base.cornerType && base.cornerType !== 'straight') continue;
 
-        var groupKey = (stampShape === 'lined' ? 'L' : 'R') + familyId;
+        var groupKey = stampShape === 'lined' ? 'L' : 'R';
         if (!familyGroups[groupKey]) {
           var shapeLabel = stampShape === 'lined' ? 'Lined' : 'Rectangle';
           familyGroups[groupKey] = {
-            name: shapeLabel + ' \u2014 ' + this.FAMILY_NAMES[familyId] + ' stamps',
-            numericFamily: familyId,
+            name: shapeLabel + ' stamps',
+            numericFamily: 1,
             results: []
           };
         }
@@ -404,8 +420,8 @@ const Gallery = {
           // Skip double frame for outlined torn edge — poor visual result
           if (frameMode === 'double' && bi.filter && base.fillType !== 'full') continue;
 
-          // Random color per variant
-          var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
+          // Selected color > default red
+          var color = this.selectedColor || '#dc2626';
 
           // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
           var variantSvg = base.svgString;
@@ -744,11 +760,6 @@ const Gallery = {
       card.className = 'stamp-card';
 
       // Create preview with inline SVG
-      var previewDiv = document.createElement('div');
-      previewDiv.className = 'stamp-card-preview';
-      var img = SvgRenderer.createSvgImage(r.svgString);
-      previewDiv.appendChild(img);
-
       var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
         '&text=' + encodeURIComponent(self.currentText) +
         '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
@@ -756,6 +767,12 @@ const Gallery = {
         '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
         (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '') +
         '&font=' + encodeURIComponent(r.fontKey || '');
+
+      var previewLink = document.createElement('a');
+      previewLink.className = 'stamp-card-preview';
+      previewLink.href = productUrl;
+      var img = SvgRenderer.createSvgImage(r.svgString);
+      previewLink.appendChild(img);
 
       var colorName = self.getColorName(r.appliedColor);
       var description = self.buildDescription(
@@ -770,7 +787,7 @@ const Gallery = {
       actionsDiv.href = productUrl;
       actionsDiv.innerHTML = '<span class="stamp-card-name">' + description + '</span>';
 
-      card.appendChild(previewDiv);
+      card.appendChild(previewLink);
       card.appendChild(actionsDiv);
       grid.appendChild(card);
     });
@@ -815,11 +832,15 @@ const Gallery = {
     headerSection.className = 'stamp-batch-section';
     var headerTitle = document.createElement('div');
     headerTitle.className = 'stamp-results-title';
-    var timeLabel = isRestore ? 'Restored at' : 'Generated at';
-    var headerMsg = isRestore
-      ? 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
-      : 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.';
-    headerTitle.innerHTML = headerMsg + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
+    var headerMsg;
+    if (this.isShowcase) {
+      headerMsg = 'Explore our <strong>' + totalCount + '</strong> stamp models. Type your text above to get started!';
+    } else {
+      var timeLabel = isRestore ? 'Restored at' : 'Generated at';
+      headerMsg = 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
+        + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
+    }
+    headerTitle.innerHTML = headerMsg;
     headerSection.appendChild(headerTitle);
     container.appendChild(headerSection);
 
@@ -829,18 +850,16 @@ const Gallery = {
       container.insertBefore(filterBar, headerSection.nextSibling);
     }
 
-    // Render each family group: R1,R2,R3,R4 then L1,L2,L3,L4
+    // Render each group: R (Rectangle) then L (Lined)
     var familyIds = Object.keys(familyGroups).sort(function(a, b) {
-      // R before L, then numeric within each shape
-      if (a[0] !== b[0]) return a[0] === 'R' ? -1 : 1;
-      return parseInt(a.slice(1)) - parseInt(b.slice(1));
+      return a === 'R' ? -1 : 1;
     });
     for (var i = 0; i < familyIds.length; i++) {
       var group = familyGroups[familyIds[i]];
 
       var section = document.createElement('div');
       section.className = 'stamp-batch-section';
-      section.dataset.family = group.numericFamily || parseInt(familyIds[i].slice(1));
+      section.dataset.family = group.numericFamily || 1;
 
       // Family header
       var familyHeader = document.createElement('div');
@@ -861,11 +880,6 @@ const Gallery = {
         card.dataset.fill = r.fillType || 'full';
         card.dataset.shape = r.appliedShape || 'rectangle';
 
-        var previewDiv = document.createElement('div');
-        previewDiv.className = 'stamp-card-preview';
-        var img = SvgRenderer.createSvgImage(r.svgString);
-        previewDiv.appendChild(img);
-
         var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
           '&text=' + encodeURIComponent(self.currentText) +
           '&color=' + encodeURIComponent((r.appliedColor || '').replace('#', '')) +
@@ -875,6 +889,12 @@ const Gallery = {
           '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
           (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '') +
           '&font=' + encodeURIComponent(r.fontKey || '');
+
+        var previewLink = document.createElement('a');
+        previewLink.className = 'stamp-card-preview';
+        previewLink.href = productUrl;
+        var img = SvgRenderer.createSvgImage(r.svgString);
+        previewLink.appendChild(img);
 
         var colorName = self.getColorName(r.appliedColor);
         var description = self.buildDescription(
@@ -889,7 +909,7 @@ const Gallery = {
         actionsDiv.href = productUrl;
         actionsDiv.innerHTML = '<span class="stamp-card-name">' + description + '</span>';
 
-        card.appendChild(previewDiv);
+        card.appendChild(previewLink);
         card.appendChild(actionsDiv);
         grid.appendChild(card);
       });
@@ -898,26 +918,30 @@ const Gallery = {
       container.appendChild(section);
     }
 
-    // Save variant params to localStorage
-    var allResults = [];
-    for (var j = 0; j < familyIds.length; j++) {
-      allResults = allResults.concat(familyGroups[familyIds[j]].results);
-    }
-    try {
-      localStorage.setItem('stx-gallery-text', this.currentText);
-      var variantParams = allResults.map(function(r) {
-        return {
-          t: r.templateId,
-          c: r.appliedColor || '',
-          f: r.appliedFrame || r.frameType || 'single',
-          s: r.appliedShape || 'rectangle',
-          i: r.appliedTilt || 0,
-          x: r.appliedTexture || ''
-        };
-      });
-      localStorage.setItem('stx-gallery-params', JSON.stringify(variantParams));
-    } catch (e) {
-      console.warn('[Gallery] localStorage save failed:', e.message);
+    // Save variant params to localStorage (skip for showcase)
+    if (!this.isShowcase) {
+      var allResults = [];
+      for (var j = 0; j < familyIds.length; j++) {
+        allResults = allResults.concat(familyGroups[familyIds[j]].results);
+      }
+      try {
+        localStorage.setItem('stx-gallery-text', this.currentText);
+        var variantParams = allResults.map(function(r) {
+          return {
+            t: r.templateId,
+            c: r.appliedColor || '',
+            f: r.appliedFrame || r.frameType || 'single',
+            s: r.appliedShape || 'rectangle',
+            i: r.appliedTilt || 0,
+            x: r.appliedTexture || ''
+          };
+        });
+        localStorage.setItem('stx-gallery-params', JSON.stringify(variantParams));
+      } catch (e) {
+        console.warn('[Gallery] localStorage save failed:', e.message);
+      }
+      // Cache to IndexedDB for instant back-navigation
+      this.saveToCache(this.currentText).catch(function() {});
     }
   },
 
@@ -943,6 +967,10 @@ const Gallery = {
     if (filterBar) {
       filterBar.style.display = 'flex';
       this.initFilterBar();
+      // Set color dot to match current gallery color
+      var dot = document.getElementById('filter-color-dot');
+      var activeColor = this.selectedColor || '#dc2626';
+      if (dot) dot.style.background = activeColor;
       // Default filters for a cleaner initial gallery
       var shapeSelect = document.getElementById('filter-shape');
       if (shapeSelect) shapeSelect.value = '';  // All shapes
@@ -959,7 +987,7 @@ const Gallery = {
    */
   initFilterBar() {
     var self = this;
-    var selects = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
+    var selects = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners'];
     selects.forEach(function(id) {
       var el = document.getElementById(id);
       if (el && !el.dataset.bound) {
@@ -967,6 +995,14 @@ const Gallery = {
         el.addEventListener('change', function() { self.applyFilterBar(); });
       }
     });
+    // Fill dropdown: convert SVGs on the fly (not a show/hide filter)
+    var fillSelect = document.getElementById('filter-fill');
+    if (fillSelect && !fillSelect.dataset.bound) {
+      fillSelect.dataset.bound = '1';
+      fillSelect.addEventListener('change', function() {
+        self.convertFillCards(fillSelect.value || 'empty');
+      });
+    }
     var resetBtn = document.getElementById('filter-reset');
     if (resetBtn && !resetBtn.dataset.bound) {
       resetBtn.dataset.bound = '1';
@@ -975,9 +1011,171 @@ const Gallery = {
           var el = document.getElementById(id);
           if (el) el.value = '';
         });
+        // Reset color selection
+        self.selectedColor = null;
+        document.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
+        var dot = document.getElementById('filter-color-dot');
+        if (dot) dot.style.background = 'transparent';
+        self.recolorizeCards(null);
+        // Reset fill to outlined
+        if (fillSelect) fillSelect.value = 'empty';
+        self.convertFillCards('empty');
         self.applyFilterBar();
       });
     }
+
+    // Build color swatches (first 4 visible in row, rest in dropdown)
+    var colorGrid = document.getElementById('filter-bar-colors');
+    if (colorGrid && !colorGrid.dataset.bound) {
+      colorGrid.dataset.bound = '1';
+      var colorDot = document.getElementById('filter-color-dot');
+
+      // Build all 12 swatches into the single grid
+      for (var ci = 0; ci < this.PALETTE_COLORS.length; ci++) {
+        (function(hex) {
+          var swatch = document.createElement('div');
+          swatch.className = 'filter-bar-swatch';
+          swatch.style.backgroundColor = hex;
+          swatch.dataset.color = hex;
+          swatch.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Toggle: clicking active swatch deselects
+            if (swatch.classList.contains('active')) {
+              document.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
+              self.selectedColor = null;
+              if (colorDot) colorDot.style.background = 'transparent';
+              self.recolorizeCards(null);
+            } else {
+              document.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
+              swatch.classList.add('active');
+              self.selectedColor = hex;
+              if (colorDot) colorDot.style.background = hex;
+              self.recolorizeCards(hex);
+            }
+            colorGrid.classList.remove('open');
+          });
+          colorGrid.appendChild(swatch);
+        })(self.PALETTE_COLORS[ci]);
+      }
+
+      // Toggle grid on box click
+      var toggle = document.getElementById('filter-color-toggle');
+      if (toggle) {
+        toggle.addEventListener('click', function(e) {
+          e.stopPropagation();
+          colorGrid.classList.toggle('open');
+        });
+      }
+
+      // Close grid when clicking outside
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.filter-bar-color-group')) {
+          colorGrid.classList.remove('open');
+        }
+      });
+    }
+  },
+
+  /**
+   * Re-colorize all visible gallery cards with a new color.
+   * Pass null to restore original variant colors.
+   */
+  recolorizeCards(newColor) {
+    var cards = document.querySelectorAll('#results-batches .stamp-card');
+    var self = this;
+    cards.forEach(function(card, idx) {
+      var preview = card.querySelector('.stamp-card-preview');
+      if (!preview) return;
+      var oldWrapper = preview.querySelector('div');
+      if (!oldWrapper) return;
+      if (newColor) {
+        var svgEl = oldWrapper.querySelector('svg');
+        if (!svgEl) return;
+        var recolored = SvgRenderer.colorize(svgEl.outerHTML, newColor);
+        var newWrapper = SvgRenderer.createSvgImage(recolored);
+        preview.replaceChild(newWrapper, oldWrapper);
+      } else {
+        var result = self.allResults[idx];
+        if (result) {
+          var newWrapper = SvgRenderer.createSvgImage(result.svgString);
+          preview.replaceChild(newWrapper, oldWrapper);
+        }
+      }
+      // Update product URLs
+      var links = card.querySelectorAll('a[href*="product.html"]');
+      links.forEach(function(a) {
+        if (newColor) {
+          a.href = a.href.replace(/color=[^&]*/, 'color=' + newColor.replace('#', ''));
+        } else if (self.allResults[idx]) {
+          a.href = a.href.replace(/color=[^&]*/, 'color=' + (self.allResults[idx].appliedColor || '').replace('#', ''));
+        }
+      });
+    });
+  },
+
+  /**
+   * Convert SVG fill between outlined and filled.
+   */
+  convertFill(svgString, targetFill) {
+    if (targetFill === 'full') {
+      var textM = svgString.match(/<text[^>]*\bfill=["']#([0-9A-Fa-f]{3,6})["']/);
+      var fillColor = textM ? '#' + textM[1] : '#BE1E2D';
+      svgString = svgString.replace(
+        /(<rect[^>]*)(fill=["'])none(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/,
+        '$1$2' + fillColor + '$3$4'
+      );
+      svgString = svgString.replace(
+        /(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])none(["'])/,
+        '$1$2' + fillColor + '$3'
+      );
+      svgString = svgString.replace(
+        /(<text[^>]*)(fill=["'])#[0-9A-Fa-f]{3,6}(["'])/,
+        '$1$2#FFFFFF$3'
+      );
+    } else if (targetFill === 'empty') {
+      var rectM = svgString.match(/<rect[^>]*\bfill=["']#([0-9A-Fa-f]{6})["'][^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)/);
+      if (!rectM) rectM = svgString.match(/<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*\bfill=["']#([0-9A-Fa-f]{6})["']/);
+      if (rectM) {
+        var rectColor = '#' + rectM[1];
+        svgString = svgString.replace(
+          /(<rect[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/,
+          '$1$2none$3$4'
+        );
+        svgString = svgString.replace(
+          /(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])/,
+          '$1$2none$3'
+        );
+        svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{6}(["'])/, '$1$2' + rectColor + '$3');
+        svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{3}(["'])/, '$1$2' + rectColor + '$3');
+      }
+    }
+    return svgString;
+  },
+
+  /**
+   * Convert fill on all visible gallery cards (outlined ↔ filled).
+   */
+  convertFillCards(targetFill) {
+    if (targetFill === this.currentFill) return;
+    this.currentFill = targetFill;
+    var cards = document.querySelectorAll('#results-batches .stamp-card');
+    var self = this;
+    cards.forEach(function(card) {
+      var preview = card.querySelector('.stamp-card-preview');
+      if (!preview) return;
+      var oldWrapper = preview.querySelector('div');
+      if (!oldWrapper) return;
+      var svgEl = oldWrapper.querySelector('svg');
+      if (!svgEl) return;
+      var converted = self.convertFill(svgEl.outerHTML, targetFill);
+      var newWrapper = SvgRenderer.createSvgImage(converted);
+      preview.replaceChild(newWrapper, oldWrapper);
+      // Update product URLs
+      var links = card.querySelectorAll('a[href*="product.html"]');
+      links.forEach(function(a) {
+        a.href = a.href.replace(/fill=[^&]*/, 'fill=' + targetFill);
+      });
+    });
   },
 
   /**
@@ -988,7 +1186,6 @@ const Gallery = {
     var familyVal = document.getElementById('filter-border-style').value;
     var frameVal = document.getElementById('filter-border-count').value;
     var cornersVal = document.getElementById('filter-corners').value;
-    var fillVal = document.getElementById('filter-fill').value;
     var cards = document.querySelectorAll('#results-batches .stamp-card');
     var visibleCount = 0;
     cards.forEach(function(card) {
@@ -1003,7 +1200,6 @@ const Gallery = {
           if (!card.dataset.corners || card.dataset.corners.indexOf('mixed') !== 0) show = false;
         } else if (card.dataset.corners !== cornersVal) show = false;
       }
-      if (fillVal && card.dataset.fill !== fillVal) show = false;
       card.style.display = show ? '' : 'none';
       if (show) visibleCount++;
     });
@@ -1021,8 +1217,8 @@ const Gallery = {
 
     // Cascading filters: disable options that would produce 0 results
     var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
-    var filterIds = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners', 'filter-fill'];
-    var dataKeys = ['shape', 'family', 'frame', 'corners', 'fill'];
+    var filterIds = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners'];
+    var dataKeys = ['shape', 'family', 'frame', 'corners'];
 
     for (var fi = 0; fi < filterIds.length; fi++) {
       var sel = document.getElementById(filterIds[fi]);
@@ -1241,12 +1437,12 @@ const Gallery = {
       var r = batch[i];
       var familyInfo = this.BORDER_STYLE_FAMILIES[r.borderType || 'simple'] || { family: 1, sub: 1 };
       var familyId = familyInfo.family;
-      var groupKey = (r.appliedShape === 'lined' ? 'L' : 'R') + familyId;
+      var groupKey = r.appliedShape === 'lined' ? 'L' : 'R';
       if (!familyGroups[groupKey]) {
         var shapeLabel = r.appliedShape === 'lined' ? 'Lined' : 'Rectangle';
         familyGroups[groupKey] = {
-          name: shapeLabel + ' \u2014 ' + this.FAMILY_NAMES[familyId] + ' stamps',
-          numericFamily: familyId,
+          name: shapeLabel + ' stamps',
+          numericFamily: 1,
           results: []
         };
       }
@@ -1256,6 +1452,106 @@ const Gallery = {
     this.appendGroupedBatchSections(familyGroups, batch.length, true);
     this.updateBatchButtons('initial');
     this.showResultsUI();
+  },
+
+  // ---- IndexedDB gallery cache (for instant back-navigation) ----
+  _dbName: 'stampatext-gallery',
+  _dbStore: 'cache',
+  _dbVersion: 1,
+
+  _openDB() {
+    var self = this;
+    return new Promise(function(resolve, reject) {
+      var req = indexedDB.open(self._dbName, self._dbVersion);
+      req.onupgradeneeded = function(e) {
+        e.target.result.createObjectStore(self._dbStore);
+      };
+      req.onsuccess = function() { resolve(req.result); };
+      req.onerror = function() { reject(req.error); };
+    });
+  },
+
+  async saveToCache(text) {
+    var db = await this._openDB();
+    var container = document.getElementById('results-batches');
+    // Temporarily remove filter bar so it's not duplicated in cached HTML
+    var filterBar = document.getElementById('stamp-filter-bar');
+    var filterBarParent = filterBar ? filterBar.parentNode : null;
+    var filterBarNext = filterBar ? filterBar.nextSibling : null;
+    if (filterBar && filterBarParent === container) {
+      container.removeChild(filterBar);
+    }
+    var html = container.innerHTML;
+    // Put filter bar back
+    if (filterBar && filterBarParent === container) {
+      container.insertBefore(filterBar, filterBarNext);
+    }
+    var data = {
+      text: text,
+      allResults: this.allResults,
+      displayedCount: this.displayedCount,
+      selectedColor: this.selectedColor,
+      currentFill: this.currentFill,
+      html: html,
+      timestamp: Date.now()
+    };
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('cache', 'readwrite');
+      tx.objectStore('cache').put(data, 'gallery');
+      tx.oncomplete = function() { db.close(); resolve(); };
+      tx.onerror = function() { db.close(); reject(tx.error); };
+    });
+  },
+
+  async loadFromCache(text) {
+    try {
+      var db = await this._openDB();
+      return new Promise(function(resolve) {
+        var tx = db.transaction('cache', 'readonly');
+        var req = tx.objectStore('cache').get('gallery');
+        req.onsuccess = function() {
+          db.close();
+          var data = req.result;
+          if (!data || data.text !== text) return resolve(null);
+          if (Date.now() - data.timestamp > 600000) return resolve(null);
+          resolve(data);
+        };
+        req.onerror = function() { db.close(); resolve(null); };
+      });
+    } catch (e) { return null; }
+  },
+
+  async restoreFromCache(text) {
+    var cached = await this.loadFromCache(text);
+    if (!cached) return false;
+
+    this.allResults = cached.allResults;
+    this.displayedCount = cached.displayedCount;
+    this.selectedColor = cached.selectedColor;
+    this.currentFill = cached.currentFill;
+    this.currentText = text;
+
+    // Restore DOM instantly
+    var container = document.getElementById('results-batches');
+    container.innerHTML = cached.html;
+
+    // Move the original filter bar into position (after the header section)
+    document.getElementById('stamp-results').style.display = 'block';
+    var filterBar = document.getElementById('stamp-filter-bar');
+    if (filterBar) {
+      var headerSection = container.querySelector('.stamp-batch-section');
+      if (headerSection) {
+        container.insertBefore(filterBar, headerSection.nextSibling);
+      }
+      filterBar.style.display = 'flex';
+      this.initFilterBar();
+      var dot = document.getElementById('filter-color-dot');
+      if (dot) dot.style.background = this.selectedColor || '#dc2626';
+      var fillSelect = document.getElementById('filter-fill');
+      if (fillSelect) fillSelect.value = this.currentFill || 'empty';
+    }
+
+    return true;
   },
 
   escapeHtml(str) {

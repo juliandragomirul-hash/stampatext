@@ -687,11 +687,17 @@ const SvgRenderer = {
       strokeColor = stampRectFill || '#FFFFFF';
     } else {
       // Thickening: stroke matches the text fill color
-      var textFillMatch = svgString.match(/<text[^>]*\sfill=["']([^"']+)["']/i);
+      var textFillMatch = svgString.match(/<text[^>]*[\s]fill=["']([^"']+)["']/i);
       strokeColor = textFillMatch ? textFillMatch[1] : '#000000';
+      // Ensure text has paint-order so stroke renders behind fill (prevents hollow appearance)
+      if (!textFillMatch) {
+        // No fill found — extract from tspan or default to stroke color
+        var tspanFillMatch = svgString.match(/<tspan[^>]*[\s]fill=["']([^"']+)["']/i);
+        if (tspanFillMatch) strokeColor = tspanFillMatch[1];
+      }
     }
 
-    // Apply stroke + stroke-width to <text> element
+    // Apply stroke + stroke-width + paint-order to <text> element
     var result = svgString.replace(/<text([^>]*)>/gi, function(match, attrs) {
       if (/stroke=["'][^"']*["']/i.test(attrs)) {
         attrs = attrs.replace(/stroke=["'][^"']*["']/i, 'stroke="' + strokeColor + '"');
@@ -702,6 +708,10 @@ const SvgRenderer = {
         attrs = attrs.replace(/stroke-width=["'][^"']*["']/i, 'stroke-width="' + strokeConfig.width + '"');
       } else {
         attrs += ' stroke-width="' + strokeConfig.width + '"';
+      }
+      // paint-order: stroke renders behind fill, preventing hollow text
+      if (!/paint-order/i.test(attrs)) {
+        attrs += ' paint-order="stroke"';
       }
       return '<text' + attrs + '>';
     });

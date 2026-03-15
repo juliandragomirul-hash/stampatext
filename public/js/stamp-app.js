@@ -56,14 +56,20 @@
     // Build color palette
     buildColorPalette();
 
-    // Delegated zoom handler for stamp card previews (works after sessionStorage restore too)
+    // Delegated click handler for stamp cards
     document.getElementById('results-batches').addEventListener('click', function(e) {
-      var preview = e.target.closest('.stamp-card-preview');
-      if (!preview) return;
-      var svgEl = preview.querySelector('svg');
-      if (svgEl) {
-        Gallery.showZoomOverlay(svgEl.outerHTML);
+      // Showcase mode: scroll to input instead of navigating
+      if (Gallery.isShowcase) {
+        var card = e.target.closest('.stamp-card-preview, .stamp-card-actions');
+        if (card) {
+          e.preventDefault();
+          var input = document.getElementById('stamp-input');
+          input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(function() { input.focus(); }, 400);
+          return;
+        }
       }
+      // Normal mode: no zoom (cards are links now)
     });
 
     // Restore search from URL param (for back navigation / shared links)
@@ -78,6 +84,9 @@
       } else {
         handleStamp();
       }
+    } else {
+      // No text param — show showcase with all models
+      Gallery.showShowcase();
     }
 
     // Select all toggles in preferences modal
@@ -118,6 +127,7 @@
 
   // ---- Stamp handler ----
   async function handleStamp() {
+    Gallery.isShowcase = false;
     var input = document.getElementById('stamp-input');
     var text = input.value.trim();
     if (!text || isProcessing) return;
@@ -164,6 +174,33 @@
     isProcessing = true;
     var btn = document.getElementById('stamp-btn');
     btn.disabled = true;
+
+    try {
+      // Try instant restore from IndexedDB cache first
+      var restored = await Gallery.restoreFromCache(text);
+      if (restored) {
+        // Restore scroll position
+        var savedY = sessionStorage.getItem('stampScrollY');
+        if (savedY) {
+          sessionStorage.removeItem('stampScrollY');
+          var y = parseInt(savedY, 10);
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              window.scrollTo(0, y);
+            });
+          });
+        }
+        var newUrl = '/?text=' + encodeURIComponent(text);
+        if (window.location.search !== '?text=' + encodeURIComponent(text)) {
+          history.replaceState(null, '', newUrl);
+        }
+        return;
+      }
+    } catch (e) {
+      // IndexedDB failed, fall through to full restore
+    }
+
+    // Cache miss — full restore from variant params
     btn.textContent = 'Restoring...';
 
     document.getElementById('stamp-results').style.display = 'block';

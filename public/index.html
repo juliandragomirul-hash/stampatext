@@ -9,7 +9,7 @@
   <meta property="og:description" content="Create custom text stamps instantly. Dozens of styles, fonts and colors. Download in high-res PNG or JPG.">
   <meta property="og:image" content="/logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="/css/style.css?v=48">
+  <link rel="stylesheet" href="/css/style.css?v=51">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&display=swap" rel="stylesheet">
@@ -53,37 +53,58 @@
   <section class="stamp-results" id="stamp-results" style="display:none;">
     <!-- Filter Bar (inside results, right above the batches) -->
     <div class="stamp-filter-bar" id="stamp-filter-bar" style="display:none;">
-      <span class="filter-bar-label">Filter:</span>
-      <select id="filter-shape" class="filter-bar-select">
-        <option value="">All shapes</option>
-        <option value="rectangle">Rectangle</option>
-        <option value="lined">Lined</option>
-        <option value="circle" disabled>Circle (soon)</option>
-      </select>
-      <select id="filter-border-style" class="filter-bar-select">
-        <option value="">All border styles</option>
-        <option value="1">Plain</option>
-        <option value="2">Stitch</option>
-        <option value="3">Zigzag / Perforated</option>
-        <option value="4">Irregular</option>
-      </select>
-      <select id="filter-border-count" class="filter-bar-select">
-        <option value="">All border counts</option>
-        <option value="single">Single</option>
-        <option value="double">Double</option>
-        <option value="split">Split</option>
-      </select>
-      <select id="filter-corners" class="filter-bar-select">
-        <option value="">All corners</option>
-        <option value="straight">Straight</option>
-        <option value="round">Round</option>
-        <option value="mixed">Mixed</option>
-      </select>
-      <select id="filter-fill" class="filter-bar-select">
-        <option value="">All fills</option>
-        <option value="full">Filled</option>
-        <option value="empty" selected>Outlined</option>
-      </select>
+      <div class="filter-bar-group filter-bar-color-group">
+        <label class="filter-bar-label">Color</label>
+        <div class="filter-bar-color-box" id="filter-color-toggle">
+          <span class="filter-bar-color-dot" id="filter-color-dot"></span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-color-grid" id="filter-bar-colors"></div>
+      </div>
+      <div class="filter-bar-group">
+        <label class="filter-bar-label" for="filter-shape">Shape</label>
+        <select id="filter-shape" class="filter-bar-select">
+          <option value="">All</option>
+          <option value="rectangle">Rectangle</option>
+          <option value="lined">Lined</option>
+          <option value="circle" disabled>Circle (soon)</option>
+        </select>
+      </div>
+      <div class="filter-bar-group">
+        <label class="filter-bar-label" for="filter-border-style">Border Style</label>
+        <select id="filter-border-style" class="filter-bar-select">
+          <option value="">All</option>
+          <option value="1">Plain</option>
+          <option value="2">Stitch</option>
+          <option value="3">Zigzag / Perforated</option>
+          <option value="4">Irregular</option>
+        </select>
+      </div>
+      <div class="filter-bar-group">
+        <label class="filter-bar-label" for="filter-border-count">Border Count</label>
+        <select id="filter-border-count" class="filter-bar-select">
+          <option value="">All</option>
+          <option value="single">Single</option>
+          <option value="double">Double</option>
+          <option value="split">Split</option>
+        </select>
+      </div>
+      <div class="filter-bar-group">
+        <label class="filter-bar-label" for="filter-corners">Corners</label>
+        <select id="filter-corners" class="filter-bar-select">
+          <option value="">All</option>
+          <option value="straight">Straight</option>
+          <option value="round">Round</option>
+          <option value="mixed">Mixed</option>
+        </select>
+      </div>
+      <div class="filter-bar-group">
+        <label class="filter-bar-label" for="filter-fill">Fill</label>
+        <select id="filter-fill" class="filter-bar-select">
+          <option value="empty" selected>Outlined</option>
+          <option value="full">Filled</option>
+        </select>
+      </div>
 
       <button class="btn btn-small filter-bar-reset" id="filter-reset">Reset</button>
     </div>
@@ -307,8 +328,8 @@
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
   <script src="/js/router.js"></script>
-  <script src="/js/svg-renderer.js?v=178"></script>
-  <script src="/js/gallery.js?v=74"></script>
+  <script src="/js/svg-renderer.js?v=179"></script>
+  <script src="/js/gallery.js?v=78"></script>
   <script>
     // Inline restore check — runs BEFORE stamp-app.js, cannot be cached separately
     (function() {

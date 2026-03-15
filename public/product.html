@@ -9,7 +9,7 @@
   <meta property="og:description" content="Customize your stamp and download in high-res PNG or JPG. Choose fonts, colors, borders and more.">
   <meta property="og:image" content="/logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="/css/style.css?v=48">
+  <link rel="stylesheet" href="/css/style.css?v=51">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -226,7 +226,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=178"></script>
+  <script src="/js/svg-renderer.js?v=179"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -434,8 +434,13 @@
         return;
       }
 
-      // Back link preserves text
-      document.getElementById('product-back').href = '/?text=' + encodeURIComponent(userText);
+      // Back link: history.back() for instant restore, href as fallback for new-tab
+      var backLink = document.getElementById('product-back');
+      backLink.href = '/?text=' + encodeURIComponent(userText);
+      backLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        history.back();
+      });
 
       // ---- Fetch template ----
       var { data: tpl, error } = await sb
@@ -518,7 +523,7 @@
       }
 
       // If no color in URL, use first palette color
-      if (!currentColor || PALETTE_COLORS.indexOf(currentColor) === -1) {
+      if (!currentColor || !/^#[0-9A-Fa-f]{6}$/.test(currentColor)) {
         currentColor = '#000000';
       }
 
@@ -539,14 +544,7 @@
 
       // ---- Event listeners ----
 
-      // Font picker arrows
-      document.getElementById('font-arrow-up').addEventListener('click', function() { cycleFont(-1); });
-      document.getElementById('font-arrow-down').addEventListener('click', function() { cycleFont(1); });
-      // Keyboard: up/down arrows when font display is focused
-      document.getElementById('font-display').addEventListener('keydown', function(e) {
-        if (e.key === 'ArrowUp') { e.preventDefault(); cycleFont(-1); }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); cycleFont(1); }
-      });
+      // Font picker is self-contained (click handler in buildFontPicker)
 
       // Color palette: single-select
       document.getElementById('product-color-palette').addEventListener('click', function(e) {
@@ -659,45 +657,57 @@
 
       function buildFontPicker() {
         var picker = document.getElementById('product-font-picker');
-        var btnUp = document.createElement('div');
-        btnUp.className = 'font-picker-arrow';
-        btnUp.id = 'font-arrow-up';
-        btnUp.innerHTML = '&#9650;';
-        var display = document.createElement('div');
-        display.className = 'font-picker-display';
-        display.id = 'font-display';
-        display.tabIndex = 0;
-        var btnDown = document.createElement('div');
-        btnDown.className = 'font-picker-arrow';
-        btnDown.id = 'font-arrow-down';
-        btnDown.innerHTML = '&#9660;';
-        picker.appendChild(btnUp);
-        picker.appendChild(display);
-        picker.appendChild(btnDown);
-        updateFontDisplay();
+        picker.className = 'font-list';
+        renderFontList();
+        picker.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var item = e.target.closest('.font-list-item');
+          if (!item) return;
+          if (item.classList.contains('active')) {
+            // Toggle open/close
+            picker.classList.toggle('open');
+            return;
+          }
+          // Select new font: move to top, keep list open, re-render
+          currentFont = item.dataset.fontKey;
+          renderFontList();
+          renderPreview();
+        });
+        // Close on outside click
+        document.addEventListener('click', function() {
+          picker.classList.remove('open');
+        });
       }
 
-      function getFontIndex() {
+      function renderFontList() {
+        var picker = document.getElementById('product-font-picker');
+        var wasOpen = picker.classList.contains('open');
+        picker.innerHTML = '';
+        // Active font as the visible toggle
+        var activeFont = AVAILABLE_FONTS.find(function(f) { return f.key === currentFont; }) || AVAILABLE_FONTS[0];
+        var activeItem = document.createElement('div');
+        activeItem.className = 'font-list-item active';
+        activeItem.dataset.fontKey = activeFont.key;
+        activeItem.style.fontFamily = "'" + activeFont.key + "', 'Arial Black', sans-serif";
+        activeItem.style.fontWeight = FONT_WEIGHTS[activeFont.key] || '400';
+        activeItem.textContent = activeFont.label;
+        picker.appendChild(activeItem);
+        // Dropdown with remaining fonts
+        var dropdown = document.createElement('div');
+        dropdown.className = 'font-list-dropdown';
         for (var i = 0; i < AVAILABLE_FONTS.length; i++) {
-          if (AVAILABLE_FONTS[i].key === currentFont) return i;
+          var font = AVAILABLE_FONTS[i];
+          if (font.key === currentFont) continue;
+          var item = document.createElement('div');
+          item.className = 'font-list-item';
+          item.dataset.fontKey = font.key;
+          item.style.fontFamily = "'" + font.key + "', 'Arial Black', sans-serif";
+          item.style.fontWeight = FONT_WEIGHTS[font.key] || '400';
+          item.textContent = font.label;
+          dropdown.appendChild(item);
         }
-        return 0;
-      }
-
-      function updateFontDisplay() {
-        var idx = getFontIndex();
-        var font = AVAILABLE_FONTS[idx];
-        var display = document.getElementById('font-display');
-        display.textContent = font.label.toUpperCase();
-        display.style.fontFamily = "'" + font.key + "', 'Arial Black', sans-serif";
-      }
-
-      function cycleFont(dir) {
-        var idx = getFontIndex();
-        idx = (idx + dir + AVAILABLE_FONTS.length) % AVAILABLE_FONTS.length;
-        currentFont = AVAILABLE_FONTS[idx].key;
-        updateFontDisplay();
-        renderPreview();
+        picker.appendChild(dropdown);
+        if (wasOpen) picker.classList.add('open');
       }
 
       // ---- Texture picker (arrow-based, same pattern as font) ----
