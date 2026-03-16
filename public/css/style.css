@@ -949,23 +949,29 @@ a:hover {
 /* Zoom overlay — styles are in the second block below (line ~1160) */
 
 .stamp-card-actions {
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-top: 1px solid #f0f0f0;
   text-decoration: none;
   cursor: pointer;
 }
 
-.stamp-card-actions:hover {
-  background-color: #fef2f2;
+.stamp-card-cta {
+  display: inline-block;
+  width: 100%;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: #dc2626;
+  border-radius: 6px;
+  text-align: center;
+  transition: background-color 0.15s;
 }
 
-.stamp-card-cta {
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: #dc2626;
+.stamp-card-actions:hover .stamp-card-cta {
+  background-color: #b91c1c;
 }
 
 .btn-download-link {
