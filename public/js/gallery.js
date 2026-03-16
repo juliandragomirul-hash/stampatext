@@ -884,6 +884,7 @@ const Gallery = {
         var card = document.createElement('div');
         card.className = 'stamp-card';
         card.dataset.family = (self.BORDER_STYLE_FAMILIES[r.borderType || 'simple'] || { family: 1 }).family;
+        card.dataset.borderType = r.borderType || 'simple';
         card.dataset.frame = r.appliedFrame || 'single';
         card.dataset.corners = r.cornerType || 'straight';
         card.dataset.fill = r.fillType || 'full';
@@ -1220,6 +1221,7 @@ const Gallery = {
       });
       // Text → white
       svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[0-9A-Fa-f]{3,6}(["'])/, '$1$2#FFFFFF$3');
+      // Note: brush stamps are hidden when filled (handled in convertFillCards)
     } else if (targetFill === 'empty') {
       // Find stamp color from outer rect
       var rectColor = null;
@@ -1269,6 +1271,7 @@ const Gallery = {
         // Text white → stamp color
         svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{6}(["'])/, '$1$2' + rectColor + '$3');
         svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{3}(["'])/, '$1$2' + rectColor + '$3');
+        // Note: brush stamps are hidden when filled (handled in convertFillCards)
       }
     }
     return svgString;
@@ -1300,12 +1303,14 @@ const Gallery = {
       if (!preview) return;
       var oldWrapper = preview.querySelector('div');
       if (!oldWrapper) return;
+      // Hide brush border stamps when filled (too complex for client-side conversion)
+      if (card.dataset.borderType === 'brushstroke') {
+        card.style.display = (targetFill === 'full') ? 'none' : '';
+        return;
+      }
       var svgEl = oldWrapper.querySelector('svg');
       if (!svgEl) return;
-      var svgHtml = svgEl.outerHTML;
-      // Skip brush border stamps — brush <g> group obscures the filled rect
-      if (/data-brush-border/i.test(svgHtml)) return;
-      var converted = self.convertFill(svgHtml, targetFill);
+      var converted = self.convertFill(svgEl.outerHTML, targetFill);
       var newWrapper = SvgRenderer.createSvgImage(converted);
       preview.replaceChild(newWrapper, oldWrapper);
       // Update product URLs
@@ -1330,8 +1335,9 @@ const Gallery = {
     var visibleCount = 0;
     cards.forEach(function(card) {
       var show = true;
-      // Lined stamps not compatible with filled mode
+      // Lined and brush stamps not compatible with filled mode
       if (isFilled && card.dataset.shape === 'lined') show = false;
+      if (isFilled && card.dataset.borderType === 'brushstroke') show = false;
       if (shapeVal && card.dataset.shape !== shapeVal) show = false;
       if (familyVal && card.dataset.family !== familyVal) show = false;
       if (frameVal && card.dataset.frame !== frameVal) show = false;
