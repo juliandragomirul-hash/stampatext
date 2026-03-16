@@ -1027,9 +1027,6 @@ const Gallery = {
         await self.showInitialRandom();
         if (pill.parentNode) pill.parentNode.removeChild(pill);
       });
-      document.addEventListener('click', function() {
-        fontList.classList.remove('open');
-      });
     }
     var selects = ['filter-shape', 'filter-border-style', 'filter-border-count'];
     selects.forEach(function(id) {
@@ -1126,7 +1123,6 @@ const Gallery = {
               if (colorDot) colorDot.style.background = hex;
               self.recolorizeCards(hex);
             }
-            colorGrid.classList.remove('open');
           });
           colorGrid.appendChild(swatch);
         })(self.PALETTE_COLORS[ci]);
@@ -1141,12 +1137,25 @@ const Gallery = {
         });
       }
 
-      // Close grid when clicking outside
+    }
+
+    // Close all gallery dropdowns on outside click — swallow click if any was open
+    if (!this._outsideClickBound) {
+      this._outsideClickBound = true;
       document.addEventListener('click', function(e) {
-        if (!e.target.closest('.filter-bar-color-group')) {
-          colorGrid.classList.remove('open');
+        // Don't swallow clicks inside dropdown elements
+        if (e.target.closest('.filter-bar-color-group, .filter-bar-font-group, .filter-bar-swatch, .filter-bar-font-item')) return;
+        var colorGrid2 = document.getElementById('filter-bar-colors');
+        var fontList2 = document.getElementById('filter-font-list');
+        var anyOpen = (colorGrid2 && colorGrid2.classList.contains('open')) ||
+                      (fontList2 && fontList2.classList.contains('open'));
+        if (anyOpen) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (colorGrid2) colorGrid2.classList.remove('open');
+          if (fontList2) fontList2.classList.remove('open');
         }
-      });
+      }, true);
     }
   },
 

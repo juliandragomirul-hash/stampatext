@@ -808,12 +808,14 @@ a:hover {
   background: #fff;
   cursor: pointer;
   user-select: none;
+  font-size: 0.82rem;
+  min-height: 1.6em;
 }
 
 .filter-bar-color-dot {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border-radius: 3px;
   border: 1px solid #ccc;
   background: transparent;
