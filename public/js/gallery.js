@@ -833,7 +833,7 @@ const Gallery = {
     headerTitle.className = 'stamp-results-title';
     if (!this.isShowcase) {
       var timeLabel = isRestore ? 'Restored at' : 'Generated at';
-      var headerMsg = 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
+      var headerMsg = 'Click on the model you like and play with color, border count, font, tilt and texture.'
         + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
       headerTitle.innerHTML = headerMsg;
       headerSection.appendChild(headerTitle);
