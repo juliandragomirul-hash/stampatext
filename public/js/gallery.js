@@ -833,9 +833,7 @@ const Gallery = {
     headerTitle.className = 'stamp-results-title';
     if (!this.isShowcase) {
       var timeLabel = isRestore ? 'Restored at' : 'Generated at';
-      var headerMsg = 'Click on the model you like and play with color, border count, font, tilt and texture.'
-        + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
-      headerTitle.innerHTML = headerMsg;
+      headerTitle.innerHTML = '<span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
       headerSection.appendChild(headerTitle);
     }
     container.appendChild(headerSection);
@@ -852,7 +850,7 @@ const Gallery = {
       countEl.id = 'gallery-count';
       countEl.className = 'gallery-count';
     }
-    countEl.textContent = 'Available models = ' + totalCount;
+    countEl.innerHTML = 'Available models = ' + totalCount + ' <span style="color:#999;font-weight:400;">\u2014 Click on the model you like and play with color, border count, font, tilt and texture.</span>';
     var insertAfter = filterBar || headerSection;
     container.insertBefore(countEl, insertAfter.nextSibling);
 
@@ -1204,7 +1202,7 @@ const Gallery = {
 
     // Update live count under filter bar
     var countEl = document.getElementById('gallery-count');
-    if (countEl) countEl.textContent = 'Available models = ' + visibleCount;
+    if (countEl) countEl.innerHTML = 'Available models = ' + visibleCount + ' <span style="color:#999;font-weight:400;">\u2014 Click on the model you like and play with color, border count, font, tilt and texture.</span>';
 
     // Cascading filters: disable options that would produce 0 results
     var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
