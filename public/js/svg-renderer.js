@@ -3493,7 +3493,7 @@ const SvgRenderer = {
     var newH = vbW * sinA + vbH * cosA;
 
     // Add breathing room so rotated stamp isn't clipped at edges
-    var pad = Math.max(newW, newH) * 0.02;
+    var pad = Math.max(newW, newH) * 0.05;
     newW += pad * 2;
     newH += pad * 2;
 

@@ -9,7 +9,7 @@
   <meta property="og:description" content="Customize your stamp and download in high-res PNG or JPG. Choose fonts, colors, borders and more.">
   <meta property="og:image" content="/logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="/css/style.css?v=51">
+  <link rel="stylesheet" href="/css/style.css?v=57">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -53,81 +53,118 @@
   <section class="product-details">
     <a href="/" class="product-back" id="product-back">&larr; Back to gallery</a>
 
+    <div class="product-description" id="product-description">Loading...</div>
+
+    <!-- Customize bar (horizontal, gallery filter bar style) -->
+    <div class="product-customize-bar">
+      <div id="product-template-info" class="product-template-info" style="display:none;"></div>
+
+      <div class="filter-bar-group filter-bar-font-group">
+        <label class="filter-bar-label">Font</label>
+        <div class="filter-bar-font-box" id="product-font-toggle">
+          <span class="filter-bar-font-value" id="product-font-value"></span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-font-list" id="product-font-list"></div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-color-group">
+        <label class="filter-bar-label">Color</label>
+        <div class="filter-bar-color-box" id="product-color-toggle">
+          <span class="filter-bar-color-dot" id="product-color-dot"></span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-color-grid" id="product-color-grid"></div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Border Count</label>
+        <div class="filter-bar-dropdown-box" id="product-frame-toggle">
+          <span class="filter-bar-dropdown-value" id="product-frame-value">Single</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-frame-list">
+          <div class="filter-bar-dropdown-item active" data-value="single">Single</div>
+          <div class="filter-bar-dropdown-item" data-value="double">Double</div>
+          <div class="filter-bar-dropdown-item" data-value="split">Split</div>
+        </div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Style</label>
+        <div class="filter-bar-dropdown-box" id="product-fill-toggle">
+          <span class="filter-bar-dropdown-value" id="product-fill-value">Outlined</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-fill-list">
+          <div class="filter-bar-dropdown-item active" data-value="empty">Outlined</div>
+          <div class="filter-bar-dropdown-item" data-value="full">Filled</div>
+        </div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Texture</label>
+        <div class="filter-bar-dropdown-box" id="product-texture-toggle">
+          <span class="filter-bar-dropdown-value" id="product-texture-value">No texture</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-texture-list"></div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Tilt</label>
+        <div class="filter-bar-dropdown-box" id="product-tilt-toggle">
+          <span class="filter-bar-dropdown-value" id="product-tilt-value">Straight</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-tilt-list">
+          <div class="filter-bar-dropdown-item active" data-value="0">Straight</div>
+          <div class="filter-bar-dropdown-item" data-value="-20">20 degrees</div>
+        </div>
+      </div>
+
+      <!-- Shape is set from gallery URL, not togglable on product page -->
+      <input type="hidden" id="product-shape-value" value="rectangle">
+    </div>
+
     <div class="product-layout">
       <!-- Left: Large preview -->
       <div class="product-preview" id="product-preview">
         <div class="stamp-loading">Loading preview...</div>
       </div>
 
-      <!-- Right: Preferences sidebar -->
-      <div class="product-sidebar">
-        <h3 class="product-sidebar-title">Customize</h3>
-        <div id="product-template-info" class="product-template-info" style="display:none; margin-bottom:12px; font-size:0.82rem; color:#666; line-height:1.6;"></div>
-
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <span class="filter-section-title">FONT</span>
+      <!-- Right: Download options -->
+      <div class="product-download-panel">
+        <div class="product-download-section" id="product-download-section">
+          <div class="download-formats">
+            <div class="download-format-col">
+              <div class="filter-section-header">
+                <span class="filter-section-title">JPG (WHITE BACKGROUND)</span>
+              </div>
+              <div class="product-radio-group">
+                <label class="product-radio"><input type="radio" name="download-choice" value="jpg-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
+                <label class="product-radio"><input type="radio" name="download-choice" value="jpg-medium" checked><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
+                <label class="product-radio"><input type="radio" name="download-choice" value="jpg-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
+              </div>
+            </div>
+            <div class="download-format-col">
+              <div class="filter-section-header">
+                <span class="filter-section-title">TRANSPARENT PNG</span>
+              </div>
+              <div class="product-radio-group">
+                <label class="product-radio"><input type="radio" name="download-choice" value="png-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
+                <label class="product-radio"><input type="radio" name="download-choice" value="png-medium"><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
+                <label class="product-radio"><input type="radio" name="download-choice" value="png-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
+              </div>
+            </div>
           </div>
-          <div class="font-picker" id="product-font-picker"></div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <span class="filter-section-title">COLOR</span>
+          <div class="download-footer">
+            <button class="btn btn-primary product-download-btn" id="btn-download-confirm">Download</button>
+            <span class="inline-credits" id="inline-credits"></span>
           </div>
-          <div class="color-palette" id="product-color-palette"></div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <span class="filter-section-title">BORDER COUNT</span>
-          </div>
-          <div class="product-radio-group" id="product-frame-toggle">
-            <label class="product-radio"><input type="radio" name="frame" value="single" checked><span>Single</span></label>
-            <label class="product-radio"><input type="radio" name="frame" value="double"><span>Double</span></label>
-            <label class="product-radio"><input type="radio" name="frame" value="split"><span>Split</span></label>
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <span class="filter-section-title">STYLE</span>
-          </div>
-          <div class="product-radio-group" id="product-fill-toggle">
-            <label class="product-radio"><input type="radio" name="fill" value="empty" checked><span>Outlined</span></label>
-            <label class="product-radio"><input type="radio" name="fill" value="full"><span>Filled</span></label>
-          </div>
-        </div>
-
-        <!-- Shape is set from gallery URL, not togglable on product page -->
-        <div class="filter-section" id="product-shape-section" style="display:none">
-          <div class="product-radio-group" id="product-shape-toggle">
-            <label class="product-radio"><input type="radio" name="shape" value="rectangle" checked><span>Rectangle</span></label>
-            <label class="product-radio"><input type="radio" name="shape" value="lined"><span>Lined</span></label>
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <span class="filter-section-title">TILT</span>
-          </div>
-          <div class="product-radio-group" id="product-tilt-toggle">
-            <label class="product-radio"><input type="radio" name="tilt" value="0" checked><span>Straight</span></label>
-            <label class="product-radio"><input type="radio" name="tilt" value="-20"><span>20 degrees</span></label>
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <span class="filter-section-title">TEXTURE</span>
-          </div>
-          <div class="font-picker" id="product-texture-picker"></div>
         </div>
       </div>
     </div>
-
-    <!-- Description below image -->
-    <div class="product-description" id="product-description">Loading...</div>
 
     <!-- Auth Modal (Login / Sign Up) -->
     <div class="modal-overlay" id="auth-modal">
@@ -188,35 +225,7 @@
       </div>
     </div>
 
-    <!-- Inline download options -->
-    <div class="product-download-section" id="product-download-section">
-      <div class="download-formats">
-        <div class="download-format-col">
-          <div class="filter-section-header">
-            <span class="filter-section-title">JPG (WHITE BACKGROUND)</span>
-          </div>
-          <div class="product-radio-group">
-            <label class="product-radio"><input type="radio" name="download-choice" value="jpg-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
-            <label class="product-radio"><input type="radio" name="download-choice" value="jpg-medium" checked><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
-            <label class="product-radio"><input type="radio" name="download-choice" value="jpg-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
-          </div>
-        </div>
-        <div class="download-format-col">
-          <div class="filter-section-header">
-            <span class="filter-section-title">TRANSPARENT PNG</span>
-          </div>
-          <div class="product-radio-group">
-            <label class="product-radio"><input type="radio" name="download-choice" value="png-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
-            <label class="product-radio"><input type="radio" name="download-choice" value="png-medium"><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
-            <label class="product-radio"><input type="radio" name="download-choice" value="png-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
-          </div>
-        </div>
-      </div>
-      <div class="download-footer">
-        <button class="btn btn-primary product-download-btn" id="btn-download-confirm">Download</button>
-        <span class="inline-credits" id="inline-credits"></span>
-      </div>
-    </div>
+    <!-- Download section is now inside .product-layout grid -->
   </section>
 
   <!-- Scripts -->
@@ -226,7 +235,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=179"></script>
+  <script src="/js/svg-renderer.js?v=180"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -532,67 +541,126 @@
 
       // ---- Load font config & Build UI ----
       await SvgRenderer.loadFontConfig();
-      buildFontPicker();
-      buildColorPalette();
-      buildTexturePicker();
-      setToggleState('product-tilt-toggle', String(currentTilt));
-      setToggleState('product-frame-toggle', currentFrame);
-      setToggleState('product-fill-toggle', currentFill);
-      setToggleState('product-shape-toggle', currentShape);
+      buildFontSelect();
+      buildColorPicker();
+      buildTextureList();
+      setDropdownActive('product-frame-list', currentFrame, 'product-frame-value');
+      setDropdownActive('product-fill-list', currentFill, 'product-fill-value');
+      setDropdownActive('product-tilt-list', String(currentTilt), 'product-tilt-value');
+      document.getElementById('product-shape-value').value = currentShape;
       updateShapeConstraints();
       await renderPreview();
 
       // ---- Event listeners ----
 
-      // Font picker is self-contained (click handler in buildFontPicker)
+      // Font custom dropdown toggle
+      document.getElementById('product-font-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
+        document.getElementById('product-color-grid').style.display = 'none';
+        var list = document.getElementById('product-font-list');
+        list.style.display = list.style.display === 'flex' ? 'none' : 'flex';
+      });
+      document.getElementById('product-font-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-font-item');
+        if (!item) return;
+        this.querySelectorAll('.filter-bar-font-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentFont = item.dataset.fontKey;
+        var label = item.textContent;
+        var val = document.getElementById('product-font-value');
+        val.textContent = label;
+        val.style.fontFamily = "'" + currentFont + "', sans-serif";
+        val.style.fontWeight = FONT_WEIGHTS[currentFont] || '400';
+        renderPreview();
+      });
 
-      // Color palette: single-select
-      document.getElementById('product-color-palette').addEventListener('click', function(e) {
-        var swatch = e.target.closest('.color-swatch');
+      // Color picker (dot + grid)
+      document.getElementById('product-color-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
+        document.getElementById('product-font-list').style.display = 'none';
+        var grid = document.getElementById('product-color-grid');
+        grid.style.display = grid.style.display === 'flex' ? 'none' : 'flex';
+      });
+      document.getElementById('product-color-grid').addEventListener('click', function(e) {
+        var swatch = e.target.closest('.filter-bar-swatch');
         if (!swatch) return;
-        this.querySelectorAll('.color-swatch').forEach(function(s) {
-          s.classList.remove('selected');
-        });
-        swatch.classList.add('selected');
+        this.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
+        swatch.classList.add('active');
         currentColor = swatch.dataset.color;
+        document.getElementById('product-color-dot').style.background = currentColor;
+        renderPreview();
+      });
+      // Close all dropdowns on outside click
+      document.addEventListener('click', function() {
+        document.getElementById('product-color-grid').style.display = 'none';
+        document.getElementById('product-font-list').style.display = 'none';
+        document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
+      });
+
+      // Generic dropdown toggle for all custom dropdowns
+      document.querySelectorAll('.filter-bar-dropdown-box').forEach(function(box) {
+        box.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var list = this.parentElement.querySelector('.filter-bar-dropdown-list');
+          // Close other dropdowns first
+          document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) {
+            if (l !== list) l.style.display = 'none';
+          });
+          document.getElementById('product-font-list').style.display = 'none';
+          document.getElementById('product-color-grid').style.display = 'none';
+          list.style.display = list.style.display === 'flex' ? 'none' : 'flex';
+        });
+      });
+
+      // Frame (border count) dropdown
+      document.getElementById('product-frame-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-dropdown-item');
+        if (!item) return;
+        this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentFrame = item.dataset.value;
+        document.getElementById('product-frame-value').textContent = item.textContent;
         renderPreview();
       });
 
-      // Frame (border count) radio
-      document.getElementById('product-frame-toggle').addEventListener('change', function(e) {
-        if (e.target.type !== 'radio') return;
-        currentFrame = e.target.value;
+      // Fill (style) dropdown
+      document.getElementById('product-fill-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-dropdown-item');
+        if (!item) return;
+        this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentFill = item.dataset.value;
+        document.getElementById('product-fill-value').textContent = item.textContent;
         renderPreview();
       });
 
-      // Tilt radio
-      document.getElementById('product-tilt-toggle').addEventListener('change', function(e) {
-        if (e.target.type !== 'radio') return;
-        currentTilt = parseInt(e.target.value, 10) || 0;
+      // Texture dropdown
+      document.getElementById('product-texture-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-dropdown-item');
+        if (!item) return;
+        this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentTexture = item.dataset.value;
+        document.getElementById('product-texture-value').textContent = item.textContent;
         renderPreview();
       });
 
-      // Fill (style) radio
-      document.getElementById('product-fill-toggle').addEventListener('change', function(e) {
-        if (e.target.type !== 'radio') return;
-        currentFill = e.target.value;
+      // Tilt dropdown
+      document.getElementById('product-tilt-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-dropdown-item');
+        if (!item) return;
+        this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentTilt = parseInt(item.dataset.value, 10) || 0;
+        document.getElementById('product-tilt-value').textContent = item.textContent;
         renderPreview();
-      });
-
-      // Shape radio
-      document.getElementById('product-shape-toggle').addEventListener('change', function(e) {
-        if (e.target.type !== 'radio') return;
-        currentShape = e.target.value;
-        updateShapeConstraints();
-        renderPreview();
-      });
-
-      // Texture picker arrows
-      document.getElementById('texture-arrow-up').addEventListener('click', function() { cycleTexture(-1); });
-      document.getElementById('texture-arrow-down').addEventListener('click', function() { cycleTexture(1); });
-      document.getElementById('texture-display').addEventListener('keydown', function(e) {
-        if (e.key === 'ArrowUp') { e.preventDefault(); cycleTexture(-1); }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); cycleTexture(1); }
       });
 
       // Download confirm
@@ -655,142 +723,81 @@
         return (r * 0.299 + g * 0.587 + b * 0.114) < 150;
       }
 
-      function buildFontPicker() {
-        var picker = document.getElementById('product-font-picker');
-        picker.className = 'font-list';
-        renderFontList();
-        picker.addEventListener('click', function(e) {
-          e.stopPropagation();
-          var item = e.target.closest('.font-list-item');
-          if (!item) return;
-          if (item.classList.contains('active')) {
-            // Toggle open/close
-            picker.classList.toggle('open');
-            return;
-          }
-          // Select new font: move to top, keep list open, re-render
-          currentFont = item.dataset.fontKey;
-          renderFontList();
-          renderPreview();
-        });
-        // Close on outside click
-        document.addEventListener('click', function() {
-          picker.classList.remove('open');
-        });
-      }
-
-      function renderFontList() {
-        var picker = document.getElementById('product-font-picker');
-        var wasOpen = picker.classList.contains('open');
-        picker.innerHTML = '';
-        // Active font as the visible toggle
+      function buildFontSelect() {
+        var list = document.getElementById('product-font-list');
+        var val = document.getElementById('product-font-value');
         var activeFont = AVAILABLE_FONTS.find(function(f) { return f.key === currentFont; }) || AVAILABLE_FONTS[0];
-        var activeItem = document.createElement('div');
-        activeItem.className = 'font-list-item active';
-        activeItem.dataset.fontKey = activeFont.key;
-        activeItem.style.fontFamily = "'" + activeFont.key + "', 'Arial Black', sans-serif";
-        activeItem.style.fontWeight = FONT_WEIGHTS[activeFont.key] || '400';
-        activeItem.textContent = activeFont.label;
-        picker.appendChild(activeItem);
-        // Dropdown with remaining fonts
-        var dropdown = document.createElement('div');
-        dropdown.className = 'font-list-dropdown';
+        val.textContent = activeFont.label;
+        val.style.fontFamily = "'" + activeFont.key + "', sans-serif";
+        val.style.fontWeight = FONT_WEIGHTS[activeFont.key] || '400';
         for (var i = 0; i < AVAILABLE_FONTS.length; i++) {
-          var font = AVAILABLE_FONTS[i];
-          if (font.key === currentFont) continue;
           var item = document.createElement('div');
-          item.className = 'font-list-item';
-          item.dataset.fontKey = font.key;
-          item.style.fontFamily = "'" + font.key + "', 'Arial Black', sans-serif";
-          item.style.fontWeight = FONT_WEIGHTS[font.key] || '400';
-          item.textContent = font.label;
-          dropdown.appendChild(item);
+          item.className = 'filter-bar-font-item';
+          if (AVAILABLE_FONTS[i].key === currentFont) item.classList.add('active');
+          item.dataset.fontKey = AVAILABLE_FONTS[i].key;
+          item.textContent = AVAILABLE_FONTS[i].label;
+          item.style.fontFamily = "'" + AVAILABLE_FONTS[i].key + "', sans-serif";
+          item.style.fontWeight = FONT_WEIGHTS[AVAILABLE_FONTS[i].key] || '400';
+          list.appendChild(item);
         }
-        picker.appendChild(dropdown);
-        if (wasOpen) picker.classList.add('open');
       }
 
-      // ---- Texture picker (arrow-based, same pattern as font) ----
-      function buildTexturePicker() {
-        var picker = document.getElementById('product-texture-picker');
-        var btnUp = document.createElement('div');
-        btnUp.className = 'font-picker-arrow';
-        btnUp.id = 'texture-arrow-up';
-        btnUp.innerHTML = '&#9650;';
-        var display = document.createElement('div');
-        display.className = 'font-picker-display';
-        display.id = 'texture-display';
-        display.tabIndex = 0;
-        var btnDown = document.createElement('div');
-        btnDown.className = 'font-picker-arrow';
-        btnDown.id = 'texture-arrow-down';
-        btnDown.innerHTML = '&#9660;';
-        picker.appendChild(btnUp);
-        picker.appendChild(display);
-        picker.appendChild(btnDown);
-        updateTextureDisplay();
-      }
-
-      function getTextureIndex() {
+      function buildTextureList() {
+        var list = document.getElementById('product-texture-list');
         for (var i = 0; i < TEXTURE_OPTIONS.length; i++) {
-          if (TEXTURE_OPTIONS[i].key === currentTexture) return i;
+          var item = document.createElement('div');
+          item.className = 'filter-bar-dropdown-item';
+          item.dataset.value = TEXTURE_OPTIONS[i].key;
+          item.textContent = TEXTURE_OPTIONS[i].label;
+          if (TEXTURE_OPTIONS[i].key === currentTexture) {
+            item.classList.add('active');
+            document.getElementById('product-texture-value').textContent = TEXTURE_OPTIONS[i].label;
+          }
+          list.appendChild(item);
         }
-        return 0;
       }
 
-      function updateTextureDisplay() {
-        var idx = getTextureIndex();
-        var display = document.getElementById('texture-display');
-        display.textContent = TEXTURE_OPTIONS[idx].label;
+      function setDropdownActive(listId, value, valueId) {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        list.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
+          if (item.dataset.value === value) {
+            item.classList.add('active');
+            document.getElementById(valueId).textContent = item.textContent;
+          } else {
+            item.classList.remove('active');
+          }
+        });
       }
 
-      function cycleTexture(dir) {
-        var idx = getTextureIndex();
-        idx = (idx + dir + TEXTURE_OPTIONS.length) % TEXTURE_OPTIONS.length;
-        currentTexture = TEXTURE_OPTIONS[idx].key;
-        updateTextureDisplay();
-        renderPreview();
-      }
-
-      function buildColorPalette() {
-        var palette = document.getElementById('product-color-palette');
+      function buildColorPicker() {
+        var dot = document.getElementById('product-color-dot');
+        dot.style.background = currentColor;
+        var grid = document.getElementById('product-color-grid');
         PALETTE_COLORS.forEach(function(color) {
           var swatch = document.createElement('div');
-          swatch.className = 'color-swatch';
-          if (isColorDark(color)) swatch.classList.add('swatch-dark');
+          swatch.className = 'filter-bar-swatch';
           swatch.style.backgroundColor = color;
           swatch.dataset.color = color;
-          if (color === '#FFFFFF') {
-            swatch.style.border = '2px solid #d4d4d4';
-          }
           if (color.toUpperCase() === currentColor.toUpperCase()) {
-            swatch.classList.add('selected');
+            swatch.classList.add('active');
           }
-          palette.appendChild(swatch);
+          grid.appendChild(swatch);
         });
       }
 
-      function setToggleState(containerId, value) {
-        var container = document.getElementById(containerId);
-        if (!container) return;
-        container.querySelectorAll('input[type="radio"]').forEach(function(radio) {
-          radio.checked = (radio.value === value);
-        });
-      }
-
-      // When shape is "lined": force fill to empty (no enclosed area), disable fill toggle
+      // When shape is "lined": force fill to empty, disable fill dropdown
       function updateShapeConstraints() {
-        var fillSection = document.getElementById('product-fill-toggle');
-        if (!fillSection) return;
+        var fillGroup = document.getElementById('product-fill-toggle');
+        if (!fillGroup) return;
         if (currentShape === 'lined') {
-          // Force empty fill — lined has no enclosed area
           if (currentFill !== 'empty') {
             currentFill = 'empty';
-            setToggleState('product-fill-toggle', 'empty');
+            setDropdownActive('product-fill-list', 'empty', 'product-fill-value');
           }
-          fillSection.classList.add('filter-disabled');
+          fillGroup.closest('.filter-bar-group').classList.add('filter-disabled');
         } else {
-          fillSection.classList.remove('filter-disabled');
+          fillGroup.closest('.filter-bar-group').classList.remove('filter-disabled');
         }
       }
 

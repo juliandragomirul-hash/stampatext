@@ -248,13 +248,12 @@ const Gallery = {
         var cleanedSvg = SvgRenderer.cleanSvgString(paired[i].svg);
         cleanedSvg = SvgRenderer.uniquifySvgIds(cleanedSvg);
 
-        // Cycle font for testing: swap font-family + font-weight before autoFit
-        var cycleFont = FONT_CYCLE[fontCycleIdx % FONT_CYCLE.length];
+        // Default gallery font: Oswald for all models
+        var cycleFont = { key: 'Oswald', weight: '500' };
         cleanedSvg = cleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + cycleFont.key + "'\"");
         cleanedSvg = cleanedSvg.replace(/font-weight=["'][^"']*["']/g,
           'font-weight="' + cycleFont.weight + '"');
-        fontCycleIdx++;
 
         // Detect text case from original SVG
         var displayText = userText;
@@ -832,16 +831,13 @@ const Gallery = {
     headerSection.className = 'stamp-batch-section';
     var headerTitle = document.createElement('div');
     headerTitle.className = 'stamp-results-title';
-    var headerMsg;
-    if (this.isShowcase) {
-      headerMsg = 'Explore our <strong>' + totalCount + '</strong> stamp models. Type your text above to get started!';
-    } else {
+    if (!this.isShowcase) {
       var timeLabel = isRestore ? 'Restored at' : 'Generated at';
-      headerMsg = 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
+      var headerMsg = 'Showing <strong>' + totalCount + '</strong> models for <strong>\u201C' + this.escapeHtml(userText) + '\u201D</strong> with random fonts and colors.<br>Click on the model you like and play with color, border count, font, tilt and texture.'
         + '<br><span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
+      headerTitle.innerHTML = headerMsg;
+      headerSection.appendChild(headerTitle);
     }
-    headerTitle.innerHTML = headerMsg;
-    headerSection.appendChild(headerTitle);
     container.appendChild(headerSection);
 
     // Move filter bar into position right after the header
@@ -849,6 +845,16 @@ const Gallery = {
     if (filterBar) {
       container.insertBefore(filterBar, headerSection.nextSibling);
     }
+    // Live model count under filter bar
+    var countEl = document.getElementById('gallery-count');
+    if (!countEl) {
+      countEl = document.createElement('div');
+      countEl.id = 'gallery-count';
+      countEl.className = 'gallery-count';
+    }
+    countEl.textContent = 'Available models = ' + totalCount;
+    var insertAfter = filterBar || headerSection;
+    container.insertBefore(countEl, insertAfter.nextSibling);
 
     // Render each group: R (Rectangle) then L (Lined)
     var familyIds = Object.keys(familyGroups).sort(function(a, b) {
@@ -860,12 +866,9 @@ const Gallery = {
       var section = document.createElement('div');
       section.className = 'stamp-batch-section';
       section.dataset.family = group.numericFamily || 1;
+      section.dataset.shapeGroup = familyIds[i] === 'L' ? 'lined' : 'rectangle';
 
-      // Family header
-      var familyHeader = document.createElement('div');
-      familyHeader.className = 'stamp-family-header';
-      familyHeader.textContent = group.name;
-      section.appendChild(familyHeader);
+      // Group headers removed — live count under filter bar is sufficient
 
       // Grid
       var grid = document.createElement('div');
@@ -987,7 +990,7 @@ const Gallery = {
    */
   initFilterBar() {
     var self = this;
-    var selects = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners'];
+    var selects = ['filter-shape', 'filter-border-style', 'filter-border-count'];
     selects.forEach(function(id) {
       var el = document.getElementById(id);
       if (el && !el.dataset.bound) {
@@ -1185,7 +1188,6 @@ const Gallery = {
     var shapeVal = document.getElementById('filter-shape') ? document.getElementById('filter-shape').value : '';
     var familyVal = document.getElementById('filter-border-style').value;
     var frameVal = document.getElementById('filter-border-count').value;
-    var cornersVal = document.getElementById('filter-corners').value;
     var cards = document.querySelectorAll('#results-batches .stamp-card');
     var visibleCount = 0;
     cards.forEach(function(card) {
@@ -1193,13 +1195,6 @@ const Gallery = {
       if (shapeVal && card.dataset.shape !== shapeVal) show = false;
       if (familyVal && card.dataset.family !== familyVal) show = false;
       if (frameVal && card.dataset.frame !== frameVal) show = false;
-      if (cornersVal) {
-        if (cornersVal === 'round') {
-          if (!card.dataset.corners || card.dataset.corners === 'straight' || card.dataset.corners.indexOf('mixed') === 0) show = false;
-        } else if (cornersVal === 'mixed') {
-          if (!card.dataset.corners || card.dataset.corners.indexOf('mixed') !== 0) show = false;
-        } else if (card.dataset.corners !== cornersVal) show = false;
-      }
       card.style.display = show ? '' : 'none';
       if (show) visibleCount++;
     });
@@ -1215,10 +1210,14 @@ const Gallery = {
     var titleEl = document.querySelector('#results-batches .stamp-results-title strong');
     if (titleEl) titleEl.textContent = visibleCount;
 
+    // Update live count under filter bar
+    var countEl = document.getElementById('gallery-count');
+    if (countEl) countEl.textContent = 'Available models = ' + visibleCount;
+
     // Cascading filters: disable options that would produce 0 results
     var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
-    var filterIds = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-corners'];
-    var dataKeys = ['shape', 'family', 'frame', 'corners'];
+    var filterIds = ['filter-shape', 'filter-border-style', 'filter-border-count'];
+    var dataKeys = ['shape', 'family', 'frame'];
 
     for (var fi = 0; fi < filterIds.length; fi++) {
       var sel = document.getElementById(filterIds[fi]);
@@ -1233,18 +1232,11 @@ const Gallery = {
           var ov = document.getElementById(filterIds[oi]).value;
           if (!ov) continue;
           var dk = dataKeys[oi];
-          if (dk === 'corners' && ov === 'round') {
-            if (!c.dataset.corners || c.dataset.corners === 'straight' || c.dataset.corners.indexOf('mixed') === 0) { ok = false; break; }
-          } else if (dk === 'corners' && ov === 'mixed') {
-            if (!c.dataset.corners || c.dataset.corners.indexOf('mixed') !== 0) { ok = false; break; }
-          } else if (c.dataset[dk] !== ov) { ok = false; break; }
+          if (c.dataset[dk] !== ov) { ok = false; break; }
         }
         if (ok) {
           var val = c.dataset[key] || '';
           available[val] = true;
-          // For corners: mark group options available when any member exists
-          if (key === 'corners' && val.indexOf('_round') !== -1) available['round'] = true;
-          if (key === 'corners' && val.indexOf('mixed') === 0) available['mixed'] = true;
         }
       });
       // Enable/disable options
