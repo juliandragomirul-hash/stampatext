@@ -9,10 +9,10 @@
   <meta property="og:description" content="Create custom text stamps instantly. Dozens of styles, fonts and colors. Download in high-res PNG or JPG.">
   <meta property="og:image" content="/logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="/css/style.css?v=65">
+  <link rel="stylesheet" href="/css/style.css?v=69">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Courier+Prime&family=Montserrat:wght@700&family=Yomogi&family=Black+Ops+One&family=Nunito:wght@900&family=Exo+2:wght@700&family=Bitter:wght@500&family=Comfortaa:wght@700&family=Fuzzy+Bubbles:wght@700&family=Bebas+Neue&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -53,6 +53,15 @@
   <section class="stamp-results" id="stamp-results" style="display:none;">
     <!-- Filter Bar (inside results, right above the batches) -->
     <div class="stamp-filter-bar" id="stamp-filter-bar" style="display:none;">
+      <div class="filter-bar-group">
+        <label class="filter-bar-label" for="filter-shape">Shape</label>
+        <select id="filter-shape" class="filter-bar-select">
+          <option value="">All</option>
+          <option value="rectangle">Rectangle</option>
+          <option value="lined">Lined</option>
+          <option value="circle" disabled>Circle (soon)</option>
+        </select>
+      </div>
       <div class="filter-bar-group filter-bar-color-group">
         <label class="filter-bar-label">Color</label>
         <div class="filter-bar-color-box" id="filter-color-toggle">
@@ -62,13 +71,31 @@
         <div class="filter-bar-color-grid" id="filter-bar-colors"></div>
       </div>
       <div class="filter-bar-group">
-        <label class="filter-bar-label" for="filter-shape">Shape</label>
-        <select id="filter-shape" class="filter-bar-select">
-          <option value="">All</option>
-          <option value="rectangle">Rectangle</option>
-          <option value="lined">Lined</option>
-          <option value="circle" disabled>Circle (soon)</option>
+        <label class="filter-bar-label" for="filter-fill">Fill</label>
+        <select id="filter-fill" class="filter-bar-select">
+          <option value="empty" selected>Outlined</option>
+          <option value="full">Filled</option>
         </select>
+      </div>
+      <div class="filter-bar-group filter-bar-font-group">
+        <label class="filter-bar-label">Font</label>
+        <div class="filter-bar-font-trigger" id="filter-font-trigger">
+          <span id="filter-font-label" style="font-family:'Oswald',sans-serif;">Oswald</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-font-list" id="filter-font-list">
+          <div class="filter-bar-font-item active" data-font="Oswald" style="font-family:'Oswald',sans-serif;">Oswald</div>
+          <div class="filter-bar-font-item" data-font="CourierPrime" style="font-family:'Courier Prime',monospace;">Courier Prime</div>
+          <div class="filter-bar-font-item" data-font="Montserrat" style="font-family:'Montserrat',sans-serif;">Montserrat</div>
+          <div class="filter-bar-font-item" data-font="Yomogi" style="font-family:'Yomogi',cursive;">Yomogi</div>
+          <div class="filter-bar-font-item" data-font="BlackOpsOne" style="font-family:'Black Ops One',cursive;">Black Ops One</div>
+          <div class="filter-bar-font-item" data-font="Nunito" style="font-family:'Nunito',sans-serif;">Nunito</div>
+          <div class="filter-bar-font-item" data-font="Exo2" style="font-family:'Exo 2',sans-serif;">Exo 2</div>
+          <div class="filter-bar-font-item" data-font="Bitter" style="font-family:'Bitter',serif;">Bitter</div>
+          <div class="filter-bar-font-item" data-font="Comfortaa" style="font-family:'Comfortaa',cursive;">Comfortaa</div>
+          <div class="filter-bar-font-item" data-font="FuzzyBubbles" style="font-family:'Fuzzy Bubbles',cursive;">Fuzzy Bubbles</div>
+          <div class="filter-bar-font-item" data-font="BebasNeue" style="font-family:'Bebas Neue',sans-serif;">Bebas Neue</div>
+        </div>
       </div>
       <div class="filter-bar-group">
         <label class="filter-bar-label" for="filter-border-style">Border Style</label>
@@ -87,13 +114,6 @@
           <option value="single">Single</option>
           <option value="double">Double</option>
           <option value="split">Split</option>
-        </select>
-      </div>
-      <div class="filter-bar-group">
-        <label class="filter-bar-label" for="filter-fill">Fill</label>
-        <select id="filter-fill" class="filter-bar-select">
-          <option value="empty" selected>Outlined</option>
-          <option value="full">Filled</option>
         </select>
       </div>
 
@@ -320,7 +340,7 @@
   <script src="/js/buy-credits.js"></script>
   <script src="/js/router.js"></script>
   <script src="/js/svg-renderer.js?v=180"></script>
-  <script src="/js/gallery.js?v=89"></script>
+  <script src="/js/gallery.js?v=98"></script>
   <script>
     // Inline restore check — runs BEFORE stamp-app.js, cannot be cached separately
     (function() {

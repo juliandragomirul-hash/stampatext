@@ -24,6 +24,7 @@ const Gallery = {
   isFirstShowMore: true,
   isShowcase: false,
   selectedColor: null,
+  selectedFont: 'Oswald',
   currentFill: 'empty',
 
   // Palette colors (same as stamp-app.js)
@@ -248,8 +249,15 @@ const Gallery = {
         var cleanedSvg = SvgRenderer.cleanSvgString(paired[i].svg);
         cleanedSvg = SvgRenderer.uniquifySvgIds(cleanedSvg);
 
-        // Default gallery font: Oswald for all models
-        var cycleFont = { key: 'Oswald', weight: '500' };
+        // Gallery font: use selected font from filter bar
+        var fontKey = this.selectedFont || 'Oswald';
+        var fontWeights = {
+          'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700',
+          'Yomogi': '400', 'BlackOpsOne': '400', 'Nunito': '900',
+          'Exo2': '700', 'Bitter': '500', 'Comfortaa': '700',
+          'FuzzyBubbles': '700', 'BebasNeue': '400'
+        };
+        var cycleFont = { key: fontKey, weight: fontWeights[fontKey] || '500' };
         cleanedSvg = cleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + cycleFont.key + "'\"");
         cleanedSvg = cleanedSvg.replace(/font-weight=["'][^"']*["']/g,
@@ -980,6 +988,48 @@ const Gallery = {
    */
   initFilterBar() {
     var self = this;
+    // Font custom dropdown: re-process all templates with new font
+    var fontTrigger = document.getElementById('filter-font-trigger');
+    var fontList = document.getElementById('filter-font-list');
+    var fontLabel = document.getElementById('filter-font-label');
+    if (fontTrigger && !fontTrigger.dataset.bound) {
+      fontTrigger.dataset.bound = '1';
+      fontTrigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var colorGrid = document.getElementById('filter-bar-colors');
+        if (colorGrid) colorGrid.classList.remove('open');
+        fontList.classList.toggle('open');
+      });
+      fontList.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-font-item');
+        if (!item) return;
+        var fontKey = item.dataset.font;
+        if (fontKey === self.selectedFont) {
+          fontList.classList.remove('open');
+          return;
+        }
+        fontList.querySelectorAll('.filter-bar-font-item').forEach(function(f) { f.classList.remove('active'); });
+        item.classList.add('active');
+        fontList.insertBefore(item, fontList.firstChild);
+        fontLabel.textContent = item.textContent;
+        fontLabel.style.fontFamily = item.style.fontFamily;
+        self.selectedFont = fontKey;
+        fontList.classList.remove('open');
+        var countEl = document.getElementById('gallery-count');
+        var modelCount = countEl ? (countEl.textContent.match(/\d+/) || [30])[0] : 30;
+        var pill = document.createElement('div');
+        pill.className = 'stamp-font-loading';
+        pill.textContent = 'Loading ' + item.textContent + ' for ' + modelCount + ' models...';
+        document.body.appendChild(pill);
+        await self.processAll(self.currentText || 'Your text here');
+        await self.showInitialRandom();
+        if (pill.parentNode) pill.parentNode.removeChild(pill);
+      });
+      document.addEventListener('click', function() {
+        fontList.classList.remove('open');
+      });
+    }
     var selects = ['filter-shape', 'filter-border-style', 'filter-border-count'];
     selects.forEach(function(id) {
       var el = document.getElementById(id);
@@ -988,12 +1038,23 @@ const Gallery = {
         el.addEventListener('change', function() { self.applyFilterBar(); });
       }
     });
-    // Fill dropdown: convert SVGs on the fly (not a show/hide filter)
+    // Fill dropdown: convert SVGs on the fly with loading pill
     var fillSelect = document.getElementById('filter-fill');
     if (fillSelect && !fillSelect.dataset.bound) {
       fillSelect.dataset.bound = '1';
       fillSelect.addEventListener('change', function() {
-        self.convertFillCards(fillSelect.value || 'empty');
+        var targetFill = fillSelect.value || 'empty';
+        var fillLabel2 = targetFill === 'full' ? 'Filled' : 'Outlined';
+        var countEl2 = document.getElementById('gallery-count');
+        var modelCount = countEl2 ? (countEl2.textContent.match(/\d+/) || [30])[0] : 30;
+        var pill = document.createElement('div');
+        pill.className = 'stamp-font-loading';
+        pill.textContent = 'Switching to ' + fillLabel2 + ' for ' + modelCount + ' models...';
+        document.body.appendChild(pill);
+        setTimeout(function() {
+          self.convertFillCards(targetFill);
+          if (pill.parentNode) pill.parentNode.removeChild(pill);
+        }, 50);
       });
     }
     var resetBtn = document.getElementById('filter-reset');
@@ -1004,6 +1065,25 @@ const Gallery = {
           var el = document.getElementById(id);
           if (el) el.value = '';
         });
+        // Reset font to Oswald
+        if (fontLabel) {
+          fontLabel.textContent = 'Oswald';
+          fontLabel.style.fontFamily = "'Oswald', sans-serif";
+        }
+        if (fontList) {
+          fontList.querySelectorAll('.filter-bar-font-item').forEach(function(f) { f.classList.remove('active'); });
+          var oswaldItem = fontList.querySelector('[data-font="Oswald"]');
+          if (oswaldItem) {
+            oswaldItem.classList.add('active');
+            fontList.insertBefore(oswaldItem, fontList.firstChild);
+          }
+        }
+        if (self.selectedFont !== 'Oswald') {
+          self.selectedFont = 'Oswald';
+          self.processAll(self.currentText || 'Your text here').then(function() {
+            self.showInitialRandom();
+          });
+        }
         // Reset color selection
         self.selectedColor = null;
         document.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
@@ -1110,34 +1190,84 @@ const Gallery = {
    * Convert SVG fill between outlined and filled.
    */
   convertFill(svgString, targetFill) {
+    var outerRectPattern = /data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width|\bstroke="/;
     if (targetFill === 'full') {
       var textM = svgString.match(/<text[^>]*\bfill=["']#([0-9A-Fa-f]{3,6})["']/);
       var fillColor = textM ? '#' + textM[1] : '#BE1E2D';
-      svgString = svgString.replace(
-        /(<rect[^>]*)(fill=["'])none(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/,
-        '$1$2' + fillColor + '$3$4'
-      );
-      svgString = svgString.replace(
-        /(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])none(["'])/,
-        '$1$2' + fillColor + '$3'
-      );
-      svgString = svgString.replace(
-        /(<text[^>]*)(fill=["'])#[0-9A-Fa-f]{3,6}(["'])/,
-        '$1$2#FFFFFF$3'
-      );
+      // Replace fill="none" on all rects with border-related attrs
+      svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
+        if (!outerRectPattern.test(attrs)) return match;
+        if (!/fill=["']none["']/i.test(attrs)) return match;
+        return '<rect' + attrs.replace(/fill=["']none["']/i, 'fill="' + fillColor + '"') + '>';
+      });
+      // Handle <path> (mixed corners)
+      svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
+        if (!/data-mixed-type/i.test(attrs)) return match;
+        if (!/fill=["']none["']/i.test(attrs)) return match;
+        return '<path' + attrs.replace(/fill=["']none["']/i, 'fill="' + fillColor + '"') + '>';
+      });
+      // Inner frame elements: change colored stroke to white for contrast on filled background
+      svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
+        if (!/fill=["']none["']/i.test(attrs)) return match;
+        if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
+        return '<rect' + attrs.replace(/(\bstroke=["'])#[0-9A-Fa-f]{3,6}(["'])/i, '$1#FFFFFF$2') + '>';
+      });
+      // Inner frame paths (lined inner frames)
+      svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
+        if (!/fill=["']none["']/i.test(attrs)) return match;
+        if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
+        if (/data-mixed-type/i.test(attrs)) return match;
+        return '<path' + attrs.replace(/(\bstroke=["'])#[0-9A-Fa-f]{3,6}(["'])/i, '$1#FFFFFF$2') + '>';
+      });
+      // Text → white
+      svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[0-9A-Fa-f]{3,6}(["'])/, '$1$2#FFFFFF$3');
     } else if (targetFill === 'empty') {
-      var rectM = svgString.match(/<rect[^>]*\bfill=["']#([0-9A-Fa-f]{6})["'][^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)/);
-      if (!rectM) rectM = svgString.match(/<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*\bfill=["']#([0-9A-Fa-f]{6})["']/);
-      if (rectM) {
-        var rectColor = '#' + rectM[1];
-        svgString = svgString.replace(
-          /(<rect[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/,
-          '$1$2none$3$4'
-        );
-        svgString = svgString.replace(
-          /(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])/,
-          '$1$2none$3'
-        );
+      // Find stamp color from outer rect
+      var rectColor = null;
+      svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
+        if (rectColor) return match;
+        if (!outerRectPattern.test(attrs)) return match;
+        var fm = attrs.match(/fill=["']#([0-9A-Fa-f]{6})["']/i);
+        if (fm && fm[1].toLowerCase() !== 'ffffff') rectColor = '#' + fm[1];
+        return match;
+      });
+      if (!rectColor) {
+        svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
+          if (rectColor) return match;
+          if (!/data-mixed-type/i.test(attrs)) return match;
+          var fm = attrs.match(/fill=["']#([0-9A-Fa-f]{6})["']/i);
+          if (fm && fm[1].toLowerCase() !== 'ffffff') rectColor = '#' + fm[1];
+          return match;
+        });
+      }
+      if (rectColor) {
+        // Rect fill → none
+        svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
+          if (!outerRectPattern.test(attrs)) return match;
+          if (/fill=["']none["']/i.test(attrs)) return match;
+          var fm = attrs.match(/fill=["']#([0-9A-Fa-f]{6})["']/i);
+          if (!fm || fm[1].toLowerCase() === 'ffffff') return match;
+          return '<rect' + attrs.replace(/fill=["']#[0-9A-Fa-f]{6}["']/i, 'fill="none"') + '>';
+        });
+        // Path fill → none (mixed corners)
+        svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
+          if (!/data-mixed-type/i.test(attrs)) return match;
+          if (/fill=["']none["']/i.test(attrs)) return match;
+          return '<path' + attrs.replace(/fill=["']#[0-9A-Fa-f]{6}["']/i, 'fill="none"') + '>';
+        });
+        // Inner frame elements: change white stroke back to stamp color
+        svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
+          if (!/fill=["']none["']/i.test(attrs)) return match;
+          if (!/\bstroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(attrs)) return match;
+          return '<rect' + attrs.replace(/(\bstroke=["'])#(?:FFF(?:FFF)?|FFFFFF)(["'])/i, '$1' + rectColor + '$2') + '>';
+        });
+        svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
+          if (!/fill=["']none["']/i.test(attrs)) return match;
+          if (!/\bstroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(attrs)) return match;
+          if (/data-mixed-type/i.test(attrs)) return match;
+          return '<path' + attrs.replace(/(\bstroke=["'])#(?:FFF(?:FFF)?|FFFFFF)(["'])/i, '$1' + rectColor + '$2') + '>';
+        });
+        // Text white → stamp color
         svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{6}(["'])/, '$1$2' + rectColor + '$3');
         svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{3}(["'])/, '$1$2' + rectColor + '$3');
       }
