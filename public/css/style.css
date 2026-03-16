@@ -732,9 +732,9 @@ a:hover {
 
 /* ========== STAMP RESULTS ========== */
 .stamp-results {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 0.5rem;
 }
 
 .gallery-count {
@@ -744,10 +744,7 @@ a:hover {
   font-size: 1.1rem;
   font-weight: 500;
   color: #555;
-  position: sticky;
-  top: 110px;
-  z-index: 14;
-  background: #fff;
+  text-align: center;
 }
 
 .stamp-filter-bar {
@@ -756,6 +753,7 @@ a:hover {
   padding: 0.4rem 2rem;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   gap: 0.75rem;
   flex-wrap: wrap;
   background: #f8f8f8;
@@ -964,9 +962,9 @@ a:hover {
 
 .stamp-results-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .stamp-results-actions {
@@ -977,21 +975,10 @@ a:hover {
 }
 
 .stamp-card {
-  background-color: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
   overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.stamp-card:hover {
-  border-color: #ccc;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .stamp-card-preview {
-  padding: 0.75rem;
-  background-color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1011,12 +998,7 @@ a:hover {
 /* Zoom overlay — styles are in the second block below (line ~1160) */
 
 .stamp-card-actions {
-  padding: 0.6rem 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  cursor: pointer;
+  display: none;
 }
 
 .stamp-card-cta {
@@ -1233,7 +1215,7 @@ a:hover {
   }
 
   .stamp-results-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

@@ -837,13 +837,6 @@ const Gallery = {
     // Overall header
     var headerSection = document.createElement('div');
     headerSection.className = 'stamp-batch-section';
-    var headerTitle = document.createElement('div');
-    headerTitle.className = 'stamp-results-title';
-    if (!this.isShowcase) {
-      var timeLabel = isRestore ? 'Restored at' : 'Generated at';
-      headerTitle.innerHTML = '<span class="stamp-results-timestamp">' + timeLabel + ' ' + this.formatTime() + '</span>';
-      headerSection.appendChild(headerTitle);
-    }
     container.appendChild(headerSection);
 
     // Move filter bar into position right after the header
@@ -858,9 +851,10 @@ const Gallery = {
       countEl.id = 'gallery-count';
       countEl.className = 'gallery-count';
     }
-    countEl.innerHTML = 'Available models = ' + totalCount + ' <span style="color:#999;font-weight:400;">\u2014 Click on the model you like and play with color, border count, font, tilt and texture.</span>';
-    var insertAfter = filterBar || headerSection;
-    container.insertBefore(countEl, insertAfter.nextSibling);
+    // Count element kept in DOM (hidden) for pill loading indicators to read
+    countEl.innerHTML = totalCount;
+    countEl.style.display = 'none';
+    container.insertBefore(countEl, filterBar || headerSection.nextSibling);
 
     // Render each group: R (Rectangle) then L (Lined)
     var familyIds = Object.keys(familyGroups).sort(function(a, b) {
@@ -906,13 +900,7 @@ const Gallery = {
         var img = SvgRenderer.createSvgImage(r.svgString);
         previewLink.appendChild(img);
 
-        var actionsDiv = document.createElement('a');
-        actionsDiv.className = 'stamp-card-actions';
-        actionsDiv.href = productUrl;
-        actionsDiv.innerHTML = '<span class="stamp-card-cta">Download options</span>';
-
         card.appendChild(previewLink);
-        card.appendChild(actionsDiv);
         grid.appendChild(card);
       });
 
@@ -979,8 +967,14 @@ const Gallery = {
       var frameSelect = document.getElementById('filter-border-count');
       if (frameSelect && !frameSelect.value) frameSelect.value = 'single';
       var fillSelect = document.getElementById('filter-fill');
-      if (fillSelect) fillSelect.value = 'empty';
+      var savedFill = this.currentFill || 'empty';
+      if (fillSelect) fillSelect.value = savedFill;
       this.applyFilterBar();
+      // Re-apply fill conversion if needed (SVGs are always generated as outlined)
+      if (savedFill === 'full') {
+        this.currentFill = 'empty'; // reset so convertFillCards doesn't early-return
+        this.convertFillCards('full');
+      }
     }
   },
 
@@ -1294,13 +1288,16 @@ const Gallery = {
     this.currentFill = targetFill;
     var cards = document.querySelectorAll('#results-batches .stamp-card');
     var self = this;
-    // Disable/enable "Lined" in Shape dropdown (lined has no enclosed area for fill)
+    // Shape auto-switch: filled → Rectangle only, outlined → All
     var shapeSelect = document.getElementById('filter-shape');
     if (shapeSelect) {
       var linedOpt = shapeSelect.querySelector('option[value="lined"]');
       if (linedOpt) linedOpt.disabled = (targetFill === 'full');
-      // If currently showing lined, reset to All
-      if (targetFill === 'full' && shapeSelect.value === 'lined') shapeSelect.value = '';
+      if (targetFill === 'full') {
+        shapeSelect.value = 'rectangle';
+      } else {
+        shapeSelect.value = '';
+      }
     }
     cards.forEach(function(card) {
       // Skip lined stamps entirely — not compatible with filled
@@ -1339,6 +1336,12 @@ const Gallery = {
     var shapeVal = document.getElementById('filter-shape') ? document.getElementById('filter-shape').value : '';
     var familyVal = document.getElementById('filter-border-style').value;
     var frameVal = document.getElementById('filter-border-count').value;
+    // If user selects Lined while Filled, auto-switch to Outlined
+    if (shapeVal === 'lined' && this.currentFill === 'full') {
+      var fillSelect = document.getElementById('filter-fill');
+      if (fillSelect) fillSelect.value = 'empty';
+      this.convertFillCards('empty');
+    }
     var isFilled = this.currentFill === 'full';
     var cards = document.querySelectorAll('#results-batches .stamp-card');
     var visibleCount = 0;
@@ -1367,7 +1370,7 @@ const Gallery = {
 
     // Update live count under filter bar
     var countEl = document.getElementById('gallery-count');
-    if (countEl) countEl.innerHTML = 'Available models = ' + visibleCount + ' <span style="color:#999;font-weight:400;">\u2014 Click on the model you like and play with color, border count, font, tilt and texture.</span>';
+    if (countEl) countEl.innerHTML = visibleCount;
 
     // Cascading filters: disable options that would produce 0 results
     var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
