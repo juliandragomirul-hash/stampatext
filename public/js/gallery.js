@@ -1190,29 +1190,28 @@ const Gallery = {
    * Convert SVG fill between outlined and filled.
    */
   convertFill(svgString, targetFill) {
-    var outerRectPattern = /data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width|\bstroke="/;
+    var outerRectPattern = /data-wavy|data-border|data-stitch|data-filter|data-brush-border|stroke-width|\bstroke="/;
     if (targetFill === 'full') {
       var textM = svgString.match(/<text[^>]*\bfill=["']#([0-9A-Fa-f]{3,6})["']/);
       var fillColor = textM ? '#' + textM[1] : '#BE1E2D';
-      // Replace fill="none" on all rects with border-related attrs
+      // Fill outer rect: change fill="none" → fill=color on rects with border attrs
       svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
         if (!outerRectPattern.test(attrs)) return match;
         if (!/fill=["']none["']/i.test(attrs)) return match;
         return '<rect' + attrs.replace(/fill=["']none["']/i, 'fill="' + fillColor + '"') + '>';
       });
-      // Handle <path> (mixed corners)
+      // Mixed corners: path with data-mixed-type
       svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
         if (!/data-mixed-type/i.test(attrs)) return match;
         if (!/fill=["']none["']/i.test(attrs)) return match;
         return '<path' + attrs.replace(/fill=["']none["']/i, 'fill="' + fillColor + '"') + '>';
       });
-      // Inner frame elements: change colored stroke to white for contrast on filled background
+      // Inner frame elements: colored stroke → white for contrast on filled background
       svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
         if (!/fill=["']none["']/i.test(attrs)) return match;
         if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
         return '<rect' + attrs.replace(/(\bstroke=["'])#[0-9A-Fa-f]{3,6}(["'])/i, '$1#FFFFFF$2') + '>';
       });
-      // Inner frame paths (lined inner frames)
       svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
         if (!/fill=["']none["']/i.test(attrs)) return match;
         if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
@@ -1241,7 +1240,7 @@ const Gallery = {
         });
       }
       if (rectColor) {
-        // Rect fill → none
+        // Outer rect fill → none
         svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
           if (!outerRectPattern.test(attrs)) return match;
           if (/fill=["']none["']/i.test(attrs)) return match;
@@ -1249,13 +1248,13 @@ const Gallery = {
           if (!fm || fm[1].toLowerCase() === 'ffffff') return match;
           return '<rect' + attrs.replace(/fill=["']#[0-9A-Fa-f]{6}["']/i, 'fill="none"') + '>';
         });
-        // Path fill → none (mixed corners)
+        // Mixed corner path fill → none
         svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
           if (!/data-mixed-type/i.test(attrs)) return match;
           if (/fill=["']none["']/i.test(attrs)) return match;
           return '<path' + attrs.replace(/fill=["']#[0-9A-Fa-f]{6}["']/i, 'fill="none"') + '>';
         });
-        // Inner frame elements: change white stroke back to stamp color
+        // Inner frame: white stroke → stamp color
         svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
           if (!/fill=["']none["']/i.test(attrs)) return match;
           if (!/\bstroke=["']#(?:FFF(?:FFF)?|FFFFFF)["']/i.test(attrs)) return match;
@@ -1283,14 +1282,30 @@ const Gallery = {
     this.currentFill = targetFill;
     var cards = document.querySelectorAll('#results-batches .stamp-card');
     var self = this;
+    // Disable/enable "Lined" in Shape dropdown (lined has no enclosed area for fill)
+    var shapeSelect = document.getElementById('filter-shape');
+    if (shapeSelect) {
+      var linedOpt = shapeSelect.querySelector('option[value="lined"]');
+      if (linedOpt) linedOpt.disabled = (targetFill === 'full');
+      // If currently showing lined, reset to All
+      if (targetFill === 'full' && shapeSelect.value === 'lined') shapeSelect.value = '';
+    }
     cards.forEach(function(card) {
+      // Skip lined stamps entirely — not compatible with filled
+      if (card.dataset.shape === 'lined') {
+        card.style.display = (targetFill === 'full') ? 'none' : '';
+        return;
+      }
       var preview = card.querySelector('.stamp-card-preview');
       if (!preview) return;
       var oldWrapper = preview.querySelector('div');
       if (!oldWrapper) return;
       var svgEl = oldWrapper.querySelector('svg');
       if (!svgEl) return;
-      var converted = self.convertFill(svgEl.outerHTML, targetFill);
+      var svgHtml = svgEl.outerHTML;
+      // Skip brush border stamps — brush <g> group obscures the filled rect
+      if (/data-brush-border/i.test(svgHtml)) return;
+      var converted = self.convertFill(svgHtml, targetFill);
       var newWrapper = SvgRenderer.createSvgImage(converted);
       preview.replaceChild(newWrapper, oldWrapper);
       // Update product URLs
@@ -1299,6 +1314,8 @@ const Gallery = {
         a.href = a.href.replace(/fill=[^&]*/, 'fill=' + targetFill);
       });
     });
+    // Re-apply filters to update counts and cascading state
+    this.applyFilterBar();
   },
 
   /**
@@ -1308,10 +1325,13 @@ const Gallery = {
     var shapeVal = document.getElementById('filter-shape') ? document.getElementById('filter-shape').value : '';
     var familyVal = document.getElementById('filter-border-style').value;
     var frameVal = document.getElementById('filter-border-count').value;
+    var isFilled = this.currentFill === 'full';
     var cards = document.querySelectorAll('#results-batches .stamp-card');
     var visibleCount = 0;
     cards.forEach(function(card) {
       var show = true;
+      // Lined stamps not compatible with filled mode
+      if (isFilled && card.dataset.shape === 'lined') show = false;
       if (shapeVal && card.dataset.shape !== shapeVal) show = false;
       if (familyVal && card.dataset.family !== familyVal) show = false;
       if (frameVal && card.dataset.frame !== frameVal) show = false;
