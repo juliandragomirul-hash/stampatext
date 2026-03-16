@@ -899,18 +899,10 @@ const Gallery = {
         var img = SvgRenderer.createSvgImage(r.svgString);
         previewLink.appendChild(img);
 
-        var colorName = self.getColorName(r.appliedColor);
-        var description = self.buildDescription(
-          r.displayText || self.currentText, colorName,
-          r.borderType, r.fillType, r.cornerType,
-          r.objectType, r.appliedTilt, r.appliedTexture,
-          r.appliedFrame, r.svgString, r.fontKey
-        );
-
         var actionsDiv = document.createElement('a');
         actionsDiv.className = 'stamp-card-actions';
         actionsDiv.href = productUrl;
-        actionsDiv.innerHTML = '<span class="stamp-card-name">' + description + '</span>';
+        actionsDiv.innerHTML = '<span class="stamp-card-cta">Download options</span>';
 
         card.appendChild(previewLink);
         card.appendChild(actionsDiv);
