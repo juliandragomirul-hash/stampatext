@@ -58,18 +58,59 @@
 
     // Delegated click handler for stamp cards
     document.getElementById('results-batches').addEventListener('click', function(e) {
-      // Showcase mode: scroll to input instead of navigating
+      // Showcase mode: show inline input pill near click
       if (Gallery.isShowcase) {
         var card = e.target.closest('.stamp-card-preview, .stamp-card-actions');
         if (card) {
           e.preventDefault();
-          var input = document.getElementById('stamp-input');
-          input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          setTimeout(function() { input.focus(); }, 400);
+          var pill = document.getElementById('stamp-input-pill');
+          if (pill) {
+            // Position pill near the click
+            var rect = card.getBoundingClientRect();
+            pill.style.left = (rect.left + rect.width / 2) + 'px';
+            pill.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+            pill.style.display = 'flex';
+            var pillInput = document.getElementById('pill-input');
+            if (pillInput) {
+              pillInput.value = '';
+              setTimeout(function() { pillInput.focus(); }, 50);
+            }
+          }
           return;
         }
       }
       // Normal mode: no zoom (cards are links now)
+    });
+
+    // Pill stamp button handler
+    var pillBtn = document.getElementById('pill-btn');
+    if (pillBtn) {
+      pillBtn.addEventListener('click', function() {
+        var pillInput = document.getElementById('pill-input');
+        var text = pillInput ? pillInput.value.trim() : '';
+        if (!text) return;
+        // Copy text to main input and trigger stamp
+        document.getElementById('stamp-input').value = text;
+        document.getElementById('stamp-input-pill').style.display = 'none';
+        handleStamp();
+      });
+    }
+    // Pill input Enter key
+    var pillInput = document.getElementById('pill-input');
+    if (pillInput) {
+      pillInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          pillBtn.click();
+        }
+      });
+    }
+    // Close pill on outside click
+    document.addEventListener('click', function(e) {
+      var pill = document.getElementById('stamp-input-pill');
+      if (pill && pill.style.display !== 'none' && !pill.contains(e.target) && !e.target.closest('.stamp-card-preview')) {
+        pill.style.display = 'none';
+      }
     });
 
     // Restore search from URL param (for back navigation / shared links)
@@ -139,12 +180,9 @@
 
     // Show results area with loading
     document.getElementById('stamp-results').style.display = 'block';
-    // Rescue filter bar before clearing (it may have been moved into results-batches)
+    // Hide filter bar during processing (it lives in sticky section, not results-batches)
     var filterBar = document.getElementById('stamp-filter-bar');
-    if (filterBar) {
-      document.getElementById('stamp-results').insertBefore(filterBar, document.getElementById('results-batches'));
-      filterBar.style.display = 'none';
-    }
+    if (filterBar) filterBar.style.display = 'none';
     document.getElementById('results-batches').innerHTML =
       '<div class="stamp-loading">Processing templates...</div>';
 
@@ -205,10 +243,7 @@
 
     document.getElementById('stamp-results').style.display = 'block';
     var filterBar2 = document.getElementById('stamp-filter-bar');
-    if (filterBar2) {
-      document.getElementById('stamp-results').insertBefore(filterBar2, document.getElementById('results-batches'));
-      filterBar2.style.display = 'none';
-    }
+    if (filterBar2) filterBar2.style.display = 'none';
     document.getElementById('results-batches').innerHTML =
       '<div class="stamp-loading">Restoring your gallery...</div>';
 

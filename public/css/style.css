@@ -674,11 +674,11 @@ a:hover {
 }
 
 /* ========== STAMP HERO ========== */
+/* ========== FILTER BAR STICKY ========== */
+
 .stamp-hero {
-  text-align: center;
-  padding: 1.2rem 2rem 0;
-  max-width: 800px;
-  margin: 0 auto;
+  text-align: left;
+  padding: 0.6rem 2rem 0.5rem;
 }
 
 .stamp-hero-title {
@@ -693,14 +693,13 @@ a:hover {
 .stamp-hero-subtitle {
   font-size: 1.2rem;
   color: #888;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .stamp-hero-input-wrapper {
   display: flex;
   gap: 0.75rem;
   max-width: 640px;
-  margin: 0 auto;
 }
 
 .stamp-hero-input {
@@ -748,19 +747,107 @@ a:hover {
 }
 
 .stamp-filter-bar {
-  max-width: 1200px;
-  margin: 0 auto;
   padding: 0.4rem 2rem;
   display: flex;
   align-items: flex-end;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.75rem;
   flex-wrap: wrap;
   background: #f8f8f8;
-  position: sticky;
-  top: 60px;
-  z-index: 15;
   border-bottom: 1px solid #e5e5e5;
+  margin-bottom: 0.5rem;
+}
+
+/* ========== SHAPE CATEGORY TABS (Excel sheet style — text only) ========== */
+.shape-tabs-bar {
+  display: flex;
+  gap: 0;
+  padding: 0 2rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  align-items: flex-end;
+}
+
+.shape-tab {
+  padding: 0.45rem 0.8rem 0.35rem;
+  border: 1px solid #e5e5e5;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #f8f8f8;
+  margin-bottom: -1px;
+  position: relative;
+  text-align: center;
+}
+
+.shape-tab:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.shape-tab.active {
+  background: #fff;
+  border-color: #dc2626;
+  border-bottom: 1px solid #fff;
+  color: #dc2626;
+  font-weight: 700;
+  z-index: 1;
+}
+
+.shape-tab.soon {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.shape-tab.soon:hover {
+  background: #f8f8f8;
+  color: #777;
+}
+
+/* Inline count span inside tab label */
+.shape-tab-count {
+  font-weight: 700;
+}
+
+/* ========== INLINE INPUT PILL ========== */
+.stamp-input-pill {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background: #fff;
+  border-radius: 25px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  border: 2px solid #dc2626;
+  transform: translateX(-50%);
+}
+
+.pill-input {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.9rem;
+  border: 1px solid #d4d4d4;
+  border-radius: 20px;
+  outline: none;
+  font-family: inherit;
+  width: 200px;
+}
+
+.pill-input:focus {
+  border-color: #dc2626;
+}
+
+.pill-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 20px;
+  white-space: nowrap;
 }
 
 .filter-bar-group {
@@ -963,8 +1050,9 @@ a:hover {
 .stamp-results-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.75rem;
+  gap: 1.25rem 0.75rem;
   margin-bottom: 1rem;
+  padding-top: 1rem;
 }
 
 .stamp-results-actions {
@@ -976,6 +1064,9 @@ a:hover {
 
 .stamp-card {
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .stamp-card-preview {
@@ -985,6 +1076,7 @@ a:hover {
   overflow: hidden;
   cursor: pointer;
   text-decoration: none;
+  width: 100%;
 }
 
 .stamp-card-preview svg {
@@ -1216,6 +1308,89 @@ a:hover {
 
   .stamp-results-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stamp-filter-bar {
+    display: flex !important;
+    gap: 0.25rem;
+    padding: 0.3rem 1rem;
+    align-items: flex-end;
+    justify-content: flex-start;
+  }
+
+  .filter-bar-group {
+    gap: 0.1rem;
+  }
+
+  .filter-bar-label {
+    font-size: 0.5rem;
+  }
+
+  .filter-bar-select {
+    font-size: 0.65rem;
+    padding: 0.25rem 0.2rem;
+    min-width: 0;
+    max-width: 65px;
+  }
+
+  .filter-bar-color-box {
+    padding: 0.25rem 0.3rem;
+    min-width: 0;
+  }
+
+  .filter-bar-select,
+  .filter-bar-color-box,
+  .filter-bar-font-trigger,
+  .filter-bar-font-box,
+  .filter-bar-reset {
+    height: 28px;
+    box-sizing: border-box;
+  }
+
+  .filter-bar-color-dot {
+    width: 14px;
+    height: 14px;
+  }
+
+  .filter-bar-font-trigger,
+  .filter-bar-font-box {
+    padding: 0.25rem 0.3rem;
+    min-width: 0;
+    max-width: 65px;
+  }
+
+  .filter-bar-font-trigger span:first-child,
+  .filter-bar-font-value {
+    font-size: 0.6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 45px;
+  }
+
+  .filter-bar-reset {
+    font-size: 0.55rem;
+    padding: 0.25rem 0.35rem;
+  }
+
+  .shape-tabs-bar {
+    padding: 0 1rem;
+  }
+
+  .shape-tab {
+    padding: 0.3rem 0.3rem 0.25rem;
+    font-size: 0.55rem;
+    border-radius: 6px 6px 0 0;
+  }
+
+  .stamp-input-pill {
+    width: 85%;
+    left: 50% !important;
+  }
+
+  .pill-input {
+    flex: 1;
+    width: auto;
+    font-size: 0.8rem;
   }
 }
 

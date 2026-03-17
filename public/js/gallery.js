@@ -168,9 +168,18 @@ const Gallery = {
    */
   async showShowcase() {
     this.isShowcase = true;
+    // Show chrome instantly (filter bar + tabs) — no loading message
     document.getElementById('stamp-results').style.display = 'block';
-    document.getElementById('results-batches').innerHTML =
-      '<div class="stamp-loading">Loading stamp models...</div>';
+    document.getElementById('results-batches').innerHTML = '';
+    var filterBar = document.getElementById('stamp-filter-bar');
+    if (filterBar) {
+      filterBar.style.display = 'flex';
+      this.initFilterBar();
+      this.initShapeTabs();
+      var dot = document.getElementById('filter-color-dot');
+      if (dot) dot.style.background = '#dc2626';
+    }
+    // Process and render progressively
     await this.processAll('Your text here');
     await this.showInitialRandom();
   },
@@ -356,11 +365,7 @@ const Gallery = {
   async showInitialRandom() {
     // Clear all previous batches
     var container = document.getElementById('results-batches');
-    // Preserve filter bar before clearing (it may have been moved inside container)
-    var filterBar = document.getElementById('stamp-filter-bar');
-    if (filterBar && filterBar.parentNode === container) {
-      container.parentNode.appendChild(filterBar);
-    }
+    // Filter bar lives outside results-batches now (in fixed HTML position)
     container.innerHTML = '';
     this.displayedCount = 0;
     this.allResults = [];
@@ -839,22 +844,17 @@ const Gallery = {
     headerSection.className = 'stamp-batch-section';
     container.appendChild(headerSection);
 
-    // Move filter bar into position right after the header
-    var filterBar = document.getElementById('stamp-filter-bar');
-    if (filterBar) {
-      container.insertBefore(filterBar, headerSection.nextSibling);
-    }
-    // Live model count under filter bar
+    // Filter bar lives outside results-batches (fixed HTML position)
+    // Hidden count element for pill loading indicators
     var countEl = document.getElementById('gallery-count');
     if (!countEl) {
       countEl = document.createElement('div');
       countEl.id = 'gallery-count';
       countEl.className = 'gallery-count';
+      countEl.style.display = 'none';
+      container.appendChild(countEl);
     }
-    // Count element kept in DOM (hidden) for pill loading indicators to read
     countEl.innerHTML = totalCount;
-    countEl.style.display = 'none';
-    container.insertBefore(countEl, filterBar || headerSection.nextSibling);
 
     // Render each group: R (Rectangle) then L (Lined)
     var familyIds = Object.keys(familyGroups).sort(function(a, b) {
@@ -963,7 +963,7 @@ const Gallery = {
       if (dot) dot.style.background = activeColor;
       // Default filters for a cleaner initial gallery
       var shapeSelect = document.getElementById('filter-shape');
-      if (shapeSelect) shapeSelect.value = '';  // All shapes
+      if (shapeSelect) shapeSelect.value = 'rectangle';  // Default to rectangle tab
       var frameSelect = document.getElementById('filter-border-count');
       if (frameSelect && !frameSelect.value) frameSelect.value = 'single';
       var fillSelect = document.getElementById('filter-fill');
@@ -976,6 +976,14 @@ const Gallery = {
         this.convertFillCards('full');
       }
     }
+    // Initialize shape tabs and update counts
+    this.initShapeTabs();
+    this.updateShapeTabCounts();
+    // Ensure rectangle tab is active by default
+    var tabs = document.querySelectorAll('.shape-tab');
+    tabs.forEach(function(t) { t.classList.remove('active'); });
+    var rectTab = document.querySelector('.shape-tab[data-shape="rectangle"]');
+    if (rectTab) rectTab.classList.add('active');
   },
 
   /**
@@ -1015,7 +1023,7 @@ const Gallery = {
         var modelCount = countEl ? (countEl.textContent.match(/\d+/) || [30])[0] : 30;
         var pill = document.createElement('div');
         pill.className = 'stamp-font-loading';
-        pill.textContent = 'Loading ' + item.textContent + ' for ' + modelCount + ' models...';
+        pill.textContent = 'Loading ' + item.textContent.trim();
         document.body.appendChild(pill);
         await self.processAll(self.currentText || 'Your text here');
         await self.showInitialRandom();
@@ -1041,7 +1049,7 @@ const Gallery = {
         var modelCount = countEl2 ? (countEl2.textContent.match(/\d+/) || [30])[0] : 30;
         var pill = document.createElement('div');
         pill.className = 'stamp-font-loading';
-        pill.textContent = 'Switching to ' + fillLabel2 + ' for ' + modelCount + ' models...';
+        pill.textContent = 'Loading ' + fillLabel2;
         document.body.appendChild(pill);
         setTimeout(function() {
           self.convertFillCards(targetFill);
@@ -1104,18 +1112,32 @@ const Gallery = {
           swatch.dataset.color = hex;
           swatch.addEventListener('click', function(e) {
             e.stopPropagation();
-            // Toggle: clicking active swatch deselects
+            var colorName = self.getColorName(hex);
             if (swatch.classList.contains('active')) {
               document.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
               self.selectedColor = null;
               if (colorDot) colorDot.style.background = 'transparent';
-              self.recolorizeCards(null);
+              var pill = document.createElement('div');
+              pill.className = 'stamp-font-loading';
+              pill.textContent = 'Loading original colors';
+              document.body.appendChild(pill);
+              setTimeout(function() {
+                self.recolorizeCards(null);
+                if (pill.parentNode) pill.parentNode.removeChild(pill);
+              }, 30);
             } else {
               document.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
               swatch.classList.add('active');
               self.selectedColor = hex;
               if (colorDot) colorDot.style.background = hex;
-              self.recolorizeCards(hex);
+              var pill = document.createElement('div');
+              pill.className = 'stamp-font-loading';
+              pill.textContent = 'Loading ' + colorName;
+              document.body.appendChild(pill);
+              setTimeout(function() {
+                self.recolorizeCards(hex);
+                if (pill.parentNode) pill.parentNode.removeChild(pill);
+              }, 30);
             }
           });
           colorGrid.appendChild(swatch);
@@ -1151,6 +1173,54 @@ const Gallery = {
         }
       }, true);
     }
+  },
+
+  /**
+   * Initialize shape category tabs: click handlers + model count updates.
+   */
+  initShapeTabs() {
+    var self = this;
+    var tabs = document.querySelectorAll('.shape-tab');
+    tabs.forEach(function(tab) {
+      if (tab.dataset.bound) return;
+      tab.dataset.bound = '1';
+      tab.addEventListener('click', function() {
+        if (tab.classList.contains('soon')) return;
+        var shape = tab.dataset.shape;
+        var shapeSelect = document.getElementById('filter-shape');
+        if (shapeSelect) shapeSelect.value = shape;
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        self.applyFilterBar();
+        self.updateShapeTabCounts();
+      });
+    });
+  },
+
+  /**
+   * Update model counts on each shape tab based on current filter bar state.
+   */
+  updateShapeTabCounts() {
+    var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
+    var familyVal = document.getElementById('filter-border-style') ? document.getElementById('filter-border-style').value : '';
+    var frameVal = document.getElementById('filter-border-count') ? document.getElementById('filter-border-count').value : '';
+    var isFilled = this.currentFill === 'full';
+
+    var shapes = ['rectangle', 'lined'];
+    shapes.forEach(function(shape) {
+      var count = 0;
+      allCards.forEach(function(card) {
+        var ok = true;
+        if (card.dataset.shape !== shape) ok = false;
+        if (familyVal && card.dataset.family !== familyVal) ok = false;
+        if (frameVal && card.dataset.frame !== frameVal) ok = false;
+        if (isFilled && shape === 'lined') ok = false;
+        if (isFilled && card.dataset.borderType === 'brushstroke') ok = false;
+        if (ok) count++;
+      });
+      var countEl = document.getElementById('tab-count-' + shape);
+      if (countEl) countEl.textContent = count;
+    });
   },
 
   /**
@@ -1194,13 +1264,33 @@ const Gallery = {
    * Convert SVG fill between outlined and filled.
    */
   convertFill(svgString, targetFill) {
-    var outerRectPattern = /data-wavy|data-border|data-stitch|data-filter|data-brush-border|stroke-width|\bstroke="/;
+    // Outer rect = has data-* border attributes OR is the main stamp rect (largest stroke-width with fill="none")
+    var outerRectDataPattern = /data-wavy|data-border|data-stitch|data-filter|data-brush-border/;
+    var anyBorderRect = /data-wavy|data-border|data-stitch|data-filter|data-brush-border|stroke-width|\bstroke="/;
     if (targetFill === 'full') {
       var textM = svgString.match(/<text[^>]*\bfill=["']#([0-9A-Fa-f]{3,6})["']/);
       var fillColor = textM ? '#' + textM[1] : '#BE1E2D';
-      // Fill outer rect: change fill="none" → fill=color on rects with border attrs
+      // Step 1: Inner frame rects FIRST (before outer fill changes) — change stroke to white
       svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
-        if (!outerRectPattern.test(attrs)) return match;
+        if (!/fill=["']none["']/i.test(attrs)) return match;
+        // Skip if it has data-* border attributes (that's the outer rect)
+        if (outerRectDataPattern.test(attrs)) return match;
+        if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
+        // Skip white/background rects (no stroke-width or very thin)
+        if (!/stroke-width/i.test(attrs)) return match;
+        return '<rect' + attrs.replace(/(\bstroke=["'])#[0-9A-Fa-f]{3,6}(["'])/i, '$1#FFFFFF$2') + '>';
+      });
+      svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
+        if (!/fill=["']none["']/i.test(attrs)) return match;
+        if (outerRectDataPattern.test(attrs)) return match;
+        if (/data-mixed-type/i.test(attrs)) return match;
+        if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
+        if (!/stroke-width/i.test(attrs)) return match;
+        return '<path' + attrs.replace(/(\bstroke=["'])#[0-9A-Fa-f]{3,6}(["'])/i, '$1#FFFFFF$2') + '>';
+      });
+      // Step 2: Fill outer rect (has data-* border attrs)
+      svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
+        if (!anyBorderRect.test(attrs)) return match;
         if (!/fill=["']none["']/i.test(attrs)) return match;
         return '<rect' + attrs.replace(/fill=["']none["']/i, 'fill="' + fillColor + '"') + '>';
       });
@@ -1210,18 +1300,6 @@ const Gallery = {
         if (!/fill=["']none["']/i.test(attrs)) return match;
         return '<path' + attrs.replace(/fill=["']none["']/i, 'fill="' + fillColor + '"') + '>';
       });
-      // Inner frame elements: colored stroke → white for contrast on filled background
-      svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
-        if (!/fill=["']none["']/i.test(attrs)) return match;
-        if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
-        return '<rect' + attrs.replace(/(\bstroke=["'])#[0-9A-Fa-f]{3,6}(["'])/i, '$1#FFFFFF$2') + '>';
-      });
-      svgString = svgString.replace(/<path([^>]*)>/gi, function(match, attrs) {
-        if (!/fill=["']none["']/i.test(attrs)) return match;
-        if (!/\bstroke=["']#[0-9A-Fa-f]{3,6}["']/i.test(attrs)) return match;
-        if (/data-mixed-type/i.test(attrs)) return match;
-        return '<path' + attrs.replace(/(\bstroke=["'])#[0-9A-Fa-f]{3,6}(["'])/i, '$1#FFFFFF$2') + '>';
-      });
       // Text → white
       svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[0-9A-Fa-f]{3,6}(["'])/, '$1$2#FFFFFF$3');
       // Note: brush stamps are hidden when filled (handled in convertFillCards)
@@ -1230,7 +1308,7 @@ const Gallery = {
       var rectColor = null;
       svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
         if (rectColor) return match;
-        if (!outerRectPattern.test(attrs)) return match;
+        if (!anyBorderRect.test(attrs)) return match;
         var fm = attrs.match(/fill=["']#([0-9A-Fa-f]{6})["']/i);
         if (fm && fm[1].toLowerCase() !== 'ffffff') rectColor = '#' + fm[1];
         return match;
@@ -1247,7 +1325,7 @@ const Gallery = {
       if (rectColor) {
         // Outer rect fill → none
         svgString = svgString.replace(/<rect([^>]*)>/gi, function(match, attrs) {
-          if (!outerRectPattern.test(attrs)) return match;
+          if (!anyBorderRect.test(attrs)) return match;
           if (/fill=["']none["']/i.test(attrs)) return match;
           var fm = attrs.match(/fill=["']#([0-9A-Fa-f]{6})["']/i);
           if (!fm || fm[1].toLowerCase() === 'ffffff') return match;
@@ -1403,6 +1481,8 @@ const Gallery = {
         opt.disabled = !available[opt.value];
       });
     }
+    // Update shape tab counts
+    this.updateShapeTabCounts();
   },
 
   /**
@@ -1572,11 +1652,7 @@ const Gallery = {
 
     // Clear and render — group by family just like fresh generation
     var container = document.getElementById('results-batches');
-    // Preserve filter bar before clearing (it may have been moved inside container)
-    var filterBar = document.getElementById('stamp-filter-bar');
-    if (filterBar && filterBar.parentNode === container) {
-      container.parentNode.appendChild(filterBar);
-    }
+    // Filter bar lives outside results-batches now (in fixed HTML position)
     container.innerHTML = '';
     this.allResults = batch;
     this.displayedCount = 0;
@@ -1685,16 +1761,14 @@ const Gallery = {
     var container = document.getElementById('results-batches');
     container.innerHTML = cached.html;
 
-    // Move the original filter bar into position (after the header section)
+    // Filter bar lives in fixed HTML position — just show it
     document.getElementById('stamp-results').style.display = 'block';
     var filterBar = document.getElementById('stamp-filter-bar');
     if (filterBar) {
-      var headerSection = container.querySelector('.stamp-batch-section');
-      if (headerSection) {
-        container.insertBefore(filterBar, headerSection.nextSibling);
-      }
       filterBar.style.display = 'flex';
       this.initFilterBar();
+      this.initShapeTabs();
+      this.updateShapeTabCounts();
       var dot = document.getElementById('filter-color-dot');
       if (dot) dot.style.background = this.selectedColor || '#dc2626';
       var fillSelect = document.getElementById('filter-fill');
