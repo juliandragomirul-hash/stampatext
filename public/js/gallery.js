@@ -1809,19 +1809,8 @@ const Gallery = {
     var container = document.getElementById('results-batches');
     container.innerHTML = cached.html;
 
-    // Filter bar lives in fixed HTML position — just show it
-    document.getElementById('stamp-results').style.display = 'block';
-    var filterBar = document.getElementById('stamp-filter-bar');
-    if (filterBar) {
-      filterBar.style.display = 'flex';
-      this.initFilterBar();
-      this.initShapeTabs();
-      this.updateShapeTabCounts();
-      var dot = document.getElementById('filter-color-dot');
-      if (dot) dot.style.background = this.selectedColor || '#dc2626';
-      var fillSelect = document.getElementById('filter-fill');
-      if (fillSelect) fillSelect.value = this.currentFill || 'empty';
-    }
+    // Use showResultsUI which handles all filter/tab/shape restoration
+    this.showResultsUI();
 
     return true;
   },
