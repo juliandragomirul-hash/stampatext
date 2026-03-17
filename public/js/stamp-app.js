@@ -179,6 +179,12 @@
     var btn = document.getElementById('stamp-btn');
     btn.disabled = true;
     btn.textContent = 'Stamping...';
+    // Safety: re-enable button after 30s in case finally block doesn't run
+    var safetyTimer = setTimeout(function() {
+      isProcessing = false;
+      btn.disabled = false;
+      btn.textContent = 'Stamp';
+    }, 30000);
 
     // Show results area with loading
     document.getElementById('stamp-results').style.display = 'block';
@@ -201,6 +207,7 @@
       document.getElementById('results-batches').innerHTML =
         '<div class="stamp-empty">Something went wrong. Please try again.</div>';
     } finally {
+      clearTimeout(safetyTimer);
       isProcessing = false;
       btn.disabled = false;
       btn.textContent = 'Stamp';

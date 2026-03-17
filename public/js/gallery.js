@@ -994,34 +994,39 @@ const Gallery = {
     if (filterBar) {
       filterBar.style.display = 'flex';
       this.initFilterBar();
-      // Set color dot to match current gallery color
-      var dot = document.getElementById('filter-color-dot');
-      var activeColor = this.selectedColor || '#dc2626';
-      if (dot) dot.style.background = activeColor;
-      // Restore active shape + filters
-      var activeShape = this.activeShape || 'rectangle';
-      var shapeSelect = document.getElementById('filter-shape');
-      if (shapeSelect) shapeSelect.value = activeShape;
-      var frameSelect = document.getElementById('filter-border-count');
-      if (frameSelect && !frameSelect.value) frameSelect.value = 'single';
-      var fillSelect = document.getElementById('filter-fill');
-      var savedFill = this.currentFill || 'empty';
-      if (fillSelect) fillSelect.value = savedFill;
-      // Re-apply fill conversion if needed (SVGs are always generated as outlined)
-      if (savedFill === 'full') {
-        this.currentFill = 'empty';
-        this.convertFillCards('full');
-      }
     }
-    // Initialize shape tabs, set active tab, apply filters
+
+    // 1. Set ALL filter values BEFORE any applyFilterBar call
+    var activeShape = this.activeShape || 'rectangle';
+    var shapeSelect = document.getElementById('filter-shape');
+    if (shapeSelect) shapeSelect.value = activeShape;
+
+    var frameSelect = document.getElementById('filter-border-count');
+    if (frameSelect) frameSelect.value = frameSelect.value || 'single';
+
+    var fillSelect = document.getElementById('filter-fill');
+    var savedFill = this.currentFill || 'empty';
+    if (fillSelect) fillSelect.value = savedFill;
+
+    var dot = document.getElementById('filter-color-dot');
+    if (dot) dot.style.background = this.selectedColor || '#dc2626';
+
+    // 2. Set active tab styling
     this.initShapeTabs();
-    this.updateShapeTabCounts();
-    var activeShape2 = this.activeShape || 'rectangle';
     var tabs = document.querySelectorAll('.shape-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    var activeTab = document.querySelector('.shape-tab[data-shape="' + activeShape2 + '"]');
+    var activeTab = document.querySelector('.shape-tab[data-shape="' + activeShape + '"]');
     if (activeTab) activeTab.classList.add('active');
+
+    // 3. Single applyFilterBar call with all values already set
     this.applyFilterBar();
+    this.updateShapeTabCounts();
+
+    // 4. Re-apply fill conversion if needed (SVGs are always generated as outlined)
+    if (savedFill === 'full') {
+      this.currentFill = 'empty';
+      this.convertFillCards('full');
+    }
   },
 
   /**
