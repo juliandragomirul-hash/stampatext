@@ -2541,6 +2541,9 @@ const SvgRenderer = {
       var newRectHeight = textBlockHeight + vPadding * 2;
 
       // Square shape enforcement: recalculate sizing for square aspect ratio
+      if (stampShape === 'square') {
+        console.log('[SQ-ENFORCE] numLines=' + numLines + ' numTspans=' + numTspans + ' measuredWidth=' + measuredWidth);
+      }
       if (stampShape === 'square' && numLines > 1) {
         // The cached textBlockWidth is from single-line measurement.
         // For multi-line square, estimate per-line width as total / numLines
@@ -2620,24 +2623,32 @@ const SvgRenderer = {
           return '<tspan' + before + 'x="0"';
         });
 
-        // Square stamps: stretch shorter lines using scaleX (spacingAndGlyphs = fat letters)
+        // Square stamps: stretch all lines to fill square width using spacingAndGlyphs
+        // Longest line fills ~95% of square inner width. Shorter lines stretch up to 1.6x max.
         if (stampShape === 'square') {
-          // Find longest line by char count
           var tspanTexts = [];
           result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, content) {
             tspanTexts.push(content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
           });
-          var maxLen = 0;
-          tspanTexts.forEach(function(t) { if (t.length > maxLen) maxLen = t.length; });
-          var targetLineWidth = textBlockWidth * 0.98;
-          if (maxLen > 0) {
+          var maxCharLen = 0;
+          tspanTexts.forEach(function(t) { if (t.length > maxCharLen) maxCharLen = t.length; });
+          // Target: fill the square inner width (square side minus padding)
+          var squareInnerWidth = newRectWidth - hPadding * 2;
+          var fullTargetWidth = squareInnerWidth * 0.95;
+          var maxStretch = 1.6;
+          if (maxCharLen > 0) {
+            var tspanIdx = 0;
             result = result.replace(/<tspan([^>]*)>([^<]*)<\/tspan>/gi, function(match, attrs, content) {
-              var plainContent = content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-              // Remove any existing textLength/lengthAdjust
+              var plainContent = tspanTexts[tspanIdx] || content;
+              tspanIdx++;
               attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
               attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
-              // All lines get the same target width — shorter words get fatter glyphs
-              return '<tspan' + attrs + ' textLength="' + targetLineWidth.toFixed(1) + '" lengthAdjust="spacingAndGlyphs">' + content + '</tspan>';
+              // Longest line gets fullTargetWidth (slight stretch ~1.0-1.1x)
+              // Shorter lines: proportional width × stretch, capped at maxStretch
+              var charRatio = plainContent.length / maxCharLen;
+              var naturalWidth = fullTargetWidth * charRatio;
+              var stretchedWidth = Math.min(fullTargetWidth, naturalWidth * maxStretch);
+              return '<tspan' + attrs + ' textLength="' + stretchedWidth.toFixed(1) + '" lengthAdjust="spacingAndGlyphs">' + content + '</tspan>';
             });
           }
         }
