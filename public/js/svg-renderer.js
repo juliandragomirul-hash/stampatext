@@ -1422,6 +1422,183 @@ const SvgRenderer = {
    * Finds the nth <text> element, replaces its content, and centers it
    * horizontally within the SVG viewBox.
    * For text longer than MAX_CHARS_PER_LINE, splits into multiple <tspan> lines.
+   * Split a word into syllables using a simple English heuristic.
+   * No external library — handles common patterns.
+   * @param {string} word - single word (no spaces)
+   * @returns {string[]} - array of syllables
+   */
+  _splitSyllables(word) {
+    word = word.toLowerCase();
+    if (word.length <= 3) return [word];
+
+    var vowels = 'aeiouyàáâãäåèéêëìíîïòóôõöùúûüýÿ';
+    var syllables = [];
+    var current = '';
+
+    for (var i = 0; i < word.length; i++) {
+      current += word[i];
+      var isVowel = vowels.indexOf(word[i]) >= 0;
+      var nextIsVowel = (i + 1 < word.length) && vowels.indexOf(word[i + 1]) >= 0;
+      var nextIsConsonant = (i + 1 < word.length) && vowels.indexOf(word[i + 1]) < 0;
+
+      // Don't split if current syllable is too short
+      if (current.length < 2) continue;
+      // Don't split if remaining is too short
+      if (word.length - i - 1 < 2) continue;
+
+      // Split after a vowel followed by a consonant-vowel pattern (CV)
+      if (isVowel && nextIsConsonant) {
+        // Check if there's a vowel after the next consonant(s)
+        var hasFollowingVowel = false;
+        for (var j = i + 1; j < word.length; j++) {
+          if (vowels.indexOf(word[j]) >= 0) { hasFollowingVowel = true; break; }
+        }
+        if (hasFollowingVowel && current.length >= 2) {
+          syllables.push(current);
+          current = '';
+        }
+      }
+    }
+    if (current) {
+      if (syllables.length > 0 && current.length < 2) {
+        syllables[syllables.length - 1] += current;
+      } else {
+        syllables.push(current);
+      }
+    }
+    // Merge very short syllables
+    var merged = [];
+    for (var k = 0; k < syllables.length; k++) {
+      if (merged.length > 0 && syllables[k].length < 2) {
+        merged[merged.length - 1] += syllables[k];
+      } else {
+        merged.push(syllables[k]);
+      }
+    }
+    return merged.length > 0 ? merged : [word];
+  },
+
+  /**
+   * Split text into lines optimized for a square stamp.
+   * Multi-word: try different row counts, pick closest to square.
+   * Single-word: split by syllable.
+   * @param {string} text - user text (already uppercased)
+   * @returns {string[]} - array of lines
+   */
+  _splitForSquare(text) {
+    var words = text.trim().split(/\s+/);
+
+    if (words.length === 1) {
+      // Single word — split by syllable
+      var syllables = this._splitSyllables(words[0]);
+      if (syllables.length <= 1) return [text]; // Can't split further
+
+      // Try different row counts from syllables
+      var bestLines = [text];
+      var bestRatio = Infinity;
+
+      for (var rows = 2; rows <= Math.min(syllables.length, 4); rows++) {
+        var lines = this._distributeSyllables(syllables, rows);
+        var maxLen = 0;
+        lines.forEach(function(l) { if (l.length > maxLen) maxLen = l.length; });
+        // Approximate aspect: width ~ maxLen, height ~ rows
+        // Perfect square: ratio = 1.0
+        var ratio = maxLen / (rows * 1.8); // 1.8 = approximate char height/width ratio
+        var diff = Math.abs(ratio - 1);
+        if (diff < bestRatio) {
+          bestRatio = diff;
+          bestLines = lines;
+        }
+      }
+      return bestLines;
+    }
+
+    // Multi-word — try different row counts
+    if (words.length <= 1) return [text];
+
+    var bestLines = [text];
+    var bestRatio = Infinity;
+
+    for (var rows = 2; rows <= Math.min(words.length, 5); rows++) {
+      var lines = this._distributeWords(words, rows);
+      var maxLen = 0;
+      lines.forEach(function(l) { if (l.length > maxLen) maxLen = l.length; });
+      var ratio = maxLen / (rows * 1.8);
+      var diff = Math.abs(ratio - 1);
+      if (diff < bestRatio) {
+        bestRatio = diff;
+        bestLines = lines;
+      }
+    }
+    return bestLines;
+  },
+
+  /**
+   * Distribute syllables across N rows, balancing line lengths.
+   */
+  _distributeSyllables(syllables, rows) {
+    var totalLen = syllables.reduce(function(s, syl) { return s + syl.length; }, 0);
+    var targetPerRow = totalLen / rows;
+    var lines = [];
+    var currentLine = '';
+    var lineIdx = 0;
+
+    for (var i = 0; i < syllables.length; i++) {
+      var remaining = rows - lineIdx - 1;
+      var syllablesLeft = syllables.length - i;
+      // Force split if we need to save syllables for remaining rows
+      if (remaining > 0 && syllablesLeft <= remaining) {
+        if (currentLine) lines.push(currentLine);
+        currentLine = syllables[i];
+        lineIdx++;
+        continue;
+      }
+      var newLine = currentLine + syllables[i];
+      if (currentLine.length >= targetPerRow && lineIdx < rows - 1) {
+        lines.push(currentLine);
+        currentLine = syllables[i];
+        lineIdx++;
+      } else {
+        currentLine = newLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  },
+
+  /**
+   * Distribute words across N rows, balancing line lengths.
+   */
+  _distributeWords(words, rows) {
+    var totalLen = words.reduce(function(s, w) { return s + w.length; }, 0) + words.length - 1;
+    var targetPerRow = totalLen / rows;
+    var lines = [];
+    var currentLine = '';
+    var lineIdx = 0;
+
+    for (var i = 0; i < words.length; i++) {
+      var remaining = rows - lineIdx - 1;
+      var wordsLeft = words.length - i;
+      if (remaining > 0 && wordsLeft <= remaining) {
+        if (currentLine) lines.push(currentLine);
+        currentLine = words[i];
+        lineIdx++;
+        continue;
+      }
+      var newLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+      if (currentLine.length >= targetPerRow && lineIdx < rows - 1) {
+        lines.push(currentLine);
+        currentLine = words[i];
+        lineIdx++;
+      } else {
+        currentLine = newLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  },
+
+  /**
    * @param {string} svgString - cleaned SVG string
    * @param {number} textIndex - 0-based index of <text> element
    * @param {string} newText - replacement text
@@ -2188,6 +2365,8 @@ const SvgRenderer = {
       // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var proportionalSw = fontRatioForProportional * 30;  // unclamped; per-family min/max below
+      // Square stamps: 50% thicker border for bolder look
+      if (stampShape === 'square') proportionalSw *= 1.5;
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2336,9 +2515,10 @@ const SvgRenderer = {
 
       // STEP 2: Inside-out rect wrapping
       // Inner gap: proportional breathing room — larger font (short text) gets more gap
-      var baseGap = 10;
-      var hInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
-      var vInnerGap = Math.max(baseGap, Math.round(fontRatioForProportional * 10));
+      // Square stamps use minimal padding for tight, punchy look
+      var baseGap = stampShape === 'square' ? 3 : 10;
+      var hInnerGap = stampShape === 'square' ? 3 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
+      var vInnerGap = stampShape === 'square' ? 3 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
 
       // Recompute text zone with actual stroke for rect padding (clamped per-family)
       var actualSw = capStroke ? Math.max(30, Math.min(75, proportionalSw)) : estStrokeW;
@@ -2359,6 +2539,42 @@ const SvgRenderer = {
       }
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
+
+      // Square shape enforcement: recalculate sizing for square aspect ratio
+      if (stampShape === 'square' && numLines > 1) {
+        // The cached textBlockWidth is from single-line measurement.
+        // For multi-line square, estimate per-line width as total / numLines
+        var perLineWidth = textBlockWidth / numLines;
+        // Rebuild rect from per-line width (this is what the text actually occupies per line)
+        var sqTextW = perLineWidth;
+        var sqTextH = textBlockHeight;
+        var sqRectW = sqTextW + hPadding * 2;
+        var sqRectH = sqTextH + vPadding * 2;
+        var squareSide = Math.max(sqRectW, sqRectH);
+        // Scale font so text fills the square width
+        var sqAvail = squareSide - hPadding * 2;
+        if (sqTextW > 0 && sqAvail > sqTextW) {
+          var sqScale = sqAvail / sqTextW;
+          newFontSize *= sqScale;
+          sqTextW *= sqScale;
+          sqTextH *= sqScale;
+          lineHeight *= sqScale;
+          sqRectW = sqTextW + hPadding * 2;
+          sqRectH = sqTextH + vPadding * 2;
+          squareSide = Math.max(sqRectW, sqRectH);
+        }
+        newRectWidth = squareSide;
+        newRectHeight = squareSide;
+        textBlockWidth = sqTextW;
+        textBlockHeight = sqTextH;
+        // Re-apply font size to SVG
+        result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', newFontSize.toFixed(2));
+      } else if (stampShape === 'square') {
+        // Single line square: just force square
+        var squareSide = Math.max(newRectWidth, newRectHeight);
+        newRectWidth = squareSide;
+        newRectHeight = squareSide;
+      }
 
       // Aspect ratio enforcement: compress wide one-liners horizontally
       // to produce less squat stamps. Without this, wide fonts (Montserrat,
@@ -2403,6 +2619,28 @@ const SvgRenderer = {
         result = result.replace(/<tspan([^>]*?)\bx=["'][\d.\-]+["']/gi, function (_match, before) {
           return '<tspan' + before + 'x="0"';
         });
+
+        // Square stamps: stretch shorter lines using scaleX (spacingAndGlyphs = fat letters)
+        if (stampShape === 'square') {
+          // Find longest line by char count
+          var tspanTexts = [];
+          result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, content) {
+            tspanTexts.push(content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+          });
+          var maxLen = 0;
+          tspanTexts.forEach(function(t) { if (t.length > maxLen) maxLen = t.length; });
+          var targetLineWidth = textBlockWidth * 0.98;
+          if (maxLen > 0) {
+            result = result.replace(/<tspan([^>]*)>([^<]*)<\/tspan>/gi, function(match, attrs, content) {
+              var plainContent = content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+              // Remove any existing textLength/lengthAdjust
+              attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
+              attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
+              // All lines get the same target width — shorter words get fatter glyphs
+              return '<tspan' + attrs + ' textLength="' + targetLineWidth.toFixed(1) + '" lengthAdjust="spacingAndGlyphs">' + content + '</tspan>';
+            });
+          }
+        }
       }
 
       // STEP 4: Position text at viewBox center

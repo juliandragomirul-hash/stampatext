@@ -115,6 +115,8 @@
 
     // Restore search from URL param (for back navigation / shared links)
     var urlParams = new URLSearchParams(window.location.search);
+    var shapeParam = urlParams.get('shape');
+    if (shapeParam) Gallery.activeShape = shapeParam;
     var textParam = urlParams.get('text');
     if (textParam) {
       document.getElementById('stamp-input').value = textParam;
@@ -190,11 +192,10 @@
       await Gallery.processAll(text);
       await Gallery.showInitialRandom();
 
-      // Update URL so back navigation restores search
-      var newUrl = '/?text=' + encodeURIComponent(text);
-      if (window.location.search !== '?text=' + encodeURIComponent(text)) {
-        history.replaceState(null, '', newUrl);
-      }
+      // Update URL so back navigation restores search (include active shape)
+      var activeShape = Gallery.activeShape || 'rectangle';
+      var newUrl = '/?text=' + encodeURIComponent(text) + '&shape=' + activeShape;
+      history.replaceState(null, '', newUrl);
     } catch (err) {
       console.error('Stamp error:', err);
       document.getElementById('results-batches').innerHTML =

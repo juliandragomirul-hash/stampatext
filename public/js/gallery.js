@@ -26,6 +26,7 @@ const Gallery = {
   selectedColor: null,
   selectedFont: 'Oswald',
   currentFill: 'empty',
+  activeShape: 'rectangle',
 
   // Palette colors (same as stamp-app.js)
   PALETTE_COLORS: [
@@ -179,25 +180,18 @@ const Gallery = {
       var dot = document.getElementById('filter-color-dot');
       if (dot) dot.style.background = '#dc2626';
     }
-    // Process and render progressively
-    var dbg = document.createElement('div');
-    dbg.id = 'ios-debug';
-    dbg.style.cssText = 'color:red;padding:0.5rem;font-size:12px;position:fixed;bottom:0;left:0;right:0;background:#fff;z-index:9999;border-top:2px solid red;';
-    document.body.appendChild(dbg);
+    // Show loading pill immediately
+    var loadPill = document.createElement('div');
+    loadPill.className = 'stamp-font-loading';
+    loadPill.textContent = 'Loading models';
+    document.body.appendChild(loadPill);
+    // Process and render
     try {
-      dbg.textContent = 'Step 1: processAll starting...';
       await this.processAll('Your text here');
-      dbg.textContent = 'Step 2: processAll done, baseResults=' + this.baseResults.length + '. showInitialRandom starting...';
       await this.showInitialRandom();
-      var cards = document.querySelectorAll('#results-batches .stamp-card');
-      var visibleCards = 0;
-      cards.forEach(function(c) { if (c.offsetHeight > 0) visibleCards++; });
-      dbg.textContent = 'Step 3: Done. Cards=' + cards.length + ', visible=' + visibleCards + ', allResults=' + this.allResults.length;
-      if (cards.length === 0) dbg.textContent += ' — No cards rendered!';
-      else if (visibleCards === 0) dbg.textContent += ' — Cards exist but have zero height!';
-      else setTimeout(function() { dbg.remove(); }, 5000);
+      if (loadPill.parentNode) loadPill.parentNode.removeChild(loadPill);
     } catch (err) {
-      dbg.textContent = 'ERROR: ' + err.message + ' | ' + err.stack;
+      if (loadPill.parentNode) loadPill.parentNode.removeChild(loadPill);
       document.getElementById('results-batches').innerHTML =
         '<div style="color:red;padding:1rem;">Error: ' + err.message + '</div>';
     }
@@ -426,7 +420,8 @@ const Gallery = {
 
       // Generate shape × border count variants
       var allowedFrames = this.FRAME_COMPAT[base.borderType || 'simple'] || this.FRAME_ORDER;
-      var shapes = ['rectangle', 'lined'];
+      var shapes = ['rectangle', 'square', 'lined'];
+      console.log('[GALLERY] Processing shapes: ' + shapes.join(', ') + ' for template: ' + base.name);
 
       for (var s = 0; s < shapes.length; s++) {
         var stampShape = shapes[s];
@@ -434,9 +429,9 @@ const Gallery = {
         // Lined: skip non-straight corners (round/mixed have no meaning without vertical sides)
         if (stampShape === 'lined' && base.cornerType && base.cornerType !== 'straight') continue;
 
-        var groupKey = stampShape === 'lined' ? 'L' : 'R';
+        var groupKey = stampShape === 'lined' ? 'L' : (stampShape === 'square' ? 'S' : 'R');
         if (!familyGroups[groupKey]) {
-          var shapeLabel = stampShape === 'lined' ? 'Lined' : 'Rectangle';
+          var shapeLabel = stampShape === 'lined' ? 'Lined' : (stampShape === 'square' ? 'Square' : 'Rectangle');
           familyGroups[groupKey] = {
             name: shapeLabel + ' stamps',
             numericFamily: 1,
@@ -456,17 +451,39 @@ const Gallery = {
 
           // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
           var variantSvg = base.svgString;
+          // For square: re-replace text with square-optimized line splits
+          if (stampShape === 'square') {
+            console.log('[SQUARE] preAutoFitSvg=' + (base.preAutoFitSvg ? 'YES' : 'NO') + ' autoFitZoneInfo=' + (base.autoFitZoneInfo ? 'YES' : 'NO'));
+          }
+          if (stampShape === 'square' && base.preAutoFitSvg) {
+            var sqText = (self.currentText || 'Your text here').toUpperCase();
+            var sqLines = SvgRenderer._splitForSquare(sqText);
+            console.log('[SQUARE-SPLIT] text="' + sqText + '" lines=' + JSON.stringify(sqLines));
+            variantSvg = SvgRenderer.replaceTextInString(base.preAutoFitSvg, base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0, sqLines.join('\n'));
+          }
           var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
-          if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined')) {
+          if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
             try {
+              // For square, use measurements with corrected numTspans for the multi-line split
+              var variantMeasurements = base.autoFitMeasurements;
+              var variantPreSvg = base.preAutoFitSvg;
+              if (stampShape === 'square') {
+                var sqTspanCount = (variantSvg.match(/<tspan/gi) || []).length;
+                if (sqTspanCount > 1) {
+                  variantMeasurements = {};
+                  for (var mk in base.autoFitMeasurements) variantMeasurements[mk] = base.autoFitMeasurements[mk];
+                  variantMeasurements.numTspans = sqTspanCount;
+                }
+                variantPreSvg = variantSvg; // use square-split SVG as base
+              }
               variantSvg = SvgRenderer._applyAutoFitSizing(
-                base.preAutoFitSvg,
+                variantPreSvg,
                 base.autoFitZoneInfo.idx,
                 base.autoFitZoneInfo.boundingWidth,
                 base.autoFitZoneInfo.fontSize,
                 base.autoFitZoneInfo.originalScaleX,
                 frameMode,
-                base.autoFitMeasurements,
+                variantMeasurements,
                 base.fillType,
                 base.cornerType,
                 base.borderType,
@@ -877,7 +894,8 @@ const Gallery = {
 
     // Render each group: R (Rectangle) then L (Lined)
     var familyIds = Object.keys(familyGroups).sort(function(a, b) {
-      return a === 'R' ? -1 : 1;
+      var order = { R: 0, S: 1, L: 2 };
+      return (order[a] || 99) - (order[b] || 99);
     });
     for (var i = 0; i < familyIds.length; i++) {
       var group = familyGroups[familyIds[i]];
@@ -980,29 +998,30 @@ const Gallery = {
       var dot = document.getElementById('filter-color-dot');
       var activeColor = this.selectedColor || '#dc2626';
       if (dot) dot.style.background = activeColor;
-      // Default filters for a cleaner initial gallery
+      // Restore active shape + filters
+      var activeShape = this.activeShape || 'rectangle';
       var shapeSelect = document.getElementById('filter-shape');
-      if (shapeSelect) shapeSelect.value = 'rectangle';  // Default to rectangle tab
+      if (shapeSelect) shapeSelect.value = activeShape;
       var frameSelect = document.getElementById('filter-border-count');
       if (frameSelect && !frameSelect.value) frameSelect.value = 'single';
       var fillSelect = document.getElementById('filter-fill');
       var savedFill = this.currentFill || 'empty';
       if (fillSelect) fillSelect.value = savedFill;
-      this.applyFilterBar();
       // Re-apply fill conversion if needed (SVGs are always generated as outlined)
       if (savedFill === 'full') {
-        this.currentFill = 'empty'; // reset so convertFillCards doesn't early-return
+        this.currentFill = 'empty';
         this.convertFillCards('full');
       }
     }
-    // Initialize shape tabs and update counts
+    // Initialize shape tabs, set active tab, apply filters
     this.initShapeTabs();
     this.updateShapeTabCounts();
-    // Ensure rectangle tab is active by default
+    var activeShape2 = this.activeShape || 'rectangle';
     var tabs = document.querySelectorAll('.shape-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    var rectTab = document.querySelector('.shape-tab[data-shape="rectangle"]');
-    if (rectTab) rectTab.classList.add('active');
+    var activeTab = document.querySelector('.shape-tab[data-shape="' + activeShape2 + '"]');
+    if (activeTab) activeTab.classList.add('active');
+    this.applyFilterBar();
   },
 
   /**
@@ -1206,12 +1225,17 @@ const Gallery = {
       tab.addEventListener('click', function() {
         if (tab.classList.contains('soon')) return;
         var shape = tab.dataset.shape;
+        self.activeShape = shape;
         var shapeSelect = document.getElementById('filter-shape');
         if (shapeSelect) shapeSelect.value = shape;
         tabs.forEach(function(t) { t.classList.remove('active'); });
         tab.classList.add('active');
         self.applyFilterBar();
         self.updateShapeTabCounts();
+        // Update URL to include shape
+        var url = new URL(window.location);
+        url.searchParams.set('shape', shape);
+        history.replaceState(null, '', url.toString());
       });
     });
   },
@@ -1225,7 +1249,7 @@ const Gallery = {
     var frameVal = document.getElementById('filter-border-count') ? document.getElementById('filter-border-count').value : '';
     var isFilled = this.currentFill === 'full';
 
-    var shapes = ['rectangle', 'lined'];
+    var shapes = ['rectangle', 'square', 'lined'];
     shapes.forEach(function(shape) {
       var count = 0;
       allCards.forEach(function(card) {
@@ -1682,9 +1706,9 @@ const Gallery = {
       var r = batch[i];
       var familyInfo = this.BORDER_STYLE_FAMILIES[r.borderType || 'simple'] || { family: 1, sub: 1 };
       var familyId = familyInfo.family;
-      var groupKey = r.appliedShape === 'lined' ? 'L' : 'R';
+      var groupKey = r.appliedShape === 'lined' ? 'L' : (r.appliedShape === 'square' ? 'S' : 'R');
       if (!familyGroups[groupKey]) {
-        var shapeLabel = r.appliedShape === 'lined' ? 'Lined' : 'Rectangle';
+        var shapeLabel = r.appliedShape === 'lined' ? 'Lined' : (r.appliedShape === 'square' ? 'Square' : 'Rectangle');
         familyGroups[groupKey] = {
           name: shapeLabel + ' stamps',
           numericFamily: 1,
