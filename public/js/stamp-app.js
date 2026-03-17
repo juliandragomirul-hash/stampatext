@@ -229,10 +229,9 @@
             });
           });
         }
-        var newUrl = '/?text=' + encodeURIComponent(text);
-        if (window.location.search !== '?text=' + encodeURIComponent(text)) {
-          history.replaceState(null, '', newUrl);
-        }
+        var restoreShape = Gallery.activeShape || 'rectangle';
+        var newUrl = '/?text=' + encodeURIComponent(text) + '&shape=' + restoreShape;
+        history.replaceState(null, '', newUrl);
         return;
       }
     } catch (e) {
@@ -263,10 +262,9 @@
         });
       }
 
-      var newUrl = '/?text=' + encodeURIComponent(text);
-      if (window.location.search !== '?text=' + encodeURIComponent(text)) {
-        history.replaceState(null, '', newUrl);
-      }
+      var restoreShape2 = Gallery.activeShape || 'rectangle';
+      var newUrl = '/?text=' + encodeURIComponent(text) + '&shape=' + restoreShape2;
+      history.replaceState(null, '', newUrl);
     } catch (err) {
       console.error('Restore error, falling back to fresh generation:', err);
       // Fall back to fresh random generation
