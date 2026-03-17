@@ -235,7 +235,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=182"></script>
+  <script src="/js/svg-renderer.js?v=191"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -313,7 +313,13 @@
         for (var i = 0; i < storedZones.length; i++) {
           var zone = storedZones[i];
           var idx = zone.svg_element_index || 0;
-          svg = SvgRenderer.replaceTextInString(svg, idx, storedDisplayText);
+          // For square stamps, split text into multi-line for square aspect
+          var textForReplace = storedDisplayText;
+          if (currentShape === 'square') {
+            var sqLines = SvgRenderer._splitForSquare(storedDisplayText.toUpperCase());
+            if (sqLines.length > 1) textForReplace = sqLines.join('\n');
+          }
+          svg = SvgRenderer.replaceTextInString(svg, idx, textForReplace);
 
           if (zone.bounding_width) {
             var originalScaleX = zone.transform_matrix
