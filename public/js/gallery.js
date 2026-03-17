@@ -180,10 +180,24 @@ const Gallery = {
       if (dot) dot.style.background = '#dc2626';
     }
     // Process and render progressively
+    var dbg = document.createElement('div');
+    dbg.id = 'ios-debug';
+    dbg.style.cssText = 'color:red;padding:0.5rem;font-size:12px;position:fixed;bottom:0;left:0;right:0;background:#fff;z-index:9999;border-top:2px solid red;';
+    document.body.appendChild(dbg);
     try {
+      dbg.textContent = 'Step 1: processAll starting...';
       await this.processAll('Your text here');
+      dbg.textContent = 'Step 2: processAll done, baseResults=' + this.baseResults.length + '. showInitialRandom starting...';
       await this.showInitialRandom();
+      var cards = document.querySelectorAll('#results-batches .stamp-card');
+      var visibleCards = 0;
+      cards.forEach(function(c) { if (c.offsetHeight > 0) visibleCards++; });
+      dbg.textContent = 'Step 3: Done. Cards=' + cards.length + ', visible=' + visibleCards + ', allResults=' + this.allResults.length;
+      if (cards.length === 0) dbg.textContent += ' — No cards rendered!';
+      else if (visibleCards === 0) dbg.textContent += ' — Cards exist but have zero height!';
+      else setTimeout(function() { dbg.remove(); }, 5000);
     } catch (err) {
+      dbg.textContent = 'ERROR: ' + err.message + ' | ' + err.stack;
       document.getElementById('results-batches').innerHTML =
         '<div style="color:red;padding:1rem;">Error: ' + err.message + '</div>';
     }
