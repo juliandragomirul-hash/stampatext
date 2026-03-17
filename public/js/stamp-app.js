@@ -239,6 +239,9 @@
         var restoreShape = Gallery.activeShape || 'rectangle';
         var newUrl = '/?text=' + encodeURIComponent(text) + '&shape=' + restoreShape;
         history.replaceState(null, '', newUrl);
+        isProcessing = false;
+        btn.disabled = false;
+        btn.textContent = 'Stamp';
         return;
       }
     } catch (e) {
