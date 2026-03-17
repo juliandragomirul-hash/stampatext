@@ -3557,12 +3557,11 @@ const SvgRenderer = {
     wrapper.style.lineHeight = '0';
     wrapper.innerHTML = svgString;
 
-    // Make the inline SVG responsive and contained within parent
+    // Make the inline SVG responsive — iOS WebKit needs explicit width to derive height from viewBox
     var svgEl = wrapper.querySelector('svg');
     if (svgEl) {
-      svgEl.removeAttribute('width');
+      svgEl.setAttribute('width', '100%');
       svgEl.removeAttribute('height');
-      // Let CSS handle sizing via max-width/max-height per context
     }
     return wrapper;
   },
