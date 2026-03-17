@@ -180,8 +180,13 @@ const Gallery = {
       if (dot) dot.style.background = '#dc2626';
     }
     // Process and render progressively
-    await this.processAll('Your text here');
-    await this.showInitialRandom();
+    try {
+      await this.processAll('Your text here');
+      await this.showInitialRandom();
+    } catch (err) {
+      document.getElementById('results-batches').innerHTML =
+        '<div style="color:red;padding:1rem;">Error: ' + err.message + '</div>';
+    }
   },
 
   /**
