@@ -235,7 +235,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=194"></script>
+  <script src="/js/svg-renderer.js?v=195"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -313,11 +313,14 @@
         for (var i = 0; i < storedZones.length; i++) {
           var zone = storedZones[i];
           var idx = zone.svg_element_index || 0;
-          // For square stamps, split text into multi-line for square aspect
+          // For square stamps, split text into multi-line with variable font sizes
           var textForReplace = storedDisplayText;
           if (currentShape === 'square') {
-            var sqLines = SvgRenderer._splitForSquare(storedDisplayText.toUpperCase());
-            if (sqLines.length > 1) textForReplace = sqLines.join('\n');
+            var sqResult = SvgRenderer._splitForSquare(storedDisplayText.toUpperCase());
+            if (sqResult.lines.length > 1) {
+              textForReplace = sqResult.lines.join('\n');
+              svg = svg.replace(/<svg/, '<svg data-sq-scales="' + sqResult.fontScales.join(',') + '"');
+            }
           }
           svg = SvgRenderer.replaceTextInString(svg, idx, textForReplace);
 

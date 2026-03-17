@@ -457,9 +457,12 @@ const Gallery = {
           }
           if (stampShape === 'square' && base.preAutoFitSvg) {
             var sqText = (self.currentText || 'Your text here').toUpperCase();
-            var sqLines = SvgRenderer._splitForSquare(sqText);
-            console.log('[SQUARE-SPLIT] text="' + sqText + '" lines=' + JSON.stringify(sqLines));
+            var sqResult = SvgRenderer._splitForSquare(sqText);
+            var sqLines = sqResult.lines;
+            var sqFontScales = sqResult.fontScales;
             variantSvg = SvgRenderer.replaceTextInString(base.preAutoFitSvg, base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0, sqLines.join('\n'));
+            // Store font scales for _applyAutoFitSizing to use
+            variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-scales="' + sqFontScales.join(',') + '"');
           }
           var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
           if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {

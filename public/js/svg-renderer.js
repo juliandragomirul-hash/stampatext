@@ -1491,46 +1491,94 @@ const SvgRenderer = {
     if (words.length === 1) {
       // Single word — split by syllable
       var syllables = this._splitSyllables(words[0]);
-      if (syllables.length <= 1) return [text]; // Can't split further
+      if (syllables.length <= 1) return { lines: [text], fontScales: [1] };
 
-      // Try different row counts from syllables
-      var bestLines = [text];
-      var bestRatio = Infinity;
+      var bestResult = { lines: [text], fontScales: [1] };
+      var bestScore = Infinity;
 
       for (var rows = 2; rows <= Math.min(syllables.length, 4); rows++) {
         var lines = this._distributeSyllables(syllables, rows);
-        var maxLen = 0;
-        lines.forEach(function(l) { if (l.length > maxLen) maxLen = l.length; });
-        // Approximate aspect: width ~ maxLen, height ~ rows
-        // Perfect square: ratio = 1.0
-        var ratio = maxLen / (rows * 1.8); // 1.8 = approximate char height/width ratio
-        var diff = Math.abs(ratio - 1);
-        if (diff < bestRatio) {
-          bestRatio = diff;
-          bestLines = lines;
+        var result = this._scoreSquareLayout(lines);
+        if (result.score < bestScore) {
+          bestScore = result.score;
+          bestResult = result;
         }
       }
-      return bestLines;
+      return bestResult;
     }
 
-    // Multi-word — try different row counts
-    if (words.length <= 1) return [text];
+    // Multi-word — try ALL possible groupings into 2 and 3 rows
+    if (words.length <= 1) return { lines: [text], fontScales: [1] };
 
-    var bestLines = [text];
-    var bestRatio = Infinity;
+    var bestResult = { lines: [text], fontScales: [1] };
+    var bestScore = Infinity;
 
-    for (var rows = 2; rows <= Math.min(words.length, 5); rows++) {
-      var lines = this._distributeWords(words, rows);
-      var maxLen = 0;
-      lines.forEach(function(l) { if (l.length > maxLen) maxLen = l.length; });
-      var ratio = maxLen / (rows * 1.8);
-      var diff = Math.abs(ratio - 1);
-      if (diff < bestRatio) {
-        bestRatio = diff;
-        bestLines = lines;
+    // Try 2-row splits: split after word i
+    for (var i = 1; i < words.length; i++) {
+      var lines = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+      var result = this._scoreSquareLayout(lines);
+      if (result.score < bestScore) {
+        bestScore = result.score;
+        bestResult = result;
       }
     }
-    return bestLines;
+
+    // Try 3-row splits: split after word i and j
+    if (words.length >= 3) {
+      for (var i = 1; i < words.length - 1; i++) {
+        for (var j = i + 1; j < words.length; j++) {
+          var lines = [
+            words.slice(0, i).join(' '),
+            words.slice(i, j).join(' '),
+            words.slice(j).join(' ')
+          ];
+          var result = this._scoreSquareLayout(lines);
+          if (result.score < bestScore) {
+            bestScore = result.score;
+            bestResult = result;
+          }
+        }
+      }
+    }
+
+    return bestResult;
+  },
+
+  /**
+   * Score a line grouping for square-ness with variable font sizes.
+   * Each row gets a font scale so all rows fill the same width.
+   * Returns { lines, fontScales, score } where score = distance from perfect square.
+   */
+  _scoreSquareLayout(lines) {
+    // Find longest line by char count
+    var maxChars = 0;
+    lines.forEach(function(l) { if (l.length > maxChars) maxChars = l.length; });
+    if (maxChars === 0) return { lines: lines, fontScales: lines.map(function() { return 1; }), score: Infinity };
+
+    // Each row's font scale = maxChars / thisRowChars (so all rows fill same width)
+    var fontScales = lines.map(function(l) {
+      return l.length > 0 ? maxChars / l.length : 1;
+    });
+
+    // Cap extreme scales (don't make tiny words absurdly large)
+    var maxScale = 2.5;
+    fontScales = fontScales.map(function(s) { return Math.min(s, maxScale); });
+
+    // Total height = sum of each row's scaled font height (font scale × base height)
+    // Width = maxChars (all rows fill the same width)
+    // Approximate: width ~ maxChars, height ~ sum of fontScales × 1.15 (line height factor)
+    var totalHeight = 0;
+    for (var i = 0; i < fontScales.length; i++) {
+      totalHeight += fontScales[i] * 1.15;
+    }
+    var width = maxChars;
+
+    // Aspect ratio: width / totalHeight — perfect square = ~1.8 (char width/height ratio)
+    var aspect = width / totalHeight;
+    var targetAspect = 1.4; // tuned for typical font proportions
+    var score = Math.abs(aspect - targetAspect);
+
+    return { lines: lines, fontScales: fontScales, score: score };
   },
 
   /**
@@ -2545,33 +2593,69 @@ const SvgRenderer = {
         console.log('[SQ-ENFORCE] numLines=' + numLines + ' numTspans=' + numTspans + ' measuredWidth=' + measuredWidth);
       }
       if (stampShape === 'square' && numLines > 1) {
-        // The cached textBlockWidth is from single-line measurement.
-        // For multi-line square, estimate per-line width as total / numLines
+        // Read per-row font scales from data attribute (set by _splitForSquare)
+        var sqScalesMatch = svgString.match(/data-sq-scales="([^"]+)"/);
+        var sqScales = sqScalesMatch ? sqScalesMatch[1].split(',').map(Number) : null;
+
+        // Estimate per-line width from single-line measurement
         var perLineWidth = textBlockWidth / numLines;
-        // Rebuild rect from per-line width (this is what the text actually occupies per line)
-        var sqTextW = perLineWidth;
-        var sqTextH = textBlockHeight;
-        var sqRectW = sqTextW + hPadding * 2;
-        var sqRectH = sqTextH + vPadding * 2;
-        var squareSide = Math.max(sqRectW, sqRectH);
-        // Scale font so text fills the square width
-        var sqAvail = squareSide - hPadding * 2;
-        if (sqTextW > 0 && sqAvail > sqTextW) {
-          var sqScale = sqAvail / sqTextW;
-          newFontSize *= sqScale;
-          sqTextW *= sqScale;
-          sqTextH *= sqScale;
-          lineHeight *= sqScale;
-          sqRectW = sqTextW + hPadding * 2;
-          sqRectH = sqTextH + vPadding * 2;
-          squareSide = Math.max(sqRectW, sqRectH);
+        // Base font size scales so the longest line fills the available width
+        var sqAvail = perLineWidth + hPadding * 2; // rough initial width
+        var sqBaseFontSize = newFontSize;
+
+        // Calculate total height with variable font sizes
+        var totalSqHeight = 0;
+        var sqFontSizes = [];
+        for (var si = 0; si < numLines; si++) {
+          var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
+          sqFontSizes.push(sqBaseFontSize * scale);
+          totalSqHeight += sqBaseFontSize * scale * 1.15; // line height per row
         }
+
+        // Square side = max(width needed, total height + padding)
+        var sqRectW = perLineWidth + hPadding * 2;
+        var sqRectH = totalSqHeight + vPadding * 2;
+        var squareSide = Math.max(sqRectW, sqRectH);
+
+        // Scale everything up so content fills the square
+        var sqWidthAvail = squareSide - hPadding * 2;
+        if (perLineWidth > 0 && sqWidthAvail > perLineWidth) {
+          var sqUpScale = sqWidthAvail / perLineWidth;
+          sqBaseFontSize *= sqUpScale;
+          // Recalculate font sizes and height
+          totalSqHeight = 0;
+          sqFontSizes = [];
+          for (var si = 0; si < numLines; si++) {
+            var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
+            sqFontSizes.push(sqBaseFontSize * scale);
+            totalSqHeight += sqBaseFontSize * scale * 1.15;
+          }
+          sqRectH = totalSqHeight + vPadding * 2;
+          squareSide = Math.max(squareSide, sqRectH);
+        }
+
         newRectWidth = squareSide;
         newRectHeight = squareSide;
-        textBlockWidth = sqTextW;
-        textBlockHeight = sqTextH;
-        // Re-apply font size to SVG
-        result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', newFontSize.toFixed(2));
+        newFontSize = sqBaseFontSize; // base font (longest line)
+        textBlockWidth = sqWidthAvail || perLineWidth;
+        textBlockHeight = totalSqHeight;
+        lineHeight = sqBaseFontSize * 1.15;
+
+        // Apply per-tspan font-size (variable sizes per row)
+        var tspanFontIdx = 0;
+        result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
+          if (tspanFontIdx < sqFontSizes.length) {
+            var fs = sqFontSizes[tspanFontIdx];
+            tspanFontIdx++;
+            // Remove existing font-size, add new one
+            attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
+            return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '">';
+          }
+          return match;
+        });
+
+        // Set base font-size on text element (for single-line fallback)
+        result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', sqBaseFontSize.toFixed(2));
       } else if (stampShape === 'square') {
         // Single line square: just force square
         var squareSide = Math.max(newRectWidth, newRectHeight);
@@ -2605,26 +2689,57 @@ const SvgRenderer = {
 
       // For multi-line text with tspans
       if (numTspans > 1) {
-        // Calculate tspan dy values for vertical centering around the text position
-        var totalSpan = (numLines - 1) * lineHeight;
-        var firstDy = -totalSpan / 2 + newFontSize * 0.39;
+        // Square stamps with variable font sizes: use per-row dy values
+        var sqScalesForDy = null;
+        if (stampShape === 'square') {
+          var sqsm = svgString.match(/data-sq-scales="([^"]+)"/);
+          if (sqsm) sqScalesForDy = sqsm[1].split(',').map(Number);
+        }
 
-        var lineIdx = 0;
-        result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
-          var before = arguments[1];
-          var dyVal = (lineIdx === 0) ? firstDy : lineHeight;
-          lineIdx++;
-          return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
-        });
+        if (sqScalesForDy && sqScalesForDy.length > 1) {
+          // Variable dy: each row's height = its font-size × 1.15
+          var rowHeights = [];
+          for (var ri = 0; ri < numLines; ri++) {
+            var rScale = sqScalesForDy[ri] || 1;
+            rowHeights.push(newFontSize * rScale * 1.15);
+          }
+          // Total text block height
+          var sqTotalH = 0;
+          for (var ri = 0; ri < rowHeights.length; ri++) sqTotalH += rowHeights[ri];
+          // First dy: position so the block is vertically centered
+          var sqFirstDy = -sqTotalH / 2 + rowHeights[0] * 0.75;
+
+          var sqLineIdx = 0;
+          result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
+            var before = arguments[1];
+            var dyVal;
+            if (sqLineIdx === 0) {
+              dyVal = sqFirstDy;
+            } else {
+              // dy = previous row height (distance from previous baseline to this baseline)
+              dyVal = (rowHeights[sqLineIdx - 1] + rowHeights[sqLineIdx]) / 2;
+            }
+            sqLineIdx++;
+            return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
+          });
+        } else {
+          // Standard uniform dy for rectangles/lined
+          var totalSpan = (numLines - 1) * lineHeight;
+          var firstDy = -totalSpan / 2 + newFontSize * 0.39;
+
+          var lineIdx = 0;
+          result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
+            var before = arguments[1];
+            var dyVal = (lineIdx === 0) ? firstDy : lineHeight;
+            lineIdx++;
+            return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
+          });
+        }
 
         // Set tspan x="0" - in the transformed coordinate system, x=0 is the center
-        // (because the text transform positions at viewBoxCenterX)
         result = result.replace(/<tspan([^>]*?)\bx=["'][\d.\-]+["']/gi, function (_match, before) {
           return '<tspan' + before + 'x="0"';
         });
-
-        // Square stamps: no horizontal stretch — each line centers naturally
-        // Longest word fills the width via autoFit, shorter words center at same font-size
       }
 
       // STEP 4: Position text at viewBox center
