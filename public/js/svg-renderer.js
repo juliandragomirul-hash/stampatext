@@ -1569,7 +1569,7 @@ const SvgRenderer = {
     // Approximate: width ~ maxChars, height ~ sum of fontScales × 1.15 (line height factor)
     var totalHeight = 0;
     for (var i = 0; i < fontScales.length; i++) {
-      totalHeight += fontScales[i] * 1.15;
+      totalHeight += fontScales[i] * 0.85;
     }
     var width = maxChars;
 
@@ -2609,7 +2609,7 @@ const SvgRenderer = {
         for (var si = 0; si < numLines; si++) {
           var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
           sqFontSizes.push(sqBaseFontSize * scale);
-          totalSqHeight += sqBaseFontSize * scale * 1.15; // line height per row
+          totalSqHeight += sqBaseFontSize * scale * 0.85; // tight line spacing
         }
 
         // Square side = max(width needed, total height + padding)
@@ -2628,7 +2628,7 @@ const SvgRenderer = {
           for (var si = 0; si < numLines; si++) {
             var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
             sqFontSizes.push(sqBaseFontSize * scale);
-            totalSqHeight += sqBaseFontSize * scale * 1.15;
+            totalSqHeight += sqBaseFontSize * scale * 0.85;
           }
           sqRectH = totalSqHeight + vPadding * 2;
           squareSide = Math.max(squareSide, sqRectH);
@@ -2697,11 +2697,11 @@ const SvgRenderer = {
         }
 
         if (sqScalesForDy && sqScalesForDy.length > 1) {
-          // Variable dy: each row's height = its font-size × 1.15
+          // Variable dy: each row's height = its font-size × 0.85 (tight spacing)
           var rowHeights = [];
           for (var ri = 0; ri < numLines; ri++) {
             var rScale = sqScalesForDy[ri] || 1;
-            rowHeights.push(newFontSize * rScale * 1.15);
+            rowHeights.push(newFontSize * rScale * 0.85);
           }
           // Total text block height
           var sqTotalH = 0;
