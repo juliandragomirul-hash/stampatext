@@ -1597,6 +1597,7 @@ const SvgRenderer = {
    * @returns {{ lines: string[], fontScales: number[], rowMode: string }}
    */
   _splitForSquare(text, rowMode) {
+    console.log('[SPLIT-SQ] called! text="' + text + '" rowMode=' + rowMode);
     var words = text.trim().split(/\s+/);
     rowMode = rowMode || '3'; // default to 3-row equal
 
