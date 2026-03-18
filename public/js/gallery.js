@@ -174,7 +174,7 @@ const Gallery = {
     document.getElementById('results-batches').innerHTML = '';
     var filterBar = document.getElementById('stamp-filter-bar');
     if (filterBar) {
-      filterBar.style.display = 'flex';
+      filterBar.style.display = 'none';
       this.initFilterBar();
       this.initShapeTabs();
       var dot = document.getElementById('filter-color-dot');
@@ -1019,7 +1019,7 @@ const Gallery = {
     document.getElementById('stamp-results').style.display = 'block';
     var filterBar = document.getElementById('stamp-filter-bar');
     if (filterBar) {
-      filterBar.style.display = 'flex';
+      filterBar.style.display = 'none';
       this.initFilterBar();
     }
 
