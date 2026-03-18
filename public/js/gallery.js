@@ -477,6 +477,11 @@ const Gallery = {
             }
           }
 
+          // Inject rowMode so svg-renderer's inline split knows which mode to use
+          if (stampShape === 'square' && currentRowMode) {
+            variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-rowmode="' + currentRowMode + '"');
+          }
+
           var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
           if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
             try {
