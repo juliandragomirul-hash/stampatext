@@ -88,6 +88,7 @@ const SquareTuning = {
     var supabase = window.__supabaseClient;
     if (!supabase) return;
 
+    // Use plain border with strong round corners for square preview
     var { data } = await supabase
       .from('templates')
       .select('*, text_zones(*)')
@@ -95,14 +96,16 @@ const SquareTuning = {
       .is('border_type', null)
       .eq('fill_type', 'empty')
       .eq('frame_type', 'single')
-      .eq('corner_type', 'straight')
+      .eq('corner_type', 'strong')
       .limit(1);
 
     if (!data || data.length === 0) {
+      // Fallback: any plain outlined template
       var fallback = await supabase
         .from('templates')
         .select('*, text_zones(*)')
         .eq('is_active', true)
+        .is('border_type', null)
         .eq('fill_type', 'empty')
         .limit(1);
       data = fallback.data;
@@ -234,50 +237,53 @@ const SquareTuning = {
     if (!previewEl) return;
 
     try {
-      // Clone template and replace font
+      var weight = this.FONT_WEIGHTS[fontKey] || 400;
       var svg = this.templateSvg;
-      var fontFamily = (this.FONT_LABELS[fontKey] || fontKey);
-      var fontWeight = this.FONT_WEIGHTS[fontKey] || 400;
-      svg = svg.replace(/font-family="[^"]*"/gi, 'font-family="' + fontFamily + '"');
-      svg = svg.replace(/font-weight="[^"]*"/gi, 'font-weight="' + fontWeight + '"');
 
-      // Replace text with the test string (multi-line via \n for square split)
+      // Uniquify IDs
+      if (SvgRenderer.uniquifySvgIds) svg = SvgRenderer.uniquifySvgIds(svg);
+
+      // Replace font
+      svg = svg.replace(/font-family=["']'?[^"']*'?["']/g, "font-family=\"'" + fontKey + "'\"");
+      svg = svg.replace(/font-weight=["'][^"']*["']/g, 'font-weight="' + weight + '"');
+
+      // Replace text
       var zone = this.templateZone;
       svg = SvgRenderer.replaceTextInString(svg, zone.svg_element_index || 0, cs.text);
 
-      // Auto-fit with square shape
-      var origScaleX = zone.transform_matrix
-        ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1 : 1;
-
-      // Inject rowMode so inline split picks it up
+      // Inject rowMode for square inline split
       svg = svg.replace(/<svg/, '<svg data-sq-rowmode="' + cs.rowMode + '"');
 
-      svg = await SvgRenderer.autoFitTextInString(
-        svg, zone.svg_element_index || 0,
-        zone.bounding_width, zone.font_size, origScaleX,
-        'single', 'empty', 'straight', null, 'square'
-      );
+      // Auto-fit with square shape
+      if (zone && zone.bounding_width) {
+        var origSx = zone.transform_matrix
+          ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1 : 1;
+        svg = await SvgRenderer.autoFitTextInString(
+          svg, zone.svg_element_index || 0,
+          zone.bounding_width, zone.font_size, origSx,
+          'single', 'empty', 'strong', null, 'square'
+        );
+      }
 
-      // Colorize and crop
+      // Colorize red, stroke, crop, corners
       svg = SvgRenderer.colorize(svg, '#dc2626');
       svg = SvgRenderer.applyThinStroke(svg);
       svg = SvgRenderer.cropViewBoxToStamp(svg);
-      svg = SvgRenderer.applyCornerRadius(svg, 'straight');
+      svg = SvgRenderer.applyCornerRadius(svg, 'strong');
 
+      // Display
       previewEl.innerHTML = '';
-      var wrapper = document.createElement('div');
-      wrapper.innerHTML = svg;
-      var svgEl = wrapper.querySelector('svg');
-      if (svgEl) {
-        svgEl.style.maxWidth = '100%';
-        svgEl.style.maxHeight = '300px';
-        svgEl.style.width = 'auto';
-        svgEl.style.height = 'auto';
+      var wrapper = SvgRenderer.createSvgImage ? SvgRenderer.createSvgImage(svg) : null;
+      if (wrapper) {
+        previewEl.appendChild(wrapper);
+      } else {
+        var div = document.createElement('div');
+        div.innerHTML = svg;
+        previewEl.appendChild(div);
       }
-      previewEl.appendChild(wrapper);
     } catch (err) {
       previewEl.innerHTML = '<span style="color:red;font-size:0.7rem;">Error: ' + err.message + '</span>';
-      console.error('Square preview error:', fontKey, cs.key, err);
+      console.error('[SQ-ADMIN] preview error:', fontKey, cs.key, err);
     }
   },
 
