@@ -2854,6 +2854,7 @@ const SvgRenderer = {
 
       // Square shape enforcement: if text is still single-line, split it now
       if (stampShape === 'square' && numLines <= 1) {
+        console.log('[SQ-INLINE-ENTER] numLines=' + numLines + ' numTspans=' + numTspans);
         // Read rowMode from data attribute (set by gallery.js), default to '2up'
         var rmMatch = result.match(/data-sq-rowmode="([^"]+)"/);
         var sqRowMode = rmMatch ? rmMatch[1] : '2up';
@@ -2866,6 +2867,7 @@ const SvgRenderer = {
           sqRawText = bareMatch ? bareMatch[1] : '';
         }
         sqRawText = sqRawText.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        console.log('[SQ-INLINE-TEXT] extracted="' + sqRawText + '" len=' + sqRawText.trim().length);
         if (sqRawText.trim().length > 1) {
           var sqSplitResult = SvgRenderer._splitForSquare(sqRawText.trim(), sqRowMode);
           if (sqSplitResult.lines.length > 1) {
