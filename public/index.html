@@ -105,6 +105,15 @@
         <option value="split">Split</option>
       </select>
     </div>
+    <div class="filter-bar-group" style="display:none;">
+      <label class="filter-bar-label" for="filter-rows">Rows</label>
+      <select id="filter-rows" class="filter-bar-select">
+        <option value="">All</option>
+        <option value="2up">2 ↑</option>
+        <option value="2down">2 ↓</option>
+        <option value="3">3</option>
+      </select>
+    </div>
   </div>
 
   <!-- Shape Category Tabs (text labels only) -->
@@ -353,8 +362,8 @@
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
   <script src="/js/router.js"></script>
-  <script src="/js/svg-renderer.js?v=196"></script>
-  <script src="/js/gallery.js?v=135"></script>
+  <script src="/js/svg-renderer.js?v=202"></script>
+  <script>document.write('<scr'+'ipt src="/js/gallery.js?v=' + Date.now() + '"><\/scr'+'ipt>');</script>
   <script>
     // Inline restore check — runs BEFORE stamp-app.js, cannot be cached separately
     (function() {

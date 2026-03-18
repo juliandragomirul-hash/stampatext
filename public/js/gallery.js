@@ -376,6 +376,7 @@ const Gallery = {
    * Order: family → sub-type → corner → border count → fill.
    */
   async showInitialRandom() {
+    console.log('[GALLERY-INIT] showInitialRandom called, baseResults=' + this.baseResults.length + ' activeShape=' + this.activeShape);
     // Clear all previous batches
     var container = document.getElementById('results-batches');
     // Filter bar lives outside results-batches now (in fixed HTML position)
@@ -439,6 +440,12 @@ const Gallery = {
           };
         }
 
+        // For square: iterate over row modes (2up, 2down, 3). Others: single pass.
+      var rowModes = stampShape === 'square' ? ['2up', '2down', '3'] : [null];
+
+      for (var rm = 0; rm < rowModes.length; rm++) {
+        var currentRowMode = rowModes[rm];
+
         for (var f = 0; f < allowedFrames.length; f++) {
           var frameMode = allowedFrames[f];
           // Skip double frame for filled stitch — too visually dense / redundant with single
@@ -449,25 +456,27 @@ const Gallery = {
           // Selected color > default red
           var color = this.selectedColor || '#dc2626';
 
-          // Per-variant font sizing: re-apply autoFit with frame-specific interior via computeTextZone
+          // Per-variant font sizing: re-apply autoFit with frame-specific interior
           var variantSvg = base.svgString;
-          // For square: re-replace text with square-optimized line splits
-          if (stampShape === 'square') {
-            console.log('[SQUARE] preAutoFitSvg=' + (base.preAutoFitSvg ? 'YES' : 'NO') + ' autoFitZoneInfo=' + (base.autoFitZoneInfo ? 'YES' : 'NO'));
-          }
+
+          // Square: re-replace text with row-mode-specific line splits
           if (stampShape === 'square' && base.preAutoFitSvg) {
-            var sqText = (self.currentText || 'Your text here').toUpperCase();
-            var sqResult = SvgRenderer._splitForSquare(sqText);
-            var sqLines = sqResult.lines;
-            var sqFontScales = sqResult.fontScales;
-            variantSvg = SvgRenderer.replaceTextInString(base.preAutoFitSvg, base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0, sqLines.join('\n'));
-            // Store font scales for _applyAutoFitSizing to use
-            variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-scales="' + sqFontScales.join(',') + '"');
+            try {
+              var sqText = (self.currentText || 'Your text here').toUpperCase();
+              var sqResult = SvgRenderer._splitForSquare(sqText, currentRowMode);
+              var sqLines = sqResult.lines;
+              var sqFontScales = sqResult.fontScales;
+              variantSvg = SvgRenderer.replaceTextInString(base.preAutoFitSvg, base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0, sqLines.join('\n'));
+              // Store font scales and row mode for _applyAutoFitSizing
+              variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-scales="' + sqFontScales.join(',') + '" data-sq-rowmode="' + currentRowMode + '"');
+            } catch (sqErr) {
+              console.error('[SQUARE-ERROR] _splitForSquare crashed:', sqErr.message, sqErr.stack);
+            }
           }
+
           var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
           if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
             try {
-              // For square, use measurements with corrected numTspans for the multi-line split
               var variantMeasurements = base.autoFitMeasurements;
               var variantPreSvg = base.preAutoFitSvg;
               if (stampShape === 'square') {
@@ -477,7 +486,7 @@ const Gallery = {
                   for (var mk in base.autoFitMeasurements) variantMeasurements[mk] = base.autoFitMeasurements[mk];
                   variantMeasurements.numTspans = sqTspanCount;
                 }
-                variantPreSvg = variantSvg; // use square-split SVG as base
+                variantPreSvg = variantSvg;
               }
               variantSvg = SvgRenderer._applyAutoFitSizing(
                 variantPreSvg,
@@ -503,7 +512,6 @@ const Gallery = {
             colorized = SvgRenderer.colorize(variantSvg, color);
             colorized = SvgRenderer.applyThinStroke(colorized);
             colorized = SvgRenderer.cropViewBoxToStamp(colorized);
-            // Lined: convert rect to 2 horizontal lines, skip corner radius
             if (stampShape === 'lined') {
               colorized = SvgRenderer.convertToLined(colorized);
             } else {
@@ -545,6 +553,7 @@ const Gallery = {
             appliedColor: color,
             appliedFrame: frameMode,
             appliedShape: stampShape,
+            appliedRowMode: currentRowMode,
             appliedTilt: 0,
             appliedTexture: null
           };
@@ -552,6 +561,7 @@ const Gallery = {
           familyGroups[groupKey].results.push(result);
           allResults.push(result);
         }
+      }
       }
     }
 
@@ -923,6 +933,7 @@ const Gallery = {
         card.dataset.corners = r.cornerType || 'straight';
         card.dataset.fill = r.fillType || 'full';
         card.dataset.shape = r.appliedShape || 'rectangle';
+        if (r.appliedRowMode) card.dataset.rows = r.appliedRowMode;
 
         var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
           '&text=' + encodeURIComponent(self.currentText) +
@@ -1076,7 +1087,7 @@ const Gallery = {
         if (pill.parentNode) pill.parentNode.removeChild(pill);
       });
     }
-    var selects = ['filter-shape', 'filter-border-style', 'filter-border-count'];
+    var selects = ['filter-shape', 'filter-border-style', 'filter-border-count', 'filter-rows'];
     selects.forEach(function(id) {
       var el = document.getElementById(id);
       if (el && !el.dataset.bound) {
@@ -1255,6 +1266,8 @@ const Gallery = {
     var allCards = Array.from(document.querySelectorAll('#results-batches .stamp-card'));
     var familyVal = document.getElementById('filter-border-style') ? document.getElementById('filter-border-style').value : '';
     var frameVal = document.getElementById('filter-border-count') ? document.getElementById('filter-border-count').value : '';
+    var rowsSelect = document.getElementById('filter-rows');
+    var rowsVal = rowsSelect ? rowsSelect.value : '';
     var isFilled = this.currentFill === 'full';
 
     var shapes = ['rectangle', 'square', 'lined'];
@@ -1267,6 +1280,8 @@ const Gallery = {
         if (frameVal && card.dataset.frame !== frameVal) ok = false;
         if (isFilled && shape === 'lined') ok = false;
         if (isFilled && card.dataset.borderType === 'brushstroke') ok = false;
+        // Rows filter for square tab count
+        if (shape === 'square' && rowsVal && card.dataset.rows && card.dataset.rows !== rowsVal) ok = false;
         if (ok) count++;
       });
       var countEl = document.getElementById('tab-count-' + shape);
@@ -1465,6 +1480,13 @@ const Gallery = {
     var shapeVal = document.getElementById('filter-shape') ? document.getElementById('filter-shape').value : '';
     var familyVal = document.getElementById('filter-border-style').value;
     var frameVal = document.getElementById('filter-border-count').value;
+    var rowsSelect = document.getElementById('filter-rows');
+    var rowsVal = rowsSelect ? rowsSelect.value : '';
+    // Show/hide Rows dropdown: only visible for square
+    if (rowsSelect) {
+      var rowsGroup = rowsSelect.closest('.filter-bar-group');
+      if (rowsGroup) rowsGroup.style.display = (shapeVal === 'square') ? '' : 'none';
+    }
     // If user selects Lined while Filled, auto-switch to Outlined
     if (shapeVal === 'lined' && this.currentFill === 'full') {
       var fillSelect = document.getElementById('filter-fill');
@@ -1482,6 +1504,8 @@ const Gallery = {
       if (shapeVal && card.dataset.shape !== shapeVal) show = false;
       if (familyVal && card.dataset.family !== familyVal) show = false;
       if (frameVal && card.dataset.frame !== frameVal) show = false;
+      // Rows filter: only applies to square cards
+      if (rowsVal && card.dataset.rows && card.dataset.rows !== rowsVal) show = false;
       card.style.display = show ? '' : 'none';
       if (show) visibleCount++;
     });

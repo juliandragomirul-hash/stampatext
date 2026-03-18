@@ -1485,97 +1485,251 @@ const SvgRenderer = {
    * @param {string} text - user text (already uppercased)
    * @returns {string[]} - array of lines
    */
-  _splitForSquare(text) {
+  // Stop words that should never stand alone on a row
+  _STOP_WORDS: ['the','a','an','to','at','in','on','of','for','and','or','but',
+                'is','it','my','no','so','by','up','do','be','we','us','if','as'],
+
+  /**
+   * Split text for square stamp layout.
+   * @param {string} text - uppercased user text
+   * @param {string} rowMode - '2up' (hero top), '2down' (hero bottom), '3' (equal 3-row)
+   * @returns {{ lines: string[], fontScales: number[], rowMode: string }}
+   */
+  _splitForSquare(text, rowMode) {
     var words = text.trim().split(/\s+/);
+    rowMode = rowMode || '3'; // default to 3-row equal
 
+    // Single word — split by syllable
     if (words.length === 1) {
-      // Single word — split by syllable
       var syllables = this._splitSyllables(words[0]);
-      if (syllables.length <= 1) return { lines: [text], fontScales: [1] };
+      if (syllables.length <= 1) return { lines: [text], fontScales: [1], rowMode: rowMode };
 
-      var bestResult = { lines: [text], fontScales: [1] };
-      var bestScore = Infinity;
-
-      for (var rows = 2; rows <= Math.min(syllables.length, 4); rows++) {
-        var lines = this._distributeSyllables(syllables, rows);
-        var result = this._scoreSquareLayout(lines);
-        if (result.score < bestScore) {
-          bestScore = result.score;
-          bestResult = result;
+      if (rowMode === '3') {
+        // Try 3-row syllable split
+        if (syllables.length >= 3) {
+          var lines3 = this._distributeSyllables(syllables, 3);
+          return { lines: lines3, fontScales: [1, 1, 1], rowMode: '3' };
         }
+        var lines2 = this._distributeSyllables(syllables, 2);
+        return { lines: lines2, fontScales: [1, 1], rowMode: '3' };
       }
-      return bestResult;
+      // 2up/2down: split syllables into 2 rows with hero scaling
+      var lines2 = this._distributeSyllables(syllables, 2);
+      if (rowMode === '2up') {
+        return { lines: lines2, fontScales: [2.0, 1.0], rowMode: '2up' };
+      } else {
+        return { lines: lines2, fontScales: [1.0, 2.0], rowMode: '2down' };
+      }
     }
 
-    // Multi-word — try ALL possible groupings into 2 and 3 rows
-    if (words.length <= 1) return { lines: [text], fontScales: [1] };
+    // Multi-word: group stop words with content words
+    var chunks = this._groupStopWords(words);
+    if (chunks.length <= 1) {
+      // All words in one chunk — fall back to word-level split
+      if (words.length >= 2) {
+        chunks = words.slice(); // each word is its own chunk
+      } else {
+        return { lines: [text], fontScales: [1], rowMode: rowMode };
+      }
+    }
 
-    var bestResult = { lines: [text], fontScales: [1] };
+    if (rowMode === '3') {
+      // 3-row equal font: split into 3 rows (or 2 if only 2 chunks)
+      return this._splitSquare3Row(chunks, words);
+    }
+
+    // 2-row hero: find best 2-row split from chunks
+    return this._splitSquare2Row(chunks, rowMode);
+  },
+
+  /**
+   * 2-row hero split: hero row gets 2x font, other gets 1x.
+   * rowMode '2up' = hero on top, '2down' = hero on bottom.
+   */
+  _splitSquare2Row(chunks, rowMode) {
+    var bestResult = null;
     var bestScore = Infinity;
 
-    // Try 2-row splits: split after word i
-    for (var i = 1; i < words.length; i++) {
-      var lines = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
-      var result = this._scoreSquareLayout(lines);
-      if (result.score < bestScore) {
-        bestScore = result.score;
-        bestResult = result;
+    for (var i = 1; i < chunks.length; i++) {
+      var line1 = chunks.slice(0, i).join(' ');
+      var line2 = chunks.slice(i).join(' ');
+
+      // Determine which line is hero based on rowMode
+      var scales;
+      if (rowMode === '2up') {
+        scales = [2.0, 1.0]; // top is hero
+      } else {
+        scales = [1.0, 2.0]; // bottom is hero
+      }
+
+      // Score: how square-like is this layout?
+      var heroIdx = rowMode === '2up' ? 0 : 1;
+      var heroChars = heroIdx === 0 ? line1.length : line2.length;
+      var smallChars = heroIdx === 0 ? line2.length : line1.length;
+      // Width determined by max(heroChars, smallChars * 2) since hero is 2x font
+      var effectiveWidth = Math.max(heroChars, smallChars * 2);
+      // Height: hero row (2x) + small row (1x) = 3 units
+      var totalHeight = 3 * 0.85;
+      var aspect = effectiveWidth / totalHeight;
+      var score = Math.abs(aspect - 1.4);
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestResult = { lines: [line1, line2], fontScales: scales, rowMode: rowMode };
       }
     }
 
-    // Try 3-row splits: split after word i and j
-    if (words.length >= 3) {
-      for (var i = 1; i < words.length - 1; i++) {
-        for (var j = i + 1; j < words.length; j++) {
-          var lines = [
-            words.slice(0, i).join(' '),
-            words.slice(i, j).join(' '),
-            words.slice(j).join(' ')
-          ];
-          var result = this._scoreSquareLayout(lines);
-          if (result.score < bestScore) {
-            bestScore = result.score;
-            bestResult = result;
-          }
-        }
-      }
+    if (!bestResult) {
+      // Fallback: first word vs rest
+      var allWords = [];
+      for (var c = 0; c < chunks.length; c++) allWords.push(chunks[c]);
+      bestResult = {
+        lines: [allWords[0], allWords.slice(1).join(' ')],
+        fontScales: rowMode === '2up' ? [2.0, 1.0] : [1.0, 2.0],
+        rowMode: rowMode
+      };
     }
-
     return bestResult;
   },
 
   /**
-   * Score a line grouping for square-ness with variable font sizes.
-   * Each row gets a font scale so all rows fill the same width.
-   * Returns { lines, fontScales, score } where score = distance from perfect square.
+   * 3-row equal-font split. All rows get scale 1.0.
+   * Tries to balance row lengths from chunks; falls back to word-level split.
+   */
+  _splitSquare3Row(chunks, words) {
+    // If we have exactly 3 chunks, use them directly
+    if (chunks.length === 3) {
+      return { lines: [chunks[0], chunks[1], chunks[2]], fontScales: [1, 1, 1], rowMode: '3' };
+    }
+
+    // If 2 chunks, split the longer one by words to get 3 rows
+    if (chunks.length === 2) {
+      // Try splitting each chunk
+      var best = null;
+      var bestDiff = Infinity;
+      for (var c = 0; c < 2; c++) {
+        var cWords = chunks[c].split(/\s+/);
+        if (cWords.length >= 2) {
+          for (var w = 1; w < cWords.length; w++) {
+            var part1 = cWords.slice(0, w).join(' ');
+            var part2 = cWords.slice(w).join(' ');
+            var lines = c === 0 ? [part1, part2, chunks[1]] : [chunks[0], part1, part2];
+            var maxL = Math.max(lines[0].length, lines[1].length, lines[2].length);
+            var minL = Math.min(lines[0].length, lines[1].length, lines[2].length);
+            var diff = maxL - minL;
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              best = lines;
+            }
+          }
+        }
+      }
+      if (best) return { lines: best, fontScales: [1, 1, 1], rowMode: '3' };
+      // Can't split into 3 — use 2 rows with equal scaling
+      return { lines: [chunks[0], chunks[1]], fontScales: [1, 1], rowMode: '3' };
+    }
+
+    // 4+ chunks: distribute into 3 groups
+    var bestResult = null;
+    var bestDiff = Infinity;
+    for (var i = 1; i < chunks.length - 1; i++) {
+      for (var j = i + 1; j < chunks.length; j++) {
+        var lines = [
+          chunks.slice(0, i).join(' '),
+          chunks.slice(i, j).join(' '),
+          chunks.slice(j).join(' ')
+        ];
+        var maxL = Math.max(lines[0].length, lines[1].length, lines[2].length);
+        var minL = Math.min(lines[0].length, lines[1].length, lines[2].length);
+        var diff = maxL - minL;
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestResult = { lines: lines, fontScales: [1, 1, 1], rowMode: '3' };
+        }
+      }
+    }
+    if (bestResult) return bestResult;
+
+    // Final fallback: word-level distribution into 3
+    if (words.length >= 3) {
+      var lines = this._distributeSyllables(words, 3);
+      return { lines: lines.map(function(l) { return l; }), fontScales: [1, 1, 1], rowMode: '3' };
+    }
+    return { lines: [words.join(' ')], fontScales: [1], rowMode: '3' };
+  },
+
+  /**
+   * Group stop words with their nearest content word.
+   * Stop words attach to the NEXT content word; trailing stop words attach to previous chunk.
+   * Returns array of chunk strings.
+   */
+  _groupStopWords(words) {
+    var stopSet = {};
+    for (var i = 0; i < this._STOP_WORDS.length; i++) {
+      stopSet[this._STOP_WORDS[i]] = true;
+    }
+
+    // Build chunks: accumulate stop words, attach to next content word
+    var chunks = [];
+    var pending = []; // stop words waiting for a content word
+
+    for (var i = 0; i < words.length; i++) {
+      if (stopSet[words[i].toLowerCase()]) {
+        pending.push(words[i]);
+      } else {
+        // Content word — attach pending stop words
+        pending.push(words[i]);
+        chunks.push(pending.join(' '));
+        pending = [];
+      }
+    }
+
+    // Trailing stop words: attach to last chunk
+    if (pending.length > 0) {
+      if (chunks.length > 0) {
+        chunks[chunks.length - 1] += ' ' + pending.join(' ');
+      } else {
+        chunks.push(pending.join(' '));
+      }
+    }
+
+    return chunks;
+  },
+
+  /**
+   * Score a line grouping for square-ness with hero-word scaling.
+   * Hero row (most characters) gets scale 2.0, others get 1.0.
+   * If all rows are similar length (<20% difference), equal sizing.
+   * Returns { lines, fontScales, score }.
    */
   _scoreSquareLayout(lines) {
-    // Find longest line by char count
     var maxChars = 0;
-    lines.forEach(function(l) { if (l.length > maxChars) maxChars = l.length; });
+    var minChars = Infinity;
+    lines.forEach(function(l) {
+      if (l.length > maxChars) maxChars = l.length;
+      if (l.length < minChars) minChars = l.length;
+    });
     if (maxChars === 0) return { lines: lines, fontScales: lines.map(function() { return 1; }), score: Infinity };
 
-    // Each row's font scale = maxChars / thisRowChars (so all rows fill same width)
+    // If all rows are similar length (within 20%), use equal sizing
+    var charRatio = minChars / maxChars;
+    var useHero = charRatio < 0.8;
+
+    var heroScale = useHero ? 2.0 : 1.0;
     var fontScales = lines.map(function(l) {
-      return l.length > 0 ? maxChars / l.length : 1;
+      return (useHero && l.length === maxChars) ? heroScale : 1.0;
     });
 
-    // Cap extreme scales (don't make tiny words absurdly large)
-    var maxScale = 2.5;
-    fontScales = fontScales.map(function(s) { return Math.min(s, maxScale); });
-
-    // Total height = sum of each row's scaled font height (font scale × base height)
-    // Width = maxChars (all rows fill the same width)
-    // Approximate: width ~ maxChars, height ~ sum of fontScales × 1.15 (line height factor)
+    // Total height: sum of row heights (scale × base line height factor)
     var totalHeight = 0;
     for (var i = 0; i < fontScales.length; i++) {
       totalHeight += fontScales[i] * 0.85;
     }
     var width = maxChars;
 
-    // Aspect ratio: width / totalHeight — perfect square = ~1.8 (char width/height ratio)
+    // Aspect ratio — target ~1.4 for typical font proportions
     var aspect = width / totalHeight;
-    var targetAspect = 1.4; // tuned for typical font proportions
+    var targetAspect = 1.4;
     var score = Math.abs(aspect - targetAspect);
 
     return { lines: lines, fontScales: fontScales, score: score };
@@ -2413,8 +2567,8 @@ const SvgRenderer = {
       // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var proportionalSw = fontRatioForProportional * 30;  // unclamped; per-family min/max below
-      // Square stamps: 50% thicker border for bolder look
-      if (stampShape === 'square') proportionalSw *= 1.5;
+      // Square stamps: 2x thicker border for bolder look
+      if (stampShape === 'square') proportionalSw *= 2.0;
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2604,13 +2758,17 @@ const SvgRenderer = {
         var sqBaseFontSize = newFontSize;
 
         // Calculate total height with variable font sizes
-        var totalSqHeight = 0;
+        // Height = first cap + sum of dy's + last descent
         var sqFontSizes = [];
         for (var si = 0; si < numLines; si++) {
           var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
           sqFontSizes.push(sqBaseFontSize * scale);
-          totalSqHeight += sqBaseFontSize * scale * 0.85; // tight line spacing
         }
+        var totalSqHeight = sqFontSizes[0] * 0.78; // first row cap height
+        for (var si = 1; si < numLines; si++) {
+          totalSqHeight += sqFontSizes[si - 1] * 0.18 + sqFontSizes[si] * 0.78 + sqBaseFontSize * 0.05;
+        }
+        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.18; // last row descent
 
         // Square side = max(width needed, total height + padding)
         var sqRectW = perLineWidth + hPadding * 2;
@@ -2623,13 +2781,16 @@ const SvgRenderer = {
           var sqUpScale = sqWidthAvail / perLineWidth;
           sqBaseFontSize *= sqUpScale;
           // Recalculate font sizes and height
-          totalSqHeight = 0;
           sqFontSizes = [];
           for (var si = 0; si < numLines; si++) {
             var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
             sqFontSizes.push(sqBaseFontSize * scale);
-            totalSqHeight += sqBaseFontSize * scale * 0.85;
           }
+          totalSqHeight = sqFontSizes[0] * 0.78;
+          for (var si = 1; si < numLines; si++) {
+            totalSqHeight += sqFontSizes[si - 1] * 0.18 + sqFontSizes[si] * 0.78 + sqBaseFontSize * 0.05;
+          }
+          totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.18;
           sqRectH = totalSqHeight + vPadding * 2;
           squareSide = Math.max(squareSide, sqRectH);
         }
@@ -2697,17 +2858,25 @@ const SvgRenderer = {
         }
 
         if (sqScalesForDy && sqScalesForDy.length > 1) {
-          // Variable dy: each row's height = its font-size × 0.85 (tight spacing)
-          var rowHeights = [];
+          // Variable dy: baseline-to-baseline = prevFont * belowBaseline + currFont * capHeight
+          // For all-caps: descent ~0.18, cap height ~0.78, gap 5% of base
+          var sqRowFontSizes = [];
           for (var ri = 0; ri < numLines; ri++) {
             var rScale = sqScalesForDy[ri] || 1;
-            rowHeights.push(newFontSize * rScale * 0.85);
+            sqRowFontSizes.push(newFontSize * rScale);
           }
-          // Total text block height
-          var sqTotalH = 0;
-          for (var ri = 0; ri < rowHeights.length; ri++) sqTotalH += rowHeights[ri];
+          // Calculate dy values (baseline to baseline)
+          var sqDyValues = [];
+          for (var ri = 1; ri < sqRowFontSizes.length; ri++) {
+            // prev row below-baseline + current row cap-height + gap
+            sqDyValues.push(sqRowFontSizes[ri - 1] * 0.18 + sqRowFontSizes[ri] * 0.78 + newFontSize * 0.05);
+          }
+          // Total text block height: first row cap + sum of dy's + last row descent
+          var sqTotalH = sqRowFontSizes[0] * 0.78;
+          for (var ri = 0; ri < sqDyValues.length; ri++) sqTotalH += sqDyValues[ri];
+          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * 0.18;
           // First dy: position so the block is vertically centered
-          var sqFirstDy = -sqTotalH / 2 + rowHeights[0] * 0.75;
+          var sqFirstDy = -sqTotalH / 2 + sqRowFontSizes[0] * 0.78;
 
           var sqLineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
@@ -2716,8 +2885,7 @@ const SvgRenderer = {
             if (sqLineIdx === 0) {
               dyVal = sqFirstDy;
             } else {
-              // dy = previous row height (distance from previous baseline to this baseline)
-              dyVal = (rowHeights[sqLineIdx - 1] + rowHeights[sqLineIdx]) / 2;
+              dyVal = sqDyValues[sqLineIdx - 1];
             }
             sqLineIdx++;
             return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
@@ -2836,12 +3004,14 @@ const SvgRenderer = {
       //   Wavy:      outerRectSw raw     (wavy path handles visual weight)
       //   Brush:     outerRectSw raw     (brush group handles visual weight)
       var outerRectSw;
+      var swMin = stampShape === 'square' ? 50 : 30;
+      var swMax = stampShape === 'square' ? 120 : 75;
       if (!hasDecorativeBorder || borderFlags.filter) {
-        // Plain + Torn edge: 30-75
-        outerRectSw = rawOuterSw > 0 ? Math.max(30, Math.min(75, proportionalSw)) : 0;
+        // Plain + Torn edge
+        outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
       } else if (borderFlags.border) {
-        // Zigzag/perforated: 30-75
-        outerRectSw = rawOuterSw > 0 ? Math.max(30, Math.min(75, proportionalSw)) : 0;
+        // Zigzag/perforated
+        outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
       } else {
         // Stitch, wavy, brush: keep raw stroke, scale decorative elements instead
         outerRectSw = rawOuterSw;
