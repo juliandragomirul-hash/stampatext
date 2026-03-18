@@ -45,7 +45,8 @@ const SquareTuning = {
     { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.8,  max: 1.5,  step: 0.05, decimals: 2 },
     { key: 'smallCapH',    label: 'S Cap H',   min: 0.40, max: 1.00, step: 0.02, decimals: 2 },
     { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 15,   step: 0.5,  decimals: 1 },
-    { key: 'smallSpacing', label: 'S Space',   min: 0,    max: 15,   step: 0.5,  decimals: 1 }
+    { key: 'smallSpacing', label: 'S Space',   min: 0,    max: 15,   step: 0.5,  decimals: 1 },
+    { key: 'lineSpacing', label: 'Line Sp',  min: 0.5,  max: 2.0,  step: 0.05, decimals: 2 }
   ],
 
   async init() {
@@ -236,6 +237,8 @@ const SquareTuning = {
     if (!previewEl) return;
 
     try {
+      // Set sqConfig so svg-renderer reads our tuned values
+      SvgRenderer._sqConfig = this.config;
       var weight = this.FONT_WEIGHTS[fontKey] || 400;
       var svg = this.templateSvg;
 
@@ -261,7 +264,7 @@ const SquareTuning = {
           svg = await SvgRenderer.autoFitTextInString(
             svg, zone.svg_element_index || 0,
             zone.bounding_width, zone.font_size, origSx,
-            'single', 'empty', 'strong', null, 'square'
+            'single', 'empty', 'straight', null, 'square'
           );
         } catch (fitErr) {
           console.warn('[SQ-ADMIN] autoFit failed, trying without square:', fitErr.message);
@@ -278,7 +281,7 @@ const SquareTuning = {
       svg = SvgRenderer.colorize(svg, '#dc2626');
       svg = SvgRenderer.applyThinStroke(svg);
       svg = SvgRenderer.cropViewBoxToStamp(svg);
-      svg = SvgRenderer.applyCornerRadius(svg, 'strong');
+      // Straight corners — no applyCornerRadius call
 
       // Display
       previewEl.innerHTML = '';

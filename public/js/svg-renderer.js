@@ -20,6 +20,7 @@ const SvgRenderer = {
 
   // Per-font tuning config loaded from /data/font-config.json
   _fontConfig: null,
+  _sqConfig: null,  // Square tuning config, set by admin or loaded from square-config.json
 
   // Load font config from server (called once at page init)
   loadFontConfig: function() {
@@ -65,6 +66,26 @@ const SvgRenderer = {
     }
     // Legacy flat structure fallback
     return fontEntry;
+  },
+
+  _getSquareConfig: function(fontName, rowMode) {
+    var defaults = {
+      heroCapH: 0.72, heroDescent: 0.05, rowGap: 0,
+      heroStroke: 10.0, heroSpacing: 2.0, heroScaleY: 1.10,
+      smallCapH: 0.72, smallStroke: 5.0, smallSpacing: 2.0,
+      lineSpacing: 1.0
+    };
+    if (!this._sqConfig || !this._sqConfig[fontName]) return defaults;
+    var fontEntry = this._sqConfig[fontName];
+    // Map rowMode to case key: '2up' → 'hero2up', '2down' → 'hero2down', '3' → 'equal3'
+    var caseKey = rowMode === '2up' ? 'hero2up' : rowMode === '2down' ? 'hero2down' : 'equal3';
+    var cfg = fontEntry[caseKey] || {};
+    // Merge with defaults
+    var result = {};
+    for (var k in defaults) {
+      result[k] = cfg[k] !== undefined ? cfg[k] : defaults[k];
+    }
+    return result;
   },
 
   // Map of font names to local font files and their format
@@ -2599,13 +2620,17 @@ const SvgRenderer = {
     var fc = SvgRenderer._getFontConfig(detectedFont, textCase);
     var fontScaleY = fc.scaleY;
     var fontLetterSpacing = fc.letterSpacing;
-    // Square stamps: tighter letters, much thicker text stroke
+    // Square stamps: read per-font tuning from square config
+    var sqCfg = null;
     if (stampShape === 'square') {
-      fontLetterSpacing = Math.max(fontLetterSpacing, 0) * 0.5;
+      var sqRowModeMatch = svgString.match(/data-sq-rowmode=["']([^"']+)["']/);
+      var sqRowMode = sqRowModeMatch ? sqRowModeMatch[1] : '2up';
+      sqCfg = SvgRenderer._getSquareConfig(detectedFont, sqRowMode);
+      fontLetterSpacing = sqCfg.heroSpacing;
     }
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
-    if (stampShape === 'square') {
-      fontTune.stroke = Math.max(fontTune.stroke, 5) * 3.0;
+    if (stampShape === 'square' && sqCfg) {
+      fontTune.stroke = sqCfg.heroStroke;
     }
     // Letter-spacing is absolute in SVG (doesn't scale with font size).
     // Track it separately so the ratio calculation only scales char widths.
@@ -2938,12 +2963,15 @@ const SvgRenderer = {
           sqFontSizes.push(heroFontSize * (heroChars / rowChars));
         }
 
-        // Total text block height — very tight poster layout
-        var totalSqHeight = sqFontSizes[0] * 0.75;
+        // Total text block height — use sqCfg values
+        var _capH = sqCfg ? sqCfg.heroCapH : 0.72;
+        var _desc = sqCfg ? sqCfg.heroDescent : 0.05;
+        var _rGap = sqCfg ? sqCfg.rowGap : 0;
+        var totalSqHeight = sqFontSizes[0] * _capH;
         for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * 0.02 + sqFontSizes[si] * 0.35;
+          totalSqHeight += sqFontSizes[si - 1] * _desc + sqFontSizes[si] * (sqCfg ? sqCfg.smallCapH : 0.72) + _rGap;
         }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.02;
+        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * _desc;
 
         // The visual width at current heroFontSize
         var heroVisualWidth = heroChars * avgCharWidth;
@@ -2965,12 +2993,12 @@ const SvgRenderer = {
           sqFontSizes.push(heroFontSize * (heroChars / rowChars));
         }
 
-        // Recompute height
-        totalSqHeight = sqFontSizes[0] * 0.75;
+        // Recompute height with sqCfg
+        totalSqHeight = sqFontSizes[0] * _capH;
         for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * 0.02 + sqFontSizes[si] * 0.35;
+          totalSqHeight += sqFontSizes[si - 1] * _desc + sqFontSizes[si] * (sqCfg ? sqCfg.smallCapH : 0.72) + _rGap;
         }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.02;
+        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * _desc;
 
         // Final square side
         sqSideFromH = totalSqHeight + sqPad * 2;
@@ -2991,8 +3019,9 @@ const SvgRenderer = {
             var isHero = (tspanFontIdx === heroIdx);
             tspanFontIdx++;
             attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
-            // Hero row gets +10% vertical scale for taller letters
-            var extra = isHero ? ' transform="scale(1, 1.1)"' : '';
+            // Hero row gets vertical scale for taller letters
+            var _scY = sqCfg ? sqCfg.heroScaleY : 1.10;
+            var extra = (isHero && _scY !== 1.0) ? ' transform="scale(1, ' + _scY.toFixed(2) + ')"' : '';
             return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '"' + extra + '>';
           }
           return match;
