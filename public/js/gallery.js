@@ -271,14 +271,17 @@ const Gallery = {
         var cleanedSvg = SvgRenderer.cleanSvgString(paired[i].svg);
         cleanedSvg = SvgRenderer.uniquifySvgIds(cleanedSvg);
 
-        // Gallery font: use selected font from filter bar
-        var fontKey = this.selectedFont || 'Oswald';
         var fontWeights = {
           'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700',
           'Yomogi': '400', 'BlackOpsOne': '400', 'Nunito': '900',
           'Exo2': '700', 'Bitter': '500', 'Comfortaa': '700',
           'FuzzyBubbles': '700', 'BebasNeue': '400'
         };
+        // Gallery font: showcase = random per template, otherwise use selected
+        var fontKeys = Object.keys(fontWeights);
+        var fontKey = this.isShowcase
+          ? fontKeys[Math.floor(Math.random() * fontKeys.length)]
+          : (this.selectedFont || 'Oswald');
         var cycleFont = { key: fontKey, weight: fontWeights[fontKey] || '500' };
         cleanedSvg = cleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + cycleFont.key + "'\"");
@@ -453,8 +456,10 @@ const Gallery = {
           // Skip double frame for outlined torn edge — poor visual result
           if (frameMode === 'double' && bi.filter && base.fillType !== 'full') continue;
 
-          // Selected color > default red
-          var color = this.selectedColor || '#dc2626';
+          // Showcase = random color per variant, otherwise selected > default red
+          var color = this.isShowcase
+            ? this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)]
+            : (this.selectedColor || '#dc2626');
 
           // Per-variant font sizing: re-apply autoFit with frame-specific interior
           var variantSvg = base.svgString;
