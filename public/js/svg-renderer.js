@@ -2679,8 +2679,8 @@ const SvgRenderer = {
       // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var proportionalSw = fontRatioForProportional * 30;  // unclamped; per-family min/max below
-      // Square stamps: 4.5x thicker border for bolder look
-      if (stampShape === 'square') proportionalSw *= 4.5;
+      // Square stamps: 2.5x thicker border
+      if (stampShape === 'square') proportionalSw *= 2.5;
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2939,12 +2939,12 @@ const SvgRenderer = {
           sqFontSizes.push(heroFontSize * (heroChars / rowChars));
         }
 
-        // Total text block height
-        var totalSqHeight = sqFontSizes[0] * 0.78;
+        // Total text block height — tight spacing for poster layout
+        var totalSqHeight = sqFontSizes[0] * 0.75;
         for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * 0.15 + sqFontSizes[si] * 0.78;
+          totalSqHeight += sqFontSizes[si - 1] * 0.05 + sqFontSizes[si] * 0.75;
         }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.15;
+        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.05;
 
         // The visual width at current heroFontSize
         var heroVisualWidth = heroChars * avgCharWidth;
@@ -2967,11 +2967,11 @@ const SvgRenderer = {
         }
 
         // Recompute height
-        totalSqHeight = sqFontSizes[0] * 0.78;
+        totalSqHeight = sqFontSizes[0] * 0.75;
         for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * 0.15 + sqFontSizes[si] * 0.78;
+          totalSqHeight += sqFontSizes[si - 1] * 0.05 + sqFontSizes[si] * 0.75;
         }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.15;
+        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.05;
 
         // Final square side
         sqSideFromH = totalSqHeight + sqPad * 2;
@@ -3039,7 +3039,7 @@ const SvgRenderer = {
 
         if (sqScalesForDy && sqScalesForDy.length > 1) {
           // Variable dy: baseline-to-baseline = prevFont * belowBaseline + currFont * capHeight
-          // For all-caps: descent ~0.18, cap height ~0.78, gap 5% of base
+          // Tight poster spacing: cap height ~0.75, descent ~0.05
           var sqRowFontSizes = [];
           for (var ri = 0; ri < numLines; ri++) {
             var rScale = sqScalesForDy[ri] || 1;
@@ -3048,15 +3048,14 @@ const SvgRenderer = {
           // Calculate dy values (baseline to baseline)
           var sqDyValues = [];
           for (var ri = 1; ri < sqRowFontSizes.length; ri++) {
-            // prev row below-baseline + current row cap-height + gap
-            sqDyValues.push(sqRowFontSizes[ri - 1] * 0.18 + sqRowFontSizes[ri] * 0.78 + newFontSize * 0.05);
+            sqDyValues.push(sqRowFontSizes[ri - 1] * 0.05 + sqRowFontSizes[ri] * 0.75);
           }
-          // Total text block height: first row cap + sum of dy's + last row descent
-          var sqTotalH = sqRowFontSizes[0] * 0.78;
+          // Total text block height
+          var sqTotalH = sqRowFontSizes[0] * 0.75;
           for (var ri = 0; ri < sqDyValues.length; ri++) sqTotalH += sqDyValues[ri];
-          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * 0.18;
+          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * 0.05;
           // First dy: position so the block is vertically centered
-          var sqFirstDy = -sqTotalH / 2 + sqRowFontSizes[0] * 0.78;
+          var sqFirstDy = -sqTotalH / 2 + sqRowFontSizes[0] * 0.75;
 
           var sqLineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
@@ -3184,8 +3183,8 @@ const SvgRenderer = {
       //   Wavy:      outerRectSw raw     (wavy path handles visual weight)
       //   Brush:     outerRectSw raw     (brush group handles visual weight)
       var outerRectSw;
-      var swMin = stampShape === 'square' ? 50 : 30;
-      var swMax = stampShape === 'square' ? 180 : 75;
+      var swMin = stampShape === 'square' ? 40 : 30;
+      var swMax = stampShape === 'square' ? 100 : 75;
       if (!hasDecorativeBorder || borderFlags.filter) {
         // Plain + Torn edge
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
