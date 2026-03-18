@@ -85,15 +85,13 @@ const SquareTuning = {
 
   async loadPreviewTemplate() {
     // Use same template loading as FontTuning — find a plain outlined template
-    var supabase = window.__supabaseClient;
-    console.log('[SQ-ADMIN] supabase client:', !!supabase);
-    if (!supabase) {
-      console.error('[SQ-ADMIN] No supabase client! Check if supabase-client.js is loaded.');
+    if (typeof sb === 'undefined') {
+      console.error('[SQ-ADMIN] No supabase client (sb)! Check if supabase-client.js is loaded.');
       return;
     }
 
     // Get any active outlined template for preview
-    var { data, error } = await supabase
+    var { data, error } = await sb
       .from('templates')
       .select('*, text_zones(*)')
       .eq('is_active', true)
@@ -103,7 +101,7 @@ const SquareTuning = {
 
     if (!data || data.length === 0) {
       // Nuclear fallback: any active template
-      var fallback = await supabase
+      var fallback = await sb
         .from('templates')
         .select('*, text_zones(*)')
         .eq('is_active', true)
@@ -115,11 +113,11 @@ const SquareTuning = {
     if (data && data.length > 0) {
       var tpl = data[0];
       this.currentTemplate = tpl;
-      var svgUrl = 'https://rtxbuywxzcmlufwumcrg.supabase.co/storage/v1/object/public/templates/' + tpl.svg_path;
-      var svgResp = await fetch(svgUrl);
-      this.templateSvg = await svgResp.text();
-      var zones = (tpl.text_zones || []).filter(z => z.is_editable).sort((a, b) => a.sort_order - b.sort_order);
-      this.templateZone = zones[0] || null;
+      var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
+      var svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
+      var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
+      this.templateSvg = SvgRenderer.cleanSvgString ? SvgRenderer.cleanSvgString(rawSvg) : rawSvg;
+      this.templateZone = tpl.text_zones && tpl.text_zones[0] ? tpl.text_zones[0] : null;
     }
   },
 
