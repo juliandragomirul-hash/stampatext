@@ -2899,22 +2899,23 @@ const SvgRenderer = {
         var sqScalesMatch = result.match(/data-sq-scales="([^"]+)"/);
         var sqScales = sqScalesMatch ? sqScalesMatch[1].split(',').map(Number) : null;
 
-        // For square: the widest row determines the base width
-        // Extract per-row text to get char counts
+        // For square: find the widest row's visual width at base font
+        // Extract per-row text
         var sqTspanTexts = [];
         result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
           sqTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
         });
-        // Find widest row: chars × fontScale (hero chars at 2x font are visually wider per char)
-        var maxRowChars = 0;
+        // Each row's visual width at BASE font = (rowChars / totalChars) × measuredWidth × fontScale
+        // The widest one determines the square width needed
+        var totalCharsWithSpaces = sqTspanTexts.join(' ').length || 1;
+        var maxVisualPx = 0;
         for (var si = 0; si < sqTspanTexts.length; si++) {
-          if (sqTspanTexts[si].length > maxRowChars) maxRowChars = sqTspanTexts[si].length;
+          var rowScale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
+          var rowWidthPx = (sqTspanTexts[si].length / totalCharsWithSpaces) * measuredWidth * rowScale;
+          if (rowWidthPx > maxVisualPx) maxVisualPx = rowWidthPx;
         }
-        // Total chars in original single-line text
-        var totalTextChars = sqTspanTexts.join(' ').length || 1;
-        // Per-line width = measured single-line width × (longest row chars / total chars)
-        // This gives the pixel width of the longest row at the BASE font size
-        var perLineWidth = measuredWidth * (maxRowChars / totalTextChars);
+        // perLineWidth = the widest row's pixel width at base font (before scaling)
+        var perLineWidth = maxVisualPx > 0 ? maxVisualPx : (measuredWidth / numLines);
         var sqBaseFontSize = newFontSize;
 
         // Calculate total height with variable font sizes
