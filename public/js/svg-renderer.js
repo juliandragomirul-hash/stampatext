@@ -2852,10 +2852,44 @@ const SvgRenderer = {
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
 
-      // Square shape enforcement: recalculate sizing for square aspect ratio
-      if (stampShape === 'square') {
-        console.log('[SQ-ENFORCE] numLines=' + numLines + ' numTspans=' + numTspans + ' measuredWidth=' + measuredWidth);
+      // Square shape enforcement: if text is still single-line, split it now
+      if (stampShape === 'square' && numLines <= 1) {
+        // Read rowMode from data attribute (set by gallery.js), default to '2up'
+        var rmMatch = result.match(/data-sq-rowmode="([^"]+)"/);
+        var sqRowMode = rmMatch ? rmMatch[1] : '2up';
+        // Extract current text from tspans or text element
+        var sqTextMatch = result.match(/<tspan[^>]*>([^<]*)<\/tspan>/i);
+        var sqRawText = sqTextMatch ? sqTextMatch[1] : '';
+        if (!sqRawText) {
+          // Try bare text content
+          var bareMatch = result.match(/<text[^>]*>([^<]+)<\/text>/i);
+          sqRawText = bareMatch ? bareMatch[1] : '';
+        }
+        sqRawText = sqRawText.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        if (sqRawText.trim().length > 1) {
+          var sqSplitResult = SvgRenderer._splitForSquare(sqRawText.trim(), sqRowMode);
+          if (sqSplitResult.lines.length > 1) {
+            // Rebuild text element with multi-line tspans
+            var sqNewContent = '';
+            for (var sli = 0; sli < sqSplitResult.lines.length; sli++) {
+              var sqLineEsc = sqSplitResult.lines[sli].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              sqNewContent += '<tspan x="0" dy="0">' + sqLineEsc + '</tspan>';
+            }
+            // Replace text content (between <text...> and </text>)
+            result = result.replace(/(<text[^>]*>)([\s\S]*?)(<\/text>)/i, '$1' + sqNewContent + '$3');
+            // Add data attributes for scales
+            if (!result.match(/data-sq-scales=/)) {
+              result = result.replace(/<svg/, '<svg data-sq-scales="' + sqSplitResult.fontScales.join(',') + '"');
+            }
+            // Recount lines and tspans
+            numLines = sqSplitResult.lines.length;
+            numTspans = sqSplitResult.lines.length;
+            console.log('[SQ-SPLIT-INLINE] split "' + sqRawText + '" into ' + numLines + ' lines, mode=' + sqRowMode);
+          }
+        }
       }
+
+      // Square shape enforcement: recalculate sizing for square aspect ratio
       if (stampShape === 'square' && numLines > 1) {
         // Read per-row font scales from data attribute (set by _splitForSquare)
         var sqScalesMatch = svgString.match(/data-sq-scales="([^"]+)"/);

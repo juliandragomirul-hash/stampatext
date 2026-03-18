@@ -188,6 +188,17 @@
       btn.textContent = 'Stamp';
     }, 30000);
 
+    // Show loading pill
+    var loadPill = document.getElementById('loading-pill');
+    if (!loadPill) {
+      loadPill = document.createElement('div');
+      loadPill.id = 'loading-pill';
+      loadPill.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;color:#fff;padding:12px 28px;border-radius:24px;font-size:15px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+      document.body.appendChild(loadPill);
+    }
+    loadPill.textContent = 'Loading models...';
+    loadPill.style.display = '';
+
     // Show results area with loading
     document.getElementById('stamp-results').style.display = 'block';
     // Hide filter bar during processing (it lives in sticky section, not results-batches)
@@ -216,6 +227,8 @@
       clearTimeout(safetyTimer);
       isProcessing = false;
       btn.disabled = false;
+      var lp = document.getElementById('loading-pill');
+      if (lp) lp.style.display = 'none';
       btn.textContent = 'Stamp';
     }
   }
