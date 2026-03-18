@@ -293,6 +293,33 @@ app.put('/api/admin/font-config', (req, res) => {
   }
 });
 
+// ---- API: Square Font Config (admin) ----
+const SQUARE_CONFIG_PATH = path.join(__dirname, 'public', 'data', 'square-config.json');
+
+app.get('/api/admin/square-config', (req, res) => {
+  try {
+    const data = fs.readFileSync(SQUARE_CONFIG_PATH, 'utf8');
+    res.json(JSON.parse(data));
+  } catch (err) {
+    console.error('Failed to read square config:', err);
+    res.status(500).json({ error: 'Failed to read square config' });
+  }
+});
+
+app.put('/api/admin/square-config', (req, res) => {
+  try {
+    const config = req.body;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      return res.status(400).json({ error: 'Invalid config format' });
+    }
+    fs.writeFileSync(SQUARE_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf8');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to write square config:', err);
+    res.status(500).json({ error: 'Failed to write square config' });
+  }
+});
+
 // ---- HTML routes ----
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'index.html'));

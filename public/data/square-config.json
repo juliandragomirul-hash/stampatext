@@ -1,0 +1,57 @@
+{
+  "Oswald": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 5, "heroSpacing": 3, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 3 }
+  },
+  "CourierPrime": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 5, "heroSpacing": 3, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 3 }
+  },
+  "Montserrat": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 5, "heroSpacing": 3, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 3 }
+  },
+  "Yomogi": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 10, "heroSpacing": 4, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 7, "smallSpacing": 4 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 10, "heroSpacing": 4, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 7, "smallSpacing": 4 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 7, "heroSpacing": 5, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 7, "smallSpacing": 5 }
+  },
+  "BlackOpsOne": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 4, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 1, "smallSpacing": 0 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 4, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 1, "smallSpacing": 0 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 1, "heroSpacing": 0, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 1, "smallSpacing": 0 }
+  },
+  "Nunito": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 6, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 3, "smallSpacing": 0 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 6, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 3, "smallSpacing": 0 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 3, "heroSpacing": 0, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 3, "smallSpacing": 0 }
+  },
+  "Exo2": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 2, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 5, "heroSpacing": 3, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 3 }
+  },
+  "Bitter": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 6, "heroSpacing": 1, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 3, "smallSpacing": 1 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 6, "heroSpacing": 1, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 3, "smallSpacing": 1 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 3, "heroSpacing": 2, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 3, "smallSpacing": 2 }
+  },
+  "Comfortaa": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 0 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 0 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 5, "heroSpacing": 0, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 0 }
+  },
+  "FuzzyBubbles": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 4, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 2, "smallSpacing": 0 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 4, "heroSpacing": 0, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 2, "smallSpacing": 0 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 2, "heroSpacing": 0, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 2, "smallSpacing": 0 }
+  },
+  "BebasNeue": {
+    "hero2up": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 1, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 1 },
+    "hero2down": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 8, "heroSpacing": 1, "heroScaleY": 1.1, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 1 },
+    "equal3": { "heroCapH": 0.72, "heroDescent": 0.05, "rowGap": 0, "heroStroke": 5, "heroSpacing": 2, "heroScaleY": 1.0, "smallCapH": 0.72, "smallStroke": 5, "smallSpacing": 2 }
+  }
+}

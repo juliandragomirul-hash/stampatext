@@ -37,6 +37,7 @@
         <li><a class="admin-nav-item" href="#templates">Templates</a></li>
         <li><a class="admin-nav-item" href="#textures">Textures</a></li>
         <li><a class="admin-nav-item" href="#fonts">Font Tuning</a></li>
+        <li><a class="admin-nav-item" href="#squares">Square Tuning</a></li>
         <li><a class="admin-nav-item" href="#users">Users</a></li>
       </ul>
     </nav>
@@ -251,6 +252,16 @@
         <div id="font-tuning-grid" class="font-tuning-grid"></div>
       </div>
 
+      <div id="section-squares" style="display:none;">
+        <h1 class="page-title">Square Stamp Tuning</h1>
+        <p class="page-subtitle">Tune hero/small row parameters per font for square stamps</p>
+        <div style="margin-bottom: 1rem;">
+          <button class="btn btn-primary" id="square-save-all" onclick="SquareTuning.saveAll()">Save All</button>
+          <span id="square-save-status" style="margin-left: 0.75rem; color: #22c55e; display: none;">Saved!</span>
+        </div>
+        <div id="square-tuning-grid" class="font-tuning-grid"></div>
+      </div>
+
     </main>
   </div>
 
@@ -266,6 +277,7 @@
   <script src="/js/svg-renderer.js"></script>
   <script src="/js/admin-templates.js"></script>
   <script src="/js/admin-font-tuning.js"></script>
+  <script src="/js/admin-square-tuning.js"></script>
   <script>
     function toggleMenu() {
       document.getElementById('user-menu').classList.toggle('active');

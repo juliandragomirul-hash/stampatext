@@ -56,6 +56,19 @@
         FontTuning.init();
       }
     }
+    var squaresSection = document.getElementById('section-squares');
+    if (squaresSection) {
+      squaresSection.style.display = name === 'squares' ? 'block' : 'none';
+      if (name === 'squares' && typeof SquareTuning !== 'undefined' && !SquareTuning._initialized) {
+        SquareTuning._initialized = true;
+        SquareTuning.init();
+      }
+    }
+    // Users section
+    var usersSection = document.getElementById('section-users');
+    if (usersSection) {
+      usersSection.style.display = name === 'users' ? 'block' : 'none';
+    }
   }
 
   // ---- Custom color palette ----
