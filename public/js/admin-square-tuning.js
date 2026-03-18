@@ -86,27 +86,30 @@ const SquareTuning = {
   async loadPreviewTemplate() {
     // Use same template loading as FontTuning — find a plain outlined template
     var supabase = window.__supabaseClient;
-    if (!supabase) return;
+    console.log('[SQ-ADMIN] supabase client:', !!supabase);
+    if (!supabase) {
+      console.error('[SQ-ADMIN] No supabase client! Check if supabase-client.js is loaded.');
+      return;
+    }
 
-    // Use plain border straight corners — we apply strong rounding programmatically
-    var { data } = await supabase
+    // Get any active outlined template for preview
+    var { data, error } = await supabase
       .from('templates')
       .select('*, text_zones(*)')
       .eq('is_active', true)
-      .is('border_type', null)
       .eq('fill_type', 'empty')
-      .eq('frame_type', 'single')
       .limit(1);
+    console.log('[SQ-ADMIN] template query result:', data ? data.length : 0, 'error:', error);
 
     if (!data || data.length === 0) {
-      // Fallback: any active outlined template
+      // Nuclear fallback: any active template
       var fallback = await supabase
         .from('templates')
         .select('*, text_zones(*)')
         .eq('is_active', true)
-        .eq('fill_type', 'empty')
         .limit(1);
       data = fallback.data;
+      console.log('[SQ-ADMIN] fallback result:', data ? data.length : 0);
     }
 
     if (data && data.length > 0) {
