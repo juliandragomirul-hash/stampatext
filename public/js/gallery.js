@@ -460,6 +460,9 @@ const Gallery = {
           var variantSvg = base.svgString;
 
           // Square: re-replace text with row-mode-specific line splits
+          if (stampShape === 'square') {
+            console.log('[SQ-DEBUG] preAutoFitSvg=' + !!base.preAutoFitSvg + ' rowMode=' + currentRowMode + ' template=' + base.name);
+          }
           if (stampShape === 'square' && base.preAutoFitSvg) {
             try {
               var sqText = (self.currentText || 'Your text here').toUpperCase();
@@ -1024,7 +1027,7 @@ const Gallery = {
     if (frameSelect) frameSelect.value = frameSelect.value || 'single';
 
     var rowsSelect = document.getElementById('filter-rows');
-    if (rowsSelect && this.activeRows) rowsSelect.value = this.activeRows;
+    if (rowsSelect) rowsSelect.value = this.activeRows || '2up';
 
     var fillSelect = document.getElementById('filter-fill');
     var savedFill = this.currentFill || 'empty';
