@@ -97,6 +97,9 @@ const SquareTuning = {
       .select('*, text_zones(*)')
       .eq('is_active', true)
       .eq('fill_type', 'empty')
+      .eq('corner_type', 'straight')
+      .is('border_type', null)
+      .eq('frame_type', 'single')
       .limit(1);
     console.log('[SQ-ADMIN] template query result:', data ? data.length : 0, 'error:', error);
 
