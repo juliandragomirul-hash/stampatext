@@ -254,15 +254,25 @@ const SquareTuning = {
       // Inject rowMode for square inline split
       svg = svg.replace(/<svg/, '<svg data-sq-rowmode="' + cs.rowMode + '"');
 
-      // Auto-fit with square shape
+      // Auto-fit — first as rectangle to get base sizing, then apply square enforcement
       if (zone && zone.bounding_width) {
         var origSx = zone.transform_matrix
           ? parseFloat(zone.transform_matrix.match(/matrix\(\s*([\d.]+)/)?.[1]) || 1 : 1;
-        svg = await SvgRenderer.autoFitTextInString(
-          svg, zone.svg_element_index || 0,
-          zone.bounding_width, zone.font_size, origSx,
-          'single', 'empty', 'strong', null, 'square'
-        );
+        try {
+          svg = await SvgRenderer.autoFitTextInString(
+            svg, zone.svg_element_index || 0,
+            zone.bounding_width, zone.font_size, origSx,
+            'single', 'empty', 'strong', null, 'square'
+          );
+        } catch (fitErr) {
+          console.warn('[SQ-ADMIN] autoFit failed, trying without square:', fitErr.message);
+          // Fallback: render as rectangle
+          svg = await SvgRenderer.autoFitTextInString(
+            svg, zone.svg_element_index || 0,
+            zone.bounding_width, zone.font_size, origSx,
+            'single', 'empty', 'strong', null
+          );
+        }
       }
 
       // Colorize red, stroke, crop, corners
