@@ -1618,9 +1618,9 @@ const SvgRenderer = {
       // 2up/2down: split syllables into 2 rows with hero scaling
       var lines2 = this._distributeSyllables(syllables, 2);
       if (rowMode === '2up') {
-        return { lines: lines2, fontScales: [2.0, 1.0], rowMode: '2up' };
+        return { lines: lines2, fontScales: [3.0, 1.0], rowMode: '2up' };
       } else {
-        return { lines: lines2, fontScales: [1.0, 2.0], rowMode: '2down' };
+        return { lines: lines2, fontScales: [1.0, 3.0], rowMode: '2down' };
       }
     }
 
@@ -1663,12 +1663,12 @@ const SvgRenderer = {
       // Hero = first chunk, small = rest joined
       line1 = chunks[0];
       line2 = chunks.slice(1).join(' ');
-      scales = [2.0, 1.0];
+      scales = [3.0, 1.0];
     } else {
       // Hero = last chunk, small = rest joined
       line1 = chunks.slice(0, -1).join(' ');
       line2 = chunks[chunks.length - 1];
-      scales = [1.0, 2.0];
+      scales = [1.0, 3.0];
     }
 
     return { lines: [line1, line2], fontScales: scales, rowMode: rowMode };
@@ -2679,8 +2679,8 @@ const SvgRenderer = {
       // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var proportionalSw = fontRatioForProportional * 30;  // unclamped; per-family min/max below
-      // Square stamps: 2x thicker border for bolder look
-      if (stampShape === 'square') proportionalSw *= 2.0;
+      // Square stamps: 3x thicker border for bolder look
+      if (stampShape === 'square') proportionalSw *= 3.0;
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2830,9 +2830,9 @@ const SvgRenderer = {
       // STEP 2: Inside-out rect wrapping
       // Inner gap: proportional breathing room — larger font (short text) gets more gap
       // Square stamps use minimal padding for tight, punchy look
-      var baseGap = stampShape === 'square' ? 3 : 10;
-      var hInnerGap = stampShape === 'square' ? 3 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
-      var vInnerGap = stampShape === 'square' ? 3 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
+      var baseGap = stampShape === 'square' ? 1 : 10;
+      var hInnerGap = stampShape === 'square' ? 1 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
+      var vInnerGap = stampShape === 'square' ? 1 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
 
       // Recompute text zone with actual stroke for rect padding (clamped per-family)
       var actualSw = capStroke ? Math.max(30, Math.min(75, proportionalSw)) : estStrokeW;
