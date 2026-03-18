@@ -2599,14 +2599,13 @@ const SvgRenderer = {
     var fc = SvgRenderer._getFontConfig(detectedFont, textCase);
     var fontScaleY = fc.scaleY;
     var fontLetterSpacing = fc.letterSpacing;
-    // Square stamps: bolder text with more tracking
+    // Square stamps: tighter letters, much thicker text stroke
     if (stampShape === 'square') {
-      fontLetterSpacing = Math.max(fontLetterSpacing, 3) * 1.5;
+      fontLetterSpacing = Math.max(fontLetterSpacing, 0) * 0.5;
     }
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
-    // Square stamps: thicker text stroke
     if (stampShape === 'square') {
-      fontTune.stroke = Math.max(fontTune.stroke, 3) * 1.5;
+      fontTune.stroke = Math.max(fontTune.stroke, 5) * 3.0;
     }
     // Letter-spacing is absolute in SVG (doesn't scale with font size).
     // Track it separately so the ratio calculation only scales char widths.
@@ -2679,8 +2678,8 @@ const SvgRenderer = {
       // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var proportionalSw = fontRatioForProportional * 30;  // unclamped; per-family min/max below
-      // Square stamps: 2.5x thicker border
-      if (stampShape === 'square') proportionalSw *= 2.5;
+      // Square stamps: 1.9x thicker border
+      if (stampShape === 'square') proportionalSw *= 1.9;
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2939,12 +2938,12 @@ const SvgRenderer = {
           sqFontSizes.push(heroFontSize * (heroChars / rowChars));
         }
 
-        // Total text block height — tight spacing for poster layout
+        // Total text block height — very tight poster layout
         var totalSqHeight = sqFontSizes[0] * 0.75;
         for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * 0.05 + sqFontSizes[si] * 0.75;
+          totalSqHeight += sqFontSizes[si - 1] * 0.02 + sqFontSizes[si] * 0.35;
         }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.05;
+        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.02;
 
         // The visual width at current heroFontSize
         var heroVisualWidth = heroChars * avgCharWidth;
@@ -2969,9 +2968,9 @@ const SvgRenderer = {
         // Recompute height
         totalSqHeight = sqFontSizes[0] * 0.75;
         for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * 0.05 + sqFontSizes[si] * 0.75;
+          totalSqHeight += sqFontSizes[si - 1] * 0.02 + sqFontSizes[si] * 0.35;
         }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.05;
+        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * 0.02;
 
         // Final square side
         sqSideFromH = totalSqHeight + sqPad * 2;
@@ -2984,14 +2983,17 @@ const SvgRenderer = {
         textBlockHeight = totalSqHeight;
         lineHeight = heroFontSize * 1.15;
 
-        // Apply per-tspan font-size
+        // Apply per-tspan font-size + hero scaleY(1.1)
         var tspanFontIdx = 0;
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
           if (tspanFontIdx < sqFontSizes.length) {
             var fs = sqFontSizes[tspanFontIdx];
+            var isHero = (tspanFontIdx === heroIdx);
             tspanFontIdx++;
             attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
-            return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '">';
+            // Hero row gets +10% vertical scale for taller letters
+            var extra = isHero ? ' transform="scale(1, 1.1)"' : '';
+            return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '"' + extra + '>';
           }
           return match;
         });
@@ -3039,7 +3041,7 @@ const SvgRenderer = {
 
         if (sqScalesForDy && sqScalesForDy.length > 1) {
           // Variable dy: baseline-to-baseline = prevFont * belowBaseline + currFont * capHeight
-          // Tight poster spacing: cap height ~0.75, descent ~0.05
+          // Very tight poster spacing
           var sqRowFontSizes = [];
           for (var ri = 0; ri < numLines; ri++) {
             var rScale = sqScalesForDy[ri] || 1;
@@ -3048,12 +3050,12 @@ const SvgRenderer = {
           // Calculate dy values (baseline to baseline)
           var sqDyValues = [];
           for (var ri = 1; ri < sqRowFontSizes.length; ri++) {
-            sqDyValues.push(sqRowFontSizes[ri - 1] * 0.05 + sqRowFontSizes[ri] * 0.75);
+            sqDyValues.push(sqRowFontSizes[ri - 1] * 0.02 + sqRowFontSizes[ri] * 0.35);
           }
           // Total text block height
           var sqTotalH = sqRowFontSizes[0] * 0.75;
           for (var ri = 0; ri < sqDyValues.length; ri++) sqTotalH += sqDyValues[ri];
-          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * 0.05;
+          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * 0.02;
           // First dy: position so the block is vertically centered
           var sqFirstDy = -sqTotalH / 2 + sqRowFontSizes[0] * 0.75;
 
@@ -3184,7 +3186,7 @@ const SvgRenderer = {
       //   Brush:     outerRectSw raw     (brush group handles visual weight)
       var outerRectSw;
       var swMin = stampShape === 'square' ? 40 : 30;
-      var swMax = stampShape === 'square' ? 100 : 75;
+      var swMax = stampShape === 'square' ? 80 : 75;
       if (!hasDecorativeBorder || borderFlags.filter) {
         // Plain + Torn edge
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
