@@ -535,6 +535,11 @@ const Gallery = {
             framed = cropped;
           }
 
+          // Add horizontal filler lines for 3-row square stamps
+          if (stampShape === 'square' && currentRowMode === '3') {
+            framed = SvgRenderer.addSquareFillerLines(framed, currentRowMode);
+          }
+
           var result = {
             templateId: base.templateId,
             svgString: SvgRenderer.addWatermark(framed),
@@ -1017,6 +1022,9 @@ const Gallery = {
 
     var frameSelect = document.getElementById('filter-border-count');
     if (frameSelect) frameSelect.value = frameSelect.value || 'single';
+
+    var rowsSelect = document.getElementById('filter-rows');
+    if (rowsSelect && this.activeRows) rowsSelect.value = this.activeRows;
 
     var fillSelect = document.getElementById('filter-fill');
     var savedFill = this.currentFill || 'empty';

@@ -1485,6 +1485,107 @@ const SvgRenderer = {
    * @param {string} text - user text (already uppercased)
    * @returns {string[]} - array of lines
    */
+  /**
+   * Add horizontal filler lines to 3-row square stamps.
+   * Lines extend from text edges to rect border with 10px gaps.
+   * @param {string} svgString - processed SVG
+   * @param {string} rowMode - '3' for equal rows (only mode that gets lines)
+   * @returns {string} SVG with filler lines injected
+   */
+  addSquareFillerLines(svgString, rowMode) {
+    if (rowMode !== '3') return svgString;
+
+    // Find the outer rect (largest rect with stroke)
+    var rectMatch = svgString.match(/<rect[^>]*\bwidth=["']([\d.]+)["'][^>]*\bheight=["']([\d.]+)["'][^>]*>/i);
+    if (!rectMatch) return svgString;
+
+    // Parse rect bounds
+    var rAttrs = rectMatch[0];
+    var rX = parseFloat((rAttrs.match(/\bx=["']([\d.\-]+)["']/) || [0, 0])[1]);
+    var rY = parseFloat((rAttrs.match(/\by=["']([\d.\-]+)["']/) || [0, 0])[1]);
+    var rW = parseFloat(rectMatch[1]);
+    var rH = parseFloat(rectMatch[2]);
+    var rSw = parseFloat((rAttrs.match(/stroke-width=["']([\d.]+)["']/) || [0, 50])[1]);
+
+    // Find text transform to get text center position
+    var textTransMatch = svgString.match(/transform=["']translate\(([\d.\-]+)[,\s]+([\d.\-]+)\)/);
+    if (!textTransMatch) return svgString;
+    var textCX = parseFloat(textTransMatch[1]);
+    var textCY = parseFloat(textTransMatch[2]);
+
+    // Find all tspan dy values and font-sizes to compute baseline Y positions
+    var tspans = [];
+    var tspanRegex = /<tspan[^>]*dy=["']([\d.\-]+)["'][^>]*(?:font-size=["']([\d.]+)["'])?[^>]*>([^<]*)<\/tspan>/gi;
+    var tm;
+    while ((tm = tspanRegex.exec(svgString)) !== null) {
+      var fs = tm[2] ? parseFloat(tm[2]) : null;
+      tspans.push({ dy: parseFloat(tm[1]), fontSize: fs, text: tm[3] });
+    }
+    if (tspans.length < 2) return svgString;
+
+    // If font-size not on tspan, get from text element
+    var textFsMatch = svgString.match(/<text[^>]*font-size=["']([\d.]+)["']/);
+    var baseFontSize = textFsMatch ? parseFloat(textFsMatch[1]) : 100;
+    tspans.forEach(function(t) { if (!t.fontSize) t.fontSize = baseFontSize; });
+
+    // Compute absolute Y positions of baselines
+    var baselines = [];
+    var cumY = 0;
+    for (var i = 0; i < tspans.length; i++) {
+      cumY += tspans[i].dy;
+      baselines.push(textCY + cumY);
+    }
+
+    // Get stroke color from the rect
+    var strokeColor = (rAttrs.match(/\bstroke=["']([^"']+)["']/) || [0, '#dc2626'])[1];
+    var lineStroke = rSw * 0.4; // filler line thickness = 40% of rect stroke
+    if (lineStroke < 3) lineStroke = 3;
+
+    // Left and right edges of rect (inside stroke)
+    var leftEdge = rX + rSw / 2;
+    var rightEdge = rX + rW - rSw / 2;
+    var gap = 10; // gap between line and text/border
+
+    // Estimate text width per row using character count ratio
+    var maxChars = 0;
+    tspans.forEach(function(t) { if (t.text.length > maxChars) maxChars = t.text.length; });
+
+    var linesHtml = '';
+    for (var i = 0; i < tspans.length; i++) {
+      var fs = tspans[i].fontSize;
+      // Estimate text width: chars × fontSize × 0.6 (average char width ratio)
+      var estTextWidth = tspans[i].text.length * fs * 0.55;
+      var textLeft = textCX - estTextWidth / 2;
+      var textRight = textCX + estTextWidth / 2;
+
+      // Baseline Y for the line
+      var lineY = baselines[i] - fs * 0.35; // vertically center on cap height
+
+      // Left filler: from leftEdge+gap to textLeft-gap
+      var lx1 = leftEdge + gap;
+      var lx2 = textLeft - gap;
+      if (lx2 > lx1 + 2) { // only draw if there's meaningful space
+        linesHtml += '<line x1="' + lx1.toFixed(1) + '" y1="' + lineY.toFixed(1) +
+          '" x2="' + lx2.toFixed(1) + '" y2="' + lineY.toFixed(1) +
+          '" stroke="' + strokeColor + '" stroke-width="' + lineStroke.toFixed(1) + '" />';
+      }
+
+      // Right filler: from textRight+gap to rightEdge-gap
+      var rx1 = textRight + gap;
+      var rx2 = rightEdge - gap;
+      if (rx2 > rx1 + 2) {
+        linesHtml += '<line x1="' + rx1.toFixed(1) + '" y1="' + lineY.toFixed(1) +
+          '" x2="' + rx2.toFixed(1) + '" y2="' + lineY.toFixed(1) +
+          '" stroke="' + strokeColor + '" stroke-width="' + lineStroke.toFixed(1) + '" />';
+      }
+    }
+
+    if (linesHtml) {
+      svgString = svgString.replace('</svg>', linesHtml + '</svg>');
+    }
+    return svgString;
+  },
+
   // Stop words that should never stand alone on a row
   _STOP_WORDS: ['the','a','an','to','at','in','on','of','for','and','or','but',
                 'is','it','my','no','so','by','up','do','be','we','us','if','as'],
@@ -2495,7 +2596,15 @@ const SvgRenderer = {
     var fc = SvgRenderer._getFontConfig(detectedFont, textCase);
     var fontScaleY = fc.scaleY;
     var fontLetterSpacing = fc.letterSpacing;
+    // Square stamps: bolder text with more tracking
+    if (stampShape === 'square') {
+      fontLetterSpacing = Math.max(fontLetterSpacing, 3) * 1.5;
+    }
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
+    // Square stamps: thicker text stroke
+    if (stampShape === 'square') {
+      fontTune.stroke = Math.max(fontTune.stroke, 3) * 1.5;
+    }
     // Letter-spacing is absolute in SVG (doesn't scale with font size).
     // Track it separately so the ratio calculation only scales char widths.
     var lsExtra = 0;

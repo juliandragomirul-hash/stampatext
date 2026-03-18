@@ -117,6 +117,8 @@
     var urlParams = new URLSearchParams(window.location.search);
     var shapeParam = urlParams.get('shape');
     if (shapeParam) Gallery.activeShape = shapeParam;
+    var rowsParam = urlParams.get('rows');
+    if (rowsParam) Gallery.activeRows = rowsParam;
     var textParam = urlParams.get('text');
     if (textParam) {
       document.getElementById('stamp-input').value = textParam;
@@ -198,9 +200,13 @@
       await Gallery.processAll(text);
       await Gallery.showInitialRandom();
 
-      // Update URL so back navigation restores search (include active shape)
+      // Update URL so back navigation restores search (include active shape + rows)
       var activeShape = Gallery.activeShape || 'rectangle';
       var newUrl = '/?text=' + encodeURIComponent(text) + '&shape=' + activeShape;
+      var rowsSelect = document.getElementById('filter-rows');
+      if (rowsSelect && rowsSelect.value && activeShape === 'square') {
+        newUrl += '&rows=' + rowsSelect.value;
+      }
       history.replaceState(null, '', newUrl);
     } catch (err) {
       console.error('Stamp error:', err);
