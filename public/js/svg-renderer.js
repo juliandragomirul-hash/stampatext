@@ -1624,8 +1624,9 @@ const SvgRenderer = {
       }
     }
 
-    // Multi-word: group stop words with content words
-    var chunks = this._groupStopWords(words);
+    // Multi-word: group stop words with direction based on rowMode
+    var direction = (rowMode === '2down') ? 'backward' : 'forward';
+    var chunks = this._groupStopWords(words, direction);
     if (chunks.length <= 1) {
       // All words in one chunk — fall back to word-level split
       if (words.length >= 2) {
@@ -1636,11 +1637,9 @@ const SvgRenderer = {
     }
 
     if (rowMode === '3') {
-      // 3-row equal font: split into 3 rows (or 2 if only 2 chunks)
       return this._splitSquare3Row(chunks, words);
     }
 
-    // 2-row hero: find best 2-row split from chunks
     return this._splitSquare2Row(chunks, rowMode);
   },
 
@@ -1648,50 +1647,31 @@ const SvgRenderer = {
    * 2-row hero split: hero row gets 2x font, other gets 1x.
    * rowMode '2up' = hero on top, '2down' = hero on bottom.
    */
+  /**
+   * Deterministic 2-row hero split.
+   * 2up: first chunk = hero (2x), rest = small (1x)
+   * 2down: last chunk = hero (2x), rest = small (1x)
+   */
   _splitSquare2Row(chunks, rowMode) {
-    var bestResult = null;
-    var bestScore = Infinity;
-
-    for (var i = 1; i < chunks.length; i++) {
-      var line1 = chunks.slice(0, i).join(' ');
-      var line2 = chunks.slice(i).join(' ');
-
-      // Determine which line is hero based on rowMode
-      var scales;
-      if (rowMode === '2up') {
-        scales = [2.0, 1.0]; // top is hero
-      } else {
-        scales = [1.0, 2.0]; // bottom is hero
-      }
-
-      // Score: how square-like is this layout?
-      var heroIdx = rowMode === '2up' ? 0 : 1;
-      var heroChars = heroIdx === 0 ? line1.length : line2.length;
-      var smallChars = heroIdx === 0 ? line2.length : line1.length;
-      // Width determined by max(heroChars, smallChars * 2) since hero is 2x font
-      var effectiveWidth = Math.max(heroChars, smallChars * 2);
-      // Height: hero row (2x) + small row (1x) = 3 units
-      var totalHeight = 3 * 0.85;
-      var aspect = effectiveWidth / totalHeight;
-      var score = Math.abs(aspect - 1.4);
-
-      if (score < bestScore) {
-        bestScore = score;
-        bestResult = { lines: [line1, line2], fontScales: scales, rowMode: rowMode };
-      }
+    if (chunks.length < 2) {
+      // Can't split into 2 — return as single line
+      return { lines: [chunks.join(' ')], fontScales: [1], rowMode: rowMode };
     }
 
-    if (!bestResult) {
-      // Fallback: first word vs rest
-      var allWords = [];
-      for (var c = 0; c < chunks.length; c++) allWords.push(chunks[c]);
-      bestResult = {
-        lines: [allWords[0], allWords.slice(1).join(' ')],
-        fontScales: rowMode === '2up' ? [2.0, 1.0] : [1.0, 2.0],
-        rowMode: rowMode
-      };
+    var line1, line2, scales;
+    if (rowMode === '2up') {
+      // Hero = first chunk, small = rest joined
+      line1 = chunks[0];
+      line2 = chunks.slice(1).join(' ');
+      scales = [2.0, 1.0];
+    } else {
+      // Hero = last chunk, small = rest joined
+      line1 = chunks.slice(0, -1).join(' ');
+      line2 = chunks[chunks.length - 1];
+      scales = [1.0, 2.0];
     }
-    return bestResult;
+
+    return { lines: [line1, line2], fontScales: scales, rowMode: rowMode };
   },
 
   /**
@@ -1765,21 +1745,43 @@ const SvgRenderer = {
    * Stop words attach to the NEXT content word; trailing stop words attach to previous chunk.
    * Returns array of chunk strings.
    */
-  _groupStopWords(words) {
+  /**
+   * Group stop words with content words.
+   * @param {string[]} words
+   * @param {string} direction - 'forward' (stop→next content) or 'backward' (stop→prev content)
+   */
+  _groupStopWords(words, direction) {
     var stopSet = {};
     for (var i = 0; i < this._STOP_WORDS.length; i++) {
       stopSet[this._STOP_WORDS[i]] = true;
     }
 
-    // Build chunks: accumulate stop words, attach to next content word
+    if (direction === 'backward') {
+      // Backward: stop words attach to PREVIOUS content word
+      var chunks = [];
+      for (var i = 0; i < words.length; i++) {
+        if (stopSet[words[i].toLowerCase()]) {
+          // Attach to previous chunk if exists, otherwise start new pending
+          if (chunks.length > 0) {
+            chunks[chunks.length - 1] += ' ' + words[i];
+          } else {
+            chunks.push(words[i]); // leading stop word, will merge later
+          }
+        } else {
+          chunks.push(words[i]);
+        }
+      }
+      return chunks;
+    }
+
+    // Forward (default): stop words attach to NEXT content word
     var chunks = [];
-    var pending = []; // stop words waiting for a content word
+    var pending = [];
 
     for (var i = 0; i < words.length; i++) {
       if (stopSet[words[i].toLowerCase()]) {
         pending.push(words[i]);
       } else {
-        // Content word — attach pending stop words
         pending.push(words[i]);
         chunks.push(pending.join(' '));
         pending = [];
@@ -2893,14 +2895,34 @@ const SvgRenderer = {
 
       // Square shape enforcement: recalculate sizing for square aspect ratio
       if (stampShape === 'square' && numLines > 1) {
-        // Read per-row font scales from data attribute (set by _splitForSquare)
-        var sqScalesMatch = svgString.match(/data-sq-scales="([^"]+)"/);
+        // Read per-row font scales from data attribute (set by _splitForSquare or inline split)
+        var sqScalesMatch = result.match(/data-sq-scales="([^"]+)"/);
         var sqScales = sqScalesMatch ? sqScalesMatch[1].split(',').map(Number) : null;
 
-        // Estimate per-line width from single-line measurement
-        var perLineWidth = textBlockWidth / numLines;
-        // Base font size scales so the longest line fills the available width
-        var sqAvail = perLineWidth + hPadding * 2; // rough initial width
+        // Estimate width: for hero layouts, each row's visual width = chars × fontScale
+        // The widest row (visually) determines the needed width
+        // Extract tspan texts to get per-line char counts
+        var sqTspanTexts = [];
+        result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
+          sqTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+        });
+        // Find which row needs the most width (chars × scale)
+        var maxVisualWidth = 0;
+        var widestRowChars = 0;
+        for (var si = 0; si < numLines; si++) {
+          var rowChars = sqTspanTexts[si] ? sqTspanTexts[si].length : 1;
+          var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
+          var visualW = rowChars * scale;
+          if (visualW > maxVisualWidth) {
+            maxVisualWidth = visualW;
+            widestRowChars = rowChars;
+          }
+        }
+        // perLineWidth based on single-line measurement, scaled for the widest row
+        var perLineWidth = widestRowChars > 0 ? (measuredWidth * widestRowChars / measuredWidth) : textBlockWidth;
+        // Actually: use measured single-line width / total chars × widest row chars
+        var totalTextChars = sqTspanTexts.join('').length || 1;
+        perLineWidth = measuredWidth * widestRowChars / totalTextChars;
         var sqBaseFontSize = newFontSize;
 
         // Calculate total height with variable font sizes
