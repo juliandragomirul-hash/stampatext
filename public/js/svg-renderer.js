@@ -3077,17 +3077,22 @@ const SvgRenderer = {
             var rScale = sqScalesForDy[ri] || 1;
             sqRowFontSizes.push(newFontSize * rScale);
           }
-          // Calculate dy values (baseline to baseline)
+          // Calculate dy values using sqCfg (baseline to baseline)
+          var _dyCapH = sqCfg ? sqCfg.heroCapH : 0.72;
+          var _dyDesc = sqCfg ? sqCfg.heroDescent : 0.05;
+          var _dySmCapH = sqCfg ? sqCfg.smallCapH : 0.72;
+          var _dyGap = sqCfg ? sqCfg.rowGap : 0;
+          var _dyLineSp = sqCfg ? (sqCfg.lineSpacing || 1.0) : 1.0;
           var sqDyValues = [];
           for (var ri = 1; ri < sqRowFontSizes.length; ri++) {
-            sqDyValues.push(sqRowFontSizes[ri - 1] * 0.02 + sqRowFontSizes[ri] * 0.35);
+            sqDyValues.push((sqRowFontSizes[ri - 1] * _dyDesc + sqRowFontSizes[ri] * _dySmCapH + _dyGap) * _dyLineSp);
           }
           // Total text block height
-          var sqTotalH = sqRowFontSizes[0] * 0.75;
+          var sqTotalH = sqRowFontSizes[0] * _dyCapH;
           for (var ri = 0; ri < sqDyValues.length; ri++) sqTotalH += sqDyValues[ri];
-          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * 0.02;
+          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * _dyDesc;
           // First dy: position so the block is vertically centered
-          var sqFirstDy = -sqTotalH / 2 + sqRowFontSizes[0] * 0.75;
+          var sqFirstDy = -sqTotalH / 2 + sqRowFontSizes[0] * _dyCapH;
 
           var sqLineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
@@ -3215,8 +3220,8 @@ const SvgRenderer = {
       //   Wavy:      outerRectSw raw     (wavy path handles visual weight)
       //   Brush:     outerRectSw raw     (brush group handles visual weight)
       var outerRectSw;
-      var swMin = stampShape === 'square' ? 40 : 30;
-      var swMax = stampShape === 'square' ? 80 : 75;
+      var swMin = stampShape === 'square' ? 20 : 30;
+      var swMax = stampShape === 'square' ? 200 : 75;
       if (!hasDecorativeBorder || borderFlags.filter) {
         // Plain + Torn edge
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
