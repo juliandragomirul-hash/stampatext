@@ -88,7 +88,7 @@ const SquareTuning = {
     var supabase = window.__supabaseClient;
     if (!supabase) return;
 
-    // Use plain border with strong round corners for square preview
+    // Use plain border straight corners — we apply strong rounding programmatically
     var { data } = await supabase
       .from('templates')
       .select('*, text_zones(*)')
@@ -96,16 +96,14 @@ const SquareTuning = {
       .is('border_type', null)
       .eq('fill_type', 'empty')
       .eq('frame_type', 'single')
-      .eq('corner_type', 'strong')
       .limit(1);
 
     if (!data || data.length === 0) {
-      // Fallback: any plain outlined template
+      // Fallback: any active outlined template
       var fallback = await supabase
         .from('templates')
         .select('*, text_zones(*)')
         .eq('is_active', true)
-        .is('border_type', null)
         .eq('fill_type', 'empty')
         .limit(1);
       data = fallback.data;
