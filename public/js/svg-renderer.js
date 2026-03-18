@@ -2899,30 +2899,22 @@ const SvgRenderer = {
         var sqScalesMatch = result.match(/data-sq-scales="([^"]+)"/);
         var sqScales = sqScalesMatch ? sqScalesMatch[1].split(',').map(Number) : null;
 
-        // Estimate width: for hero layouts, each row's visual width = chars × fontScale
-        // The widest row (visually) determines the needed width
-        // Extract tspan texts to get per-line char counts
+        // For square: the widest row determines the base width
+        // Extract per-row text to get char counts
         var sqTspanTexts = [];
         result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
           sqTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
         });
-        // Find which row needs the most width (chars × scale)
-        var maxVisualWidth = 0;
-        var widestRowChars = 0;
-        for (var si = 0; si < numLines; si++) {
-          var rowChars = sqTspanTexts[si] ? sqTspanTexts[si].length : 1;
-          var scale = (sqScales && sqScales[si]) ? sqScales[si] : 1;
-          var visualW = rowChars * scale;
-          if (visualW > maxVisualWidth) {
-            maxVisualWidth = visualW;
-            widestRowChars = rowChars;
-          }
+        // Find widest row: chars × fontScale (hero chars at 2x font are visually wider per char)
+        var maxRowChars = 0;
+        for (var si = 0; si < sqTspanTexts.length; si++) {
+          if (sqTspanTexts[si].length > maxRowChars) maxRowChars = sqTspanTexts[si].length;
         }
-        // perLineWidth based on single-line measurement, scaled for the widest row
-        var perLineWidth = widestRowChars > 0 ? (measuredWidth * widestRowChars / measuredWidth) : textBlockWidth;
-        // Actually: use measured single-line width / total chars × widest row chars
-        var totalTextChars = sqTspanTexts.join('').length || 1;
-        perLineWidth = measuredWidth * widestRowChars / totalTextChars;
+        // Total chars in original single-line text
+        var totalTextChars = sqTspanTexts.join(' ').length || 1;
+        // Per-line width = measured single-line width × (longest row chars / total chars)
+        // This gives the pixel width of the longest row at the BASE font size
+        var perLineWidth = measuredWidth * (maxRowChars / totalTextChars);
         var sqBaseFontSize = newFontSize;
 
         // Calculate total height with variable font sizes

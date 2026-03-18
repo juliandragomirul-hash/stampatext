@@ -199,13 +199,11 @@
     loadPill.textContent = 'Loading models...';
     loadPill.style.display = '';
 
-    // Show results area with loading
+    // Show results area (no inline loading text — pill handles it)
     document.getElementById('stamp-results').style.display = 'block';
-    // Hide filter bar during processing (it lives in sticky section, not results-batches)
     var filterBar = document.getElementById('stamp-filter-bar');
     if (filterBar) filterBar.style.display = 'none';
-    document.getElementById('results-batches').innerHTML =
-      '<div class="stamp-loading">Processing templates...</div>';
+    document.getElementById('results-batches').innerHTML = '';
 
     try {
       await Gallery.processAll(text);
@@ -268,13 +266,22 @@
     }
 
     // Cache miss — full restore from variant params
+    // Show loading pill
+    var loadPill2 = document.getElementById('loading-pill');
+    if (!loadPill2) {
+      loadPill2 = document.createElement('div');
+      loadPill2.id = 'loading-pill';
+      loadPill2.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;color:#fff;padding:12px 28px;border-radius:24px;font-size:15px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+      document.body.appendChild(loadPill2);
+    }
+    loadPill2.textContent = 'Loading models...';
+    loadPill2.style.display = '';
     btn.textContent = 'Restoring...';
 
     document.getElementById('stamp-results').style.display = 'block';
     var filterBar2 = document.getElementById('stamp-filter-bar');
     if (filterBar2) filterBar2.style.display = 'none';
-    document.getElementById('results-batches').innerHTML =
-      '<div class="stamp-loading">Restoring your gallery...</div>';
+    document.getElementById('results-batches').innerHTML = '';
 
     try {
       await Gallery.restoreVariants(text, params);
@@ -308,6 +315,8 @@
       isProcessing = false;
       btn.disabled = false;
       btn.textContent = 'Stamp';
+      var lp2 = document.getElementById('loading-pill');
+      if (lp2) lp2.style.display = 'none';
     }
   }
 
