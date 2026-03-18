@@ -37,16 +37,16 @@ const SquareTuning = {
 
   // Tunable parameters per case
   PARAMS: [
-    { key: 'heroCapH',     label: 'Cap H',     min: 0.40, max: 1.00, step: 0.02, decimals: 2 },
-    { key: 'heroDescent',  label: 'Descent',   min: 0.00, max: 0.20, step: 0.01, decimals: 2 },
-    { key: 'rowGap',       label: 'Row Gap',   min: -20,  max: 40,   step: 2,    decimals: 0 },
-    { key: 'heroStroke',   label: 'H Stroke',  min: 0,    max: 20,   step: 0.5,  decimals: 1 },
-    { key: 'heroSpacing',  label: 'H Space',   min: 0,    max: 15,   step: 0.5,  decimals: 1 },
-    { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.8,  max: 1.5,  step: 0.05, decimals: 2 },
-    { key: 'smallCapH',    label: 'S Cap H',   min: 0.40, max: 1.00, step: 0.02, decimals: 2 },
-    { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 15,   step: 0.5,  decimals: 1 },
-    { key: 'smallSpacing', label: 'S Space',   min: 0,    max: 15,   step: 0.5,  decimals: 1 },
-    { key: 'lineSpacing', label: 'Line Sp',  min: 0.5,  max: 2.0,  step: 0.05, decimals: 2 }
+    { key: 'heroCapH',     label: 'Cap H',     min: 0.10, max: 2.00, step: 0.02, decimals: 2 },
+    { key: 'heroDescent',  label: 'Descent',   min: 0.00, max: 1.00, step: 0.01, decimals: 2 },
+    { key: 'rowGap',       label: 'Row Gap',   min: -100, max: 200,  step: 5,    decimals: 0 },
+    { key: 'heroStroke',   label: 'H Stroke',  min: 0,    max: 30,   step: 0.5,  decimals: 1 },
+    { key: 'heroSpacing',  label: 'H Space',   min: -5,   max: 30,   step: 0.5,  decimals: 1 },
+    { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.5,  max: 2.0,  step: 0.05, decimals: 2 },
+    { key: 'smallCapH',    label: 'S Cap H',   min: 0.10, max: 2.00, step: 0.02, decimals: 2 },
+    { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 30,   step: 0.5,  decimals: 1 },
+    { key: 'smallSpacing', label: 'S Space',   min: -5,   max: 30,   step: 0.5,  decimals: 1 },
+    { key: 'lineSpacing', label: 'Line Sp',  min: 0.0,  max: 3.0,  step: 0.05, decimals: 2 }
   ],
 
   async init() {
