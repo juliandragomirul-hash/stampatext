@@ -2626,6 +2626,7 @@ const SvgRenderer = {
       var sqRowModeMatch = svgString.match(/data-sq-rowmode=["']([^"']+)["']/);
       var sqRowMode = sqRowModeMatch ? sqRowModeMatch[1] : '2up';
       sqCfg = SvgRenderer._getSquareConfig(detectedFont, sqRowMode);
+      console.log('[SQ-CFG] font=' + detectedFont + ' mode=' + sqRowMode + ' capH=' + sqCfg.heroCapH + ' desc=' + sqCfg.heroDescent + ' gap=' + sqCfg.rowGap + ' scaleY=' + sqCfg.heroScaleY + ' hStroke=' + sqCfg.heroStroke);
       fontLetterSpacing = sqCfg.heroSpacing;
     }
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
