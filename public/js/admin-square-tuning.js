@@ -50,24 +50,36 @@ const SquareTuning = {
 
   async init() {
     try {
+      console.log('[SQ-ADMIN] init starting...');
       var resp = await fetch('/api/admin/square-config');
       this.config = await resp.json();
       this.savedConfig = JSON.parse(JSON.stringify(this.config));
+      console.log('[SQ-ADMIN] config loaded:', Object.keys(this.config).length, 'fonts');
 
       // Push to SvgRenderer for live preview
       SvgRenderer._squareConfig = this.config;
 
       await this.loadPreviewTemplate();
+      console.log('[SQ-ADMIN] template loaded:', !!this.templateSvg, 'zone:', !!this.templateZone);
+
       this.buildGrid();
+      console.log('[SQ-ADMIN] grid built');
 
       // Render all previews
       for (var i = 0; i < this.FONT_ORDER.length; i++) {
         for (var c = 0; c < this.PREVIEW_CASES.length; c++) {
-          await this.renderPreview(this.FONT_ORDER[i], c);
+          try {
+            await this.renderPreview(this.FONT_ORDER[i], c);
+          } catch (previewErr) {
+            console.error('[SQ-ADMIN] preview failed:', this.FONT_ORDER[i], c, previewErr);
+          }
         }
       }
+      console.log('[SQ-ADMIN] all previews rendered');
     } catch (err) {
-      console.error('SquareTuning init failed:', err);
+      console.error('[SQ-ADMIN] init failed:', err);
+      var grid = document.getElementById('square-tuning-grid');
+      if (grid) grid.innerHTML = '<p style="color:red;padding:1rem;">Init failed: ' + err.message + '</p>';
     }
   },
 
