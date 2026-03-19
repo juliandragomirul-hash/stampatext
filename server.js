@@ -295,6 +295,7 @@ app.put('/api/admin/font-config', (req, res) => {
 
 // ---- API: Square Font Config (admin) ----
 const SQUARE_CONFIG_PATH = path.join(__dirname, 'public', 'data', 'square-config.json');
+const PARAM_COMPAT_PATH = path.join(__dirname, 'public', 'data', 'param-compat.json');
 
 app.get('/api/admin/square-config', (req, res) => {
   try {
@@ -317,6 +318,47 @@ app.put('/api/admin/square-config', (req, res) => {
   } catch (err) {
     console.error('Failed to write square config:', err);
     res.status(500).json({ error: 'Failed to write square config' });
+  }
+});
+
+// Param compatibility API
+app.get('/api/admin/param-compat', (req, res) => {
+  try {
+    const data = fs.readFileSync(PARAM_COMPAT_PATH, 'utf8');
+    res.json(JSON.parse(data));
+  } catch (err) {
+    res.json({ incompatible: [] });
+  }
+});
+
+app.post('/api/admin/param-compat', (req, res) => {
+  try {
+    const combo = req.body;
+    if (!combo || !combo.style) return res.status(400).json({ error: 'Invalid combo' });
+    let data;
+    try { data = JSON.parse(fs.readFileSync(PARAM_COMPAT_PATH, 'utf8')); } catch (e) { data = { incompatible: [] }; }
+    // Check for duplicate
+    const exists = data.incompatible.some(c => c.style === combo.style && c.corners === combo.corners && c.frames === combo.frames && c.fill === combo.fill);
+    if (!exists) {
+      data.incompatible.push(combo);
+      fs.writeFileSync(PARAM_COMPAT_PATH, JSON.stringify(data, null, 2) + '\n', 'utf8');
+    }
+    res.json({ success: true, count: data.incompatible.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save' });
+  }
+});
+
+app.delete('/api/admin/param-compat', (req, res) => {
+  try {
+    const combo = req.body;
+    let data;
+    try { data = JSON.parse(fs.readFileSync(PARAM_COMPAT_PATH, 'utf8')); } catch (e) { data = { incompatible: [] }; }
+    data.incompatible = data.incompatible.filter(c => !(c.style === combo.style && c.corners === combo.corners && c.frames === combo.frames && c.fill === combo.fill));
+    fs.writeFileSync(PARAM_COMPAT_PATH, JSON.stringify(data, null, 2) + '\n', 'utf8');
+    res.json({ success: true, count: data.incompatible.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete' });
   }
 });
 

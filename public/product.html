@@ -184,6 +184,7 @@
       <div class="product-preview" id="product-preview">
         <div class="stamp-loading">Loading preview...</div>
       </div>
+      <button id="btn-mark-incompat" style="display:none;margin:8px 0;padding:6px 16px;background:#ff4444;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.8rem;">Mark as incompatible</button>
 
       <!-- Right: Download options -->
       <div class="product-download-panel">
@@ -871,6 +872,41 @@
 
       // Download confirm
       document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
+
+      // Mark incompatible button (admin-only)
+      (async function() {
+        try {
+          var { data: { user } } = await sb.auth.getUser();
+          if (user && user.email === 'juliandragomirul@gmail.com') {
+            var markBtn = document.getElementById('btn-mark-incompat');
+            markBtn.style.display = 'block';
+            markBtn.addEventListener('click', async function() {
+              var combo = {
+                style: currentBorderStyle || 'simple',
+                corners: currentCornerStyle || 'straight',
+                frames: currentFrame || 'single',
+                fill: currentFill || 'empty'
+              };
+              try {
+                var resp = await fetch('/api/admin/param-compat', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(combo)
+                });
+                var result = await resp.json();
+                markBtn.textContent = 'Marked! (' + result.count + ' total)';
+                markBtn.style.background = '#666';
+                setTimeout(function() {
+                  markBtn.textContent = 'Mark as incompatible';
+                  markBtn.style.background = '#ff4444';
+                }, 2000);
+              } catch (e) {
+                markBtn.textContent = 'Error: ' + e.message;
+              }
+            });
+          }
+        } catch (e) { /* not logged in */ }
+      })();
 
       // Credits modal close
       document.getElementById('credits-modal-close').addEventListener('click', function() {
