@@ -2918,7 +2918,10 @@ const SvgRenderer = {
         }
       }
 
-      // Square shape enforcement: poster layout
+      // Square shape enforcement: hero fills width, small fills remaining space
+      // _sqComputedFontSizes persists to the dy section below
+      var _sqComputedFontSizes = null;
+      var _sqHeroIdx = 0;
       if (stampShape === 'square' && numLines > 1) {
         // Extract per-row text
         var sqTspanTexts = [];
@@ -2926,108 +2929,94 @@ const SvgRenderer = {
           sqTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
         });
 
-        // Read font scales
+        // Find hero row from scales
         var sqScalesMatch = result.match(/data-sq-scales="([^"]+)"/);
         var sqScales = sqScalesMatch ? sqScalesMatch[1].split(',').map(Number) : null;
-
-        // Poster approach: size each row so ALL rows have the SAME visual width
-        // The width = 95% of the square side (5% padding = 2.5% each side)
-        // First: estimate char widths from the measured single-line width
-        var allChars = sqTspanTexts.join('');
-        var avgCharWidth = measuredWidth / (allChars.length || 1); // px per char at base font
-
-        // Each row's font-size = targetWidth / (rowChars × avgCharWidth) × baseFontSize
-        // This makes every row exactly targetWidth pixels wide
-        // First pass: compute font sizes that make all rows equal width
-        var targetWidthRatio = 0.95; // 5% total padding (2.5% each side)
-
-        // Find the hero row (highest scale) to determine square side
-        var heroIdx = 0;
         var maxScale = 1;
         if (sqScales) {
           for (var si = 0; si < sqScales.length; si++) {
-            if (sqScales[si] > maxScale) { maxScale = sqScales[si]; heroIdx = si; }
+            if (sqScales[si] > maxScale) { maxScale = sqScales[si]; _sqHeroIdx = si; }
           }
         }
 
-        // Hero font: sized so hero text fills targetWidthRatio of square
-        // heroChars × heroFontSize × avgCharWidthPerEm = targetWidth
-        var heroChars = sqTspanTexts[heroIdx] ? sqTspanTexts[heroIdx].length : 1;
-        // Start with the hero font as reference, then compute square side
-        var heroFontSize = newFontSize; // initial estimate
-
-        // Each row's font-size to achieve equal visual width
-        var sqFontSizes = [];
-        for (var si = 0; si < numLines; si++) {
-          var rowChars = sqTspanTexts[si] ? sqTspanTexts[si].length : 1;
-          // font ratio: more chars → smaller font (to match same width)
-          sqFontSizes.push(heroFontSize * (heroChars / rowChars));
-        }
-
-        // Total text block height — use sqCfg values
+        // Config values
         var _capH = sqCfg ? sqCfg.heroCapH : 0.72;
         var _desc = sqCfg ? sqCfg.heroDescent : 0.05;
         var _rGap = sqCfg ? sqCfg.rowGap : 0;
-        var totalSqHeight = sqFontSizes[0] * _capH;
-        for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * _desc + sqFontSizes[si] * (sqCfg ? sqCfg.smallCapH : 0.72) + _rGap;
-        }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * _desc;
+        var _scY = sqCfg ? sqCfg.heroScaleY : 1.10;
+        var _smCapH = sqCfg ? sqCfg.smallCapH : 0.72;
 
-        // The visual width at current heroFontSize
+        // Step 1: Size hero to fill 95% of square width
+        var allChars = sqTspanTexts.join('');
+        var avgCharWidth = measuredWidth / (allChars.length || 1);
+        var heroChars = sqTspanTexts[_sqHeroIdx] ? sqTspanTexts[_sqHeroIdx].length : 1;
         var heroVisualWidth = heroChars * avgCharWidth;
-        // Square side: max of (width with padding) and (height with padding)
-        var sqPad = heroVisualWidth * 0.05; // 5% of text width as padding
-        var sqSideFromW = heroVisualWidth + sqPad * 2;
-        var sqSideFromH = totalSqHeight + sqPad * 2;
-        var squareSide = Math.max(sqSideFromW, sqSideFromH);
 
-        // Scale hero font up so text fills 95% of square
-        var targetWidth = squareSide * targetWidthRatio;
+        // Square side = hero width / 0.95 (hero fills 95%)
+        var squareSide = heroVisualWidth / 0.95;
+        var targetWidth = squareSide * 0.95;
+
+        // Scale hero font to fill targetWidth
         var scaleUp = targetWidth / heroVisualWidth;
-        heroFontSize *= scaleUp;
+        var heroFontSize = newFontSize * scaleUp;
 
-        // Recompute all font sizes with scaled hero
-        sqFontSizes = [];
+        // Step 2: Hero visual height
+        var heroVisH = heroFontSize * _capH * _scY;
+
+        // Step 3: Small row fills remaining vertical space
+        var totalPad = squareSide * 0.05; // 2.5% padding top + bottom
+        var availForSmall = squareSide - heroVisH - totalPad - _rGap;
+        var smallIdx = (_sqHeroIdx === 0) ? 1 : 0;
+        var smallFontSize = Math.max(availForSmall / _smCapH, heroFontSize * 0.2); // min 20% of hero
+
+        // Step 4: If small row makes square too tall, expand
+        var totalTextH = heroVisH + _rGap + smallFontSize * _smCapH;
+        if (totalTextH + totalPad > squareSide) {
+          squareSide = totalTextH + totalPad;
+          targetWidth = squareSide * 0.95;
+          scaleUp = targetWidth / (heroChars * avgCharWidth);
+          heroFontSize = newFontSize * scaleUp;
+          heroVisH = heroFontSize * _capH * _scY;
+          availForSmall = squareSide - heroVisH - totalPad - _rGap;
+          smallFontSize = Math.max(availForSmall / _smCapH, heroFontSize * 0.2);
+        }
+
+        // Build font sizes array
+        _sqComputedFontSizes = [];
         for (var si = 0; si < numLines; si++) {
-          var rowChars = sqTspanTexts[si] ? sqTspanTexts[si].length : 1;
-          sqFontSizes.push(heroFontSize * (heroChars / rowChars));
+          _sqComputedFontSizes.push(si === _sqHeroIdx ? heroFontSize : smallFontSize);
         }
-
-        // Recompute height with sqCfg
-        totalSqHeight = sqFontSizes[0] * _capH;
-        for (var si = 1; si < numLines; si++) {
-          totalSqHeight += sqFontSizes[si - 1] * _desc + sqFontSizes[si] * (sqCfg ? sqCfg.smallCapH : 0.72) + _rGap;
-        }
-        totalSqHeight += sqFontSizes[sqFontSizes.length - 1] * _desc;
-
-        // Final square side
-        sqSideFromH = totalSqHeight + sqPad * 2;
-        squareSide = Math.max(targetWidth / targetWidthRatio, sqSideFromH);
 
         newRectWidth = squareSide;
         newRectHeight = squareSide;
         newFontSize = heroFontSize;
         textBlockWidth = targetWidth;
-        textBlockHeight = totalSqHeight;
+        textBlockHeight = totalTextH;
         lineHeight = heroFontSize * 1.15;
 
-        // Apply per-tspan font-size + hero scaleY(1.1)
+        // Apply per-tspan font-size + hero transforms
         var tspanFontIdx = 0;
+        var _hStroke = sqCfg ? sqCfg.heroStroke : 8;
+        var _sStroke = sqCfg ? sqCfg.smallStroke : 5;
+        var _hSpace = sqCfg ? sqCfg.heroSpacing : 2;
+        var _sSpace = sqCfg ? sqCfg.smallSpacing : 2;
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
-          if (tspanFontIdx < sqFontSizes.length) {
-            var fs = sqFontSizes[tspanFontIdx];
-            var isHero = (tspanFontIdx === heroIdx);
+          if (tspanFontIdx < _sqComputedFontSizes.length) {
+            var fs = _sqComputedFontSizes[tspanFontIdx];
+            var isHero = (tspanFontIdx === _sqHeroIdx);
             tspanFontIdx++;
             attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
-            // Hero row gets vertical scale for taller letters
-            var _scY = sqCfg ? sqCfg.heroScaleY : 1.10;
-            var extra = (isHero && _scY !== 1.0) ? ' transform="scale(1, ' + _scY.toFixed(2) + ')"' : '';
+            attrs = attrs.replace(/\s*transform=["'][^"']*["']/gi, '');
+            var extra = '';
+            if (isHero && _scY !== 1.0) {
+              extra += ' transform="scale(1, ' + _scY.toFixed(2) + ')"';
+            }
             return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '"' + extra + '>';
           }
           return match;
         });
 
+        // Set text-level stroke per row type (hero gets heroStroke)
         result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', heroFontSize.toFixed(2));
       } else if (stampShape === 'square') {
         // Single line square: just force square
@@ -3062,37 +3051,33 @@ const SvgRenderer = {
 
       // For multi-line text with tspans
       if (numTspans > 1) {
-        // Square stamps with variable font sizes: use per-row dy values
-        var sqScalesForDy = null;
-        if (stampShape === 'square') {
-          var sqsm = svgString.match(/data-sq-scales="([^"]+)"/);
-          if (sqsm) sqScalesForDy = sqsm[1].split(',').map(Number);
-        }
-
-        if (sqScalesForDy && sqScalesForDy.length > 1) {
-          // Variable dy: baseline-to-baseline = prevFont * belowBaseline + currFont * capHeight
-          // Very tight poster spacing
-          var sqRowFontSizes = [];
-          for (var ri = 0; ri < numLines; ri++) {
-            var rScale = sqScalesForDy[ri] || 1;
-            sqRowFontSizes.push(newFontSize * rScale);
-          }
-          // Calculate dy values using sqCfg (baseline to baseline)
+        if (_sqComputedFontSizes && _sqComputedFontSizes.length > 1) {
+          // Square: use actual computed font sizes for dy positioning
           var _dyCapH = sqCfg ? sqCfg.heroCapH : 0.72;
           var _dyDesc = sqCfg ? sqCfg.heroDescent : 0.05;
           var _dySmCapH = sqCfg ? sqCfg.smallCapH : 0.72;
           var _dyGap = sqCfg ? sqCfg.rowGap : 0;
-          var _dyLineSp = sqCfg ? (sqCfg.lineSpacing || 1.0) : 1.0;
+          var _dyScY = sqCfg ? sqCfg.heroScaleY : 1.10;
+
+          // dy between rows: hero descent + small cap height + gap
           var sqDyValues = [];
-          for (var ri = 1; ri < sqRowFontSizes.length; ri++) {
-            sqDyValues.push((sqRowFontSizes[ri - 1] * _dyDesc + sqRowFontSizes[ri] * _dySmCapH + _dyGap) * _dyLineSp);
+          for (var ri = 1; ri < _sqComputedFontSizes.length; ri++) {
+            var prevIsHero = ((ri - 1) === _sqHeroIdx);
+            var currIsHero = (ri === _sqHeroIdx);
+            var prevDescH = _sqComputedFontSizes[ri - 1] * _dyDesc * (prevIsHero ? _dyScY : 1);
+            var currCapH = _sqComputedFontSizes[ri] * (currIsHero ? _dyCapH * _dyScY : _dySmCapH);
+            sqDyValues.push(prevDescH + currCapH + _dyGap);
           }
-          // Total text block height
-          var sqTotalH = sqRowFontSizes[0] * _dyCapH;
+
+          // Total text block height for centering
+          var firstCapH = _sqComputedFontSizes[0] * (_sqHeroIdx === 0 ? _dyCapH * _dyScY : _dySmCapH);
+          var sqTotalH = firstCapH;
           for (var ri = 0; ri < sqDyValues.length; ri++) sqTotalH += sqDyValues[ri];
-          sqTotalH += sqRowFontSizes[sqRowFontSizes.length - 1] * _dyDesc;
-          // First dy: position so the block is vertically centered
-          var sqFirstDy = -sqTotalH / 2 + sqRowFontSizes[0] * _dyCapH;
+          var lastDescH = _sqComputedFontSizes[_sqComputedFontSizes.length - 1] * _dyDesc;
+          sqTotalH += lastDescH;
+
+          // First dy: center the block vertically
+          var sqFirstDy = -sqTotalH / 2 + firstCapH;
 
           var sqLineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
