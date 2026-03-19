@@ -1427,7 +1427,9 @@ a:hover {
   background: #fff;
   cursor: pointer;
   user-select: none;
-  min-width: 100px;
+  min-width: 130px;
+  height: 36px;
+  box-sizing: border-box;
 }
 
 .filter-bar-font-value {
@@ -1488,6 +1490,8 @@ a:hover {
   background: #fff;
   cursor: pointer;
   user-select: none;
+  height: 36px;
+  box-sizing: border-box;
 }
 
 .filter-bar-dropdown-value {
