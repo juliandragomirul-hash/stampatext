@@ -503,25 +503,24 @@ const Gallery = {
             }
           }
 
+          // Forced multi-line: full async autoFit from raw template (same quality as product page)
           var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
-          if (base.autoFitZoneInfo && base.autoFitMeasurements && !appliedForceLines && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
+          if (appliedForceLines && base.autoFitZoneInfo) {
+            try {
+              var zi = base.autoFitZoneInfo;
+              var origSx = zi.originalScaleX || 1;
+              variantSvg = await SvgRenderer.autoFitTextInString(
+                variantSvg, zi.idx, zi.boundingWidth, zi.fontSize, origSx,
+                frameMode, base.fillType || 'empty', base.cornerType || 'straight',
+                null, stampShape
+              );
+            } catch (flErr) {
+              console.warn('[GALLERY] forceLines autoFit failed:', flErr.message);
+            }
+          } else if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
             try {
               var variantMeasurements = base.autoFitMeasurements;
               var variantPreSvg = base.preAutoFitSvg;
-              // Forced multi-line: use full async autoFit (same as product page)
-              if (appliedForceLines && base.autoFitZoneInfo) {
-                try {
-                  var zi = base.autoFitZoneInfo;
-                  var origSx = zi.originalScaleX || 1;
-                  variantSvg = await SvgRenderer.autoFitTextInString(
-                    variantSvg, zi.idx, zi.boundingWidth, zi.fontSize, origSx,
-                    frameMode, base.fillType || 'empty', base.cornerType || 'straight',
-                    null, stampShape
-                  );
-                } catch (flErr) {
-                  console.warn('[GALLERY] forceLines autoFit failed:', flErr.message);
-                }
-              }
               if (stampShape === 'square') {
                 var sqTspanCount = (variantSvg.match(/<tspan/gi) || []).length;
                 if (sqTspanCount > 1) {
