@@ -71,7 +71,9 @@ const SvgRenderer = {
   _getSquareConfig: function(fontName, rowMode) {
     var defaults = {
       heroStroke: 8.0, heroSpacing: 2.0, heroScaleY: 1.10, heroScaleX: 1.0,
+      heroDx: 0, heroDy: 0,
       smallStroke: 5.0, smallSpacing: 2.0, smallScaleY: 1.0, smallScaleX: 1.0,
+      smallDx: 0, smallDy: 0,
       rowGap: 0
     };
     if (!this._sqConfig || !this._sqConfig[fontName]) return defaults;
@@ -3079,13 +3081,32 @@ const SvgRenderer = {
             : _sqComputedFontSizes[1] * sqHeroCapH * (sqCfg ? (sqCfg.smallScaleY || 1.0) : 1.0);
           var sqSecondDy = firstDescPx + (_sqLineGap || 0) + secondCapPx;
 
+          // Apply admin dX/dY offsets per row
+          var _heroDx = sqCfg ? (sqCfg.heroDx || 0) : 0;
+          var _heroDy = sqCfg ? (sqCfg.heroDy || 0) : 0;
+          var _smallDx = sqCfg ? (sqCfg.smallDx || 0) : 0;
+          var _smallDy = sqCfg ? (sqCfg.smallDy || 0) : 0;
+
           var sqLineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
             var before = arguments[1];
-            var dyVal = (sqLineIdx === 0) ? sqFirstDy : sqSecondDy;
+            var isHeroRow = (sqLineIdx === _sqHeroIdx);
+            var dyOffset = isHeroRow ? _heroDy : _smallDy;
+            var dyVal = ((sqLineIdx === 0) ? sqFirstDy : sqSecondDy) + dyOffset;
             sqLineIdx++;
             return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
           });
+
+          // Apply dX offsets to tspan x attributes
+          if (_heroDx !== 0 || _smallDx !== 0) {
+            var sqXIdx = 0;
+            result = result.replace(/<tspan([^>]*?)\bx=["']([\d.\-]+)["']/gi, function (_match, before, xVal) {
+              var isHeroRow = (sqXIdx === _sqHeroIdx);
+              var dxOffset = isHeroRow ? _heroDx : _smallDx;
+              sqXIdx++;
+              return '<tspan' + before + 'x="' + (parseFloat(xVal) + dxOffset).toFixed(2) + '"';
+            });
+          }
         } else {
           // Standard uniform dy for rectangles/lined
           var totalSpan = (numLines - 1) * lineHeight;

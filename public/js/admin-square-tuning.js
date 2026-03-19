@@ -37,15 +37,19 @@ const SquareTuning = {
 
   // Tunable parameters per case — no capping, free experimentation
   PARAMS: [
-    { key: 'heroStroke',   label: 'H Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1 },
-    { key: 'heroSpacing',  label: 'H Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1 },
-    { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
-    { key: 'heroScaleX',   label: 'H ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
-    { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1 },
-    { key: 'smallSpacing', label: 'S Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1 },
-    { key: 'smallScaleY',  label: 'S ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
-    { key: 'smallScaleX',  label: 'S ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
-    { key: 'rowGap',       label: 'Line Sp',   min: -100, max: 200,  step: 2,    decimals: 0 }
+    { key: 'heroStroke',   label: 'H Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1, defaultVal: 8.0 },
+    { key: 'heroSpacing',  label: 'H Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1, defaultVal: 2.0 },
+    { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.10 },
+    { key: 'heroScaleX',   label: 'H ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.0 },
+    { key: 'heroDx',       label: 'H DX',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'heroDy',       label: 'H DY',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1, defaultVal: 5.0 },
+    { key: 'smallSpacing', label: 'S Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1, defaultVal: 2.0 },
+    { key: 'smallScaleY',  label: 'S ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.0 },
+    { key: 'smallScaleX',  label: 'S ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.0 },
+    { key: 'smallDx',      label: 'S DX',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'smallDy',      label: 'S DY',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'rowGap',       label: 'Line Sp',   min: -100, max: 200,  step: 2,    decimals: 0, defaultVal: 0 }
   ],
 
   async init() {
@@ -156,7 +160,7 @@ const SquareTuning = {
 
         for (var p = 0; p < this.PARAMS.length; p++) {
           var param = this.PARAMS[p];
-          var val = caseConfig[param.key] !== undefined ? caseConfig[param.key] : 0;
+          var val = caseConfig[param.key] !== undefined ? caseConfig[param.key] : (param.defaultVal !== undefined ? param.defaultVal : 0);
 
           var row = document.createElement('div');
           row.className = 'font-tune-row';
