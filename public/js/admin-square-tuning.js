@@ -286,6 +286,26 @@ const SquareTuning = {
       svg = SvgRenderer.cropViewBoxToStamp(svg);
       // Straight corners — no applyCornerRadius call
 
+      // Add red debug rect showing the text zone (inner area where text should fit)
+      // Parse the outer rect and viewBox to draw the text zone
+      var outerRectMatch = svg.match(/<rect[^>]*\bstroke=["'][^"']+["'][^>]*>/i);
+      if (outerRectMatch) {
+        var orx = parseFloat((outerRectMatch[0].match(/\bx=["']([^"']+)["']/)||[])[1])||0;
+        var ory = parseFloat((outerRectMatch[0].match(/\by=["']([^"']+)["']/)||[])[1])||0;
+        var orw = parseFloat((outerRectMatch[0].match(/\bwidth=["']([^"']+)["']/)||[])[1])||0;
+        var orh = parseFloat((outerRectMatch[0].match(/\bheight=["']([^"']+)["']/)||[])[1])||0;
+        var orsw = parseFloat((outerRectMatch[0].match(/stroke-width=["']([^"']+)["']/)||[])[1])||0;
+        // Text zone = inner area with 5% padding from outer rect inner edge
+        var inset = orsw / 2;
+        var pad = orw * 0.05;
+        var tzx = orx + inset + pad;
+        var tzy = ory + inset + pad;
+        var tzw = orw - 2 * (inset + pad);
+        var tzh = orh - 2 * (inset + pad);
+        var debugRect = '<rect x="' + tzx.toFixed(1) + '" y="' + tzy.toFixed(1) + '" width="' + tzw.toFixed(1) + '" height="' + tzh.toFixed(1) + '" fill="none" stroke="red" stroke-width="3" stroke-dasharray="10,5" opacity="0.5"/>';
+        svg = svg.replace(/<\/svg>/, debugRect + '</svg>');
+      }
+
       // Display
       previewEl.innerHTML = '';
       var wrapper = SvgRenderer.createSvgImage ? SvgRenderer.createSvgImage(svg) : null;

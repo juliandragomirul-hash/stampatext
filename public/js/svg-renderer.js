@@ -2946,19 +2946,23 @@ const SvgRenderer = {
         var _scY = sqCfg ? sqCfg.heroScaleY : 1.10;
         var _smCapH = sqCfg ? sqCfg.smallCapH : 0.72;
 
-        // Step 1: Size hero to fill 95% of square width
+        // Step 1: Use the already-computed rect as basis
+        // newRectWidth/newRectHeight are the rectangle dimensions from autoFit
+        // The square side = max(W, H) so the rect fits inside
+        var squareSide = Math.max(newRectWidth, newRectHeight);
+        var innerWidth = squareSide * 0.90; // 5% padding each side
+
+        // Hero font: scale up from base font so hero row fills innerWidth
+        // At base newFontSize, the full text fills newRectWidth
+        // Hero has fewer chars, so it fills a fraction of that width
         var allChars = sqTspanTexts.join('');
-        var avgCharWidth = measuredWidth / (allChars.length || 1);
         var heroChars = sqTspanTexts[_sqHeroIdx] ? sqTspanTexts[_sqHeroIdx].length : 1;
-        var heroVisualWidth = heroChars * avgCharWidth;
-
-        // Square side = hero width / 0.95 (hero fills 95%)
-        var squareSide = heroVisualWidth / 0.95;
-        var targetWidth = squareSide * 0.95;
-
-        // Scale hero font to fill targetWidth
-        var scaleUp = targetWidth / heroVisualWidth;
-        var heroFontSize = newFontSize * scaleUp;
+        var heroWidthFraction = heroChars / (allChars.length || 1);
+        // Hero at base font fills heroWidthFraction × textBlockWidth
+        var heroBaseWidth = heroWidthFraction * textBlockWidth;
+        // Scale hero so it fills innerWidth
+        var heroScale = innerWidth / (heroBaseWidth || 1);
+        var heroFontSize = newFontSize * heroScale;
 
         // Step 2: Hero visual height
         var heroVisH = heroFontSize * _capH * _scY;
@@ -2969,13 +2973,13 @@ const SvgRenderer = {
         var smallIdx = (_sqHeroIdx === 0) ? 1 : 0;
         var smallFontSize = Math.max(availForSmall / _smCapH, heroFontSize * 0.2); // min 20% of hero
 
-        // Step 4: If small row makes square too tall, expand
+        // Step 4: If small row makes square too tall, expand and rebalance
         var totalTextH = heroVisH + _rGap + smallFontSize * _smCapH;
         if (totalTextH + totalPad > squareSide) {
           squareSide = totalTextH + totalPad;
-          targetWidth = squareSide * 0.95;
-          scaleUp = targetWidth / (heroChars * avgCharWidth);
-          heroFontSize = newFontSize * scaleUp;
+          innerWidth = squareSide * 0.90;
+          heroScale = innerWidth / (heroBaseWidth || 1);
+          heroFontSize = newFontSize * heroScale;
           heroVisH = heroFontSize * _capH * _scY;
           availForSmall = squareSide - heroVisH - totalPad - _rGap;
           smallFontSize = Math.max(availForSmall / _smCapH, heroFontSize * 0.2);
