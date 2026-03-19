@@ -44,14 +44,14 @@ const FontTuning = {
 
   // Parameter definitions: key, label, min, max, step, decimals
   PARAMS: [
-    { key: 'scaleY',        label: 'Scale Y',  min: 0.8,  max: 2.0,  step: 0.05, decimals: 2 },
-    { key: 'letterSpacing',  label: 'Spacing',  min: 0,    max: 30,   step: 1,    decimals: 0 },
-    { key: 'dx',             label: 'dx',       min: -0.15, max: 0.15, step: 0.005, decimals: 3 },
-    { key: 'dy',             label: 'dy',       min: -0.15, max: 0.15, step: 0.005, decimals: 3 },
-    { key: 'wb',             label: 'wb',       min: 0.60,  max: 1.30, step: 0.01,  decimals: 2 },
-    { key: 'hb',             label: 'hb',       min: 0.80,  max: 1.50, step: 0.01,  decimals: 2 },
-    { key: 'stroke',          label: 'Stroke',   min: -8,    max: 8,    step: 0.5,   decimals: 1 },
-    { key: 'lineSpacing',     label: 'Line Sp',  min: 0.60,  max: 1.80, step: 0.05,  decimals: 2 }
+    { key: 'scaleY',        label: 'Scale Y',  min: -9999, max: 9999, step: 0.05, decimals: 2 },
+    { key: 'letterSpacing',  label: 'Spacing',  min: -9999, max: 9999, step: 1,    decimals: 0 },
+    { key: 'dx',             label: 'dx',       min: -9999, max: 9999, step: 0.005, decimals: 3 },
+    { key: 'dy',             label: 'dy',       min: -9999, max: 9999, step: 0.005, decimals: 3 },
+    { key: 'wb',             label: 'wb',       min: -9999, max: 9999, step: 0.01,  decimals: 2 },
+    { key: 'hb',             label: 'hb',       min: -9999, max: 9999, step: 0.01,  decimals: 2 },
+    { key: 'stroke',          label: 'Stroke',   min: -9999, max: 9999, step: 0.5,   decimals: 1 },
+    { key: 'lineSpacing',     label: 'Line Sp',  min: -9999, max: 9999, step: 0.05,  decimals: 2 }
   ],
 
   async init() {
