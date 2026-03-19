@@ -1444,7 +1444,7 @@ a:hover {
   top: 100%;
   left: 0;
   z-index: 30;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(4px);
   border: 1px solid #e5e5e5;
   border-radius: 6px;
@@ -1507,7 +1507,7 @@ a:hover {
   top: 100%;
   left: 0;
   z-index: 30;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(4px);
   border: 1px solid #e5e5e5;
   border-radius: 6px;
