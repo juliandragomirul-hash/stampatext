@@ -1289,20 +1289,36 @@ const SvgRenderer = {
    * @param {string} text
    * @returns {string[]}
    */
-  splitTextIntoLines(text) {
+  splitTextIntoLines(text, forceLines) {
     // Respect explicit newlines (from multi-line input)
     if (text.indexOf('\n') !== -1) {
       var explicitLines = text.split('\n');
       var result = [];
       for (var ei = 0; ei < explicitLines.length; ei++) {
-        var subLines = this.splitTextIntoLines(explicitLines[ei]);
+        var subLines = this.splitTextIntoLines(explicitLines[ei], forceLines);
         for (var si = 0; si < subLines.length; si++) result.push(subLines[si]);
       }
       return result;
     }
 
+    // Force specific line count: override maxCharsPerLine to produce desired number of lines
+    if (forceLines && forceLines > 1) {
+      var words = text.split(' ');
+      if (words.length >= forceLines) {
+        // Distribute words across forceLines rows as evenly as possible
+        var lines = [];
+        var wordsPerLine = Math.ceil(words.length / forceLines);
+        for (var i = 0; i < words.length; i += wordsPerLine) {
+          lines.push(words.slice(i, i + wordsPerLine).join(' '));
+        }
+        // Balance: try to minimize difference between longest and shortest line
+        if (lines.length === forceLines) return lines;
+      }
+      // Not enough words for forceLines — fall through to natural wrapping
+    }
+
     var max = this._getMaxCharsPerLine(text.length);
-    if (text.length <= max) return [text];
+    if (text.length <= max && !forceLines) return [text];
 
     var words = text.split(' ');
 
@@ -1932,7 +1948,7 @@ const SvgRenderer = {
    * @param {string} newText - replacement text
    * @returns {string} - modified SVG string
    */
-  replaceTextInString(svgString, textIndex, newText) {
+  replaceTextInString(svgString, textIndex, newText, forceLines) {
     // Escape special XML characters in the new text
     var escaped = newText
       .replace(/&/g, '&amp;')
@@ -2012,7 +2028,7 @@ const SvgRenderer = {
         var isFixedFrame = /<image[\s>]/i.test(svgString);
         var lines = isFixedFrame
           ? this.splitTextIntoLinesFixedFrame(caseAdjusted)
-          : this.splitTextIntoLines(caseAdjusted);
+          : this.splitTextIntoLines(caseAdjusted, forceLines);
 
         // Extract styling attributes from original tspans (if any)
         // These include: fill, font-family, font-size, font-weight, etc.

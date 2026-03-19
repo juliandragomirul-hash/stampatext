@@ -483,11 +483,40 @@ const Gallery = {
             variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-rowmode="' + currentRowMode + '"');
           }
 
+          // Rectangle/Lined: randomly force multi-line for multi-word text
+          var appliedForceLines = null;
+          if (stampShape !== 'square' && base.preAutoFitSvg) {
+            var rectText = (self.currentText || 'Your text here').toUpperCase();
+            var rectWords = rectText.trim().split(/\s+/);
+            if (rectWords.length >= 2) {
+              // 50% chance of forcing 2 lines for 2+ word text
+              var forceMulti = Math.random() < 0.5;
+              if (forceMulti) {
+                appliedForceLines = Math.min(rectWords.length, 2);
+                variantSvg = SvgRenderer.replaceTextInString(
+                  base.preAutoFitSvg,
+                  base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0,
+                  rectText,
+                  appliedForceLines
+                );
+              }
+            }
+          }
+
           var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
-          if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
+          if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square' || appliedForceLines)) {
             try {
               var variantMeasurements = base.autoFitMeasurements;
               var variantPreSvg = base.preAutoFitSvg;
+              if (appliedForceLines) {
+                var flTspanCount = (variantSvg.match(/<tspan/gi) || []).length;
+                if (flTspanCount > 1) {
+                  variantMeasurements = {};
+                  for (var mk in base.autoFitMeasurements) variantMeasurements[mk] = base.autoFitMeasurements[mk];
+                  variantMeasurements.numTspans = flTspanCount;
+                }
+                variantPreSvg = variantSvg;
+              }
               if (stampShape === 'square') {
                 var sqTspanCount = (variantSvg.match(/<tspan/gi) || []).length;
                 if (sqTspanCount > 1) {
@@ -568,6 +597,7 @@ const Gallery = {
             appliedFrame: frameMode,
             appliedShape: stampShape,
             appliedRowMode: currentRowMode,
+            appliedForceLines: appliedForceLines,
             appliedTilt: 0,
             appliedTexture: null
           };
@@ -948,6 +978,7 @@ const Gallery = {
         card.dataset.fill = r.fillType || 'full';
         card.dataset.shape = r.appliedShape || 'rectangle';
         if (r.appliedRowMode) card.dataset.rows = r.appliedRowMode;
+        if (r.appliedForceLines) card.dataset.forceLines = r.appliedForceLines;
 
         var productUrl = '/product.html?id=' + encodeURIComponent(r.templateId) +
           '&text=' + encodeURIComponent(self.currentText) +
@@ -957,7 +988,8 @@ const Gallery = {
           '&shape=' + encodeURIComponent(r.appliedShape || 'rectangle') +
           '&tilt=' + encodeURIComponent(r.appliedTilt || 0) +
           (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '') +
-          '&font=' + encodeURIComponent(r.fontKey || '');
+          '&font=' + encodeURIComponent(r.fontKey || '') +
+          (r.appliedForceLines ? '&rows=' + r.appliedForceLines : '');
 
         var previewLink = document.createElement('a');
         previewLink.className = 'stamp-card-preview';
