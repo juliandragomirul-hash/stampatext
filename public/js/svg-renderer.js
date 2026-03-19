@@ -2962,9 +2962,8 @@ const SvgRenderer = {
 
         // === HERO IS MASTER ===
         // Step 1: Size hero to fill available height
-        // Hero gets 65% of inner height, small gets 35% (approximate starting ratio)
-        // Hero font = innerHeight × 0.65 / capH (layout capH, no scaleY)
-        var heroFontSize = (innerSize * 0.65) / capH;
+        // Hero gets 40% of inner height at default (user scales up with scaleY)
+        var heroFontSize = (innerSize * 0.40) / capH;
         var heroBaseWidth = heroChars * avgCharWidth * (heroFontSize / newFontSize);
         var heroVisH = heroFontSize * capH; // layout height (no scaleY!)
 
