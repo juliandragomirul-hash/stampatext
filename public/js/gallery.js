@@ -514,6 +514,21 @@ const Gallery = {
                   variantMeasurements = {};
                   for (var mk in base.autoFitMeasurements) variantMeasurements[mk] = base.autoFitMeasurements[mk];
                   variantMeasurements.numTspans = flTspanCount;
+                  // Estimate longest line width: extract tspan texts, find longest
+                  var flTexts = [];
+                  variantSvg.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
+                    flTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+                  });
+                  if (flTexts.length > 0) {
+                    var fullText = flTexts.join('');
+                    var longestLine = '';
+                    for (var fli = 0; fli < flTexts.length; fli++) {
+                      if (flTexts[fli].length > longestLine.length) longestLine = flTexts[fli];
+                    }
+                    // Scale measuredWidth proportionally to longest line vs full text
+                    var widthRatio = longestLine.length / (fullText.length || 1);
+                    variantMeasurements.measuredWidth = base.autoFitMeasurements.measuredWidth * widthRatio;
+                  }
                 }
                 variantPreSvg = variantSvg;
               }
