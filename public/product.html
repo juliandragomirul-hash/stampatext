@@ -103,6 +103,41 @@
       </div>
 
       <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Style</label>
+        <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:95px">
+          <span class="filter-bar-dropdown-value" id="product-border-value">Plain</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-border-list">
+          <div class="filter-bar-dropdown-item active" data-value="simple">Plain</div>
+          <div class="filter-bar-dropdown-item" data-value="stitch_line">Stitch Line</div>
+          <div class="filter-bar-dropdown-item" data-value="stitch_square">Stitch Square</div>
+          <div class="filter-bar-dropdown-item" data-value="stitch_circle">Stitch Dot</div>
+          <div class="filter-bar-dropdown-item" data-value="sawtooth">Sawtooth</div>
+          <div class="filter-bar-dropdown-item" data-value="perforated">Perforated</div>
+          <div class="filter-bar-dropdown-item" data-value="wavy">Wavy</div>
+          <div class="filter-bar-dropdown-item" data-value="zigzag">Zigzag</div>
+          <div class="filter-bar-dropdown-item" data-value="brushstroke">Brushstroke</div>
+          <div class="filter-bar-dropdown-item" data-value="torn_edge">Torn Edge</div>
+          <div class="filter-bar-dropdown-item" data-value="chalk">Chalk</div>
+        </div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Corners</label>
+        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:85px">
+          <span class="filter-bar-dropdown-value" id="product-corner-value">Straight</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-corner-list">
+          <div class="filter-bar-dropdown-item active" data-value="straight">Straight</div>
+          <div class="filter-bar-dropdown-item" data-value="soft_round">Soft Round</div>
+          <div class="filter-bar-dropdown-item" data-value="medium_round">Medium Round</div>
+          <div class="filter-bar-dropdown-item" data-value="strong_round">Strong Round</div>
+        </div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Texture</label>
         <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:95px">
           <span class="filter-bar-dropdown-value" id="product-texture-value">No texture</span>
@@ -344,8 +379,8 @@
             svg = await SvgRenderer.autoFitTextInString(
               svg, idx, zone.bounding_width,
               zone.font_size, originalScaleX,
-              frameMode, currentFill || 'empty', templateCornerType || 'straight',
-              templateBorderType || null, currentShape
+              frameMode, currentFill || 'empty', currentCornerStyle || 'straight',
+              currentBorderStyle || null, currentShape
             );
             didAutoFit = true;
           }
@@ -437,6 +472,10 @@
       var currentFont = '';
       var currentTilt = 0;
       var currentTexture = '';
+      // All templates indexed by border_type for instant border style switching
+      var allTemplatesByBorder = {};
+      var currentBorderStyle = 'simple';
+      var currentCornerStyle = 'straight';
       var currentFrame = 'single';
       var currentFill = 'empty';
       var currentShape = 'rectangle';
@@ -518,6 +557,37 @@
       var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
       var cleanedSvg = SvgRenderer.cleanSvgString(rawSvg);
 
+      // Set current border/corner style from loaded template
+      currentBorderStyle = templateBorderType || 'simple';
+      currentCornerStyle = templateCornerType || 'straight';
+
+      // Store this template's SVG indexed by border type
+      allTemplatesByBorder[currentBorderStyle] = {
+        svg: cleanedSvg, tpl: tpl, zones: (tpl.text_zones || []).filter(function(z) { return z.is_editable; }).sort(function(a, b) { return a.sort_order - b.sort_order; })
+      };
+
+      // Background: preload all other active templates for instant border switching
+      (async function() {
+        try {
+          var { data: allTpls } = await sb.from('templates').select('*, text_zones(*)').eq('is_active', true).eq('fill_type', 'empty').eq('frame_type', 'single');
+          if (allTpls) {
+            for (var ti = 0; ti < allTpls.length; ti++) {
+              var t = allTpls[ti];
+              var bt = t.border_type || 'simple';
+              if (allTemplatesByBorder[bt]) continue; // already loaded
+              try {
+                var tSvgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + t.svg_path;
+                var tRawSvg = await SvgRenderer.fetchSvg(tSvgUrl);
+                var tCleanedSvg = SvgRenderer.cleanSvgString(tRawSvg);
+                allTemplatesByBorder[bt] = {
+                  svg: tCleanedSvg, tpl: t, zones: (t.text_zones || []).filter(function(z) { return z.is_editable; }).sort(function(a, b) { return a.sort_order - b.sort_order; })
+                };
+              } catch (e) { /* skip failed fetches */ }
+            }
+          }
+        } catch (e) { console.warn('Failed to preload templates:', e.message); }
+      })();
+
       // ---- Detect text case from original SVG ----
       var displayText = userText;
       (function() {
@@ -570,6 +640,8 @@
       setDropdownActive('product-frame-list', currentFrame, 'product-frame-value');
       setDropdownActive('product-fill-list', currentFill, 'product-fill-value');
       setDropdownActive('product-tilt-list', String(currentTilt), 'product-tilt-value');
+      setDropdownActive('product-border-list', currentBorderStyle, 'product-border-value');
+      setDropdownActive('product-corner-list', currentCornerStyle, 'product-corner-value');
       document.getElementById('product-shape-value').value = currentShape;
 
       // Show Rows dropdown for multi-word text
@@ -713,6 +785,62 @@
         item.classList.add('active');
         currentTilt = parseInt(item.dataset.value, 10) || 0;
         document.getElementById('product-tilt-value').textContent = item.textContent;
+        renderPreview();
+      });
+
+      // Border Style dropdown
+      document.getElementById('product-border-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
+        document.getElementById('product-color-grid').style.display = 'none';
+        var list = document.getElementById('product-border-list');
+        list.style.display = list.style.display === 'block' ? 'none' : 'block';
+      });
+      document.getElementById('product-border-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-dropdown-item');
+        if (!item) return;
+        var newBorder = item.dataset.value;
+        if (newBorder === currentBorderStyle) { this.style.display = 'none'; return; }
+        // Check if template is preloaded
+        if (!allTemplatesByBorder[newBorder]) {
+          console.warn('Template for border style "' + newBorder + '" not yet loaded');
+          return;
+        }
+        this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentBorderStyle = newBorder;
+        document.getElementById('product-border-value').textContent = item.textContent;
+        this.style.display = 'none';
+        // Switch to new template
+        var entry = allTemplatesByBorder[newBorder];
+        rawCleanedSvg = entry.svg;
+        storedZones = entry.zones;
+        templateBorderType = newBorder;
+        // Re-render with new template
+        rebuildWithFont(currentFont).then(function(svg) {
+          baseSvg = svg;
+          renderPreview();
+        });
+      });
+
+      // Corner Style dropdown
+      document.getElementById('product-corner-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
+        document.getElementById('product-color-grid').style.display = 'none';
+        var list = document.getElementById('product-corner-list');
+        list.style.display = list.style.display === 'block' ? 'none' : 'block';
+      });
+      document.getElementById('product-corner-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-dropdown-item');
+        if (!item) return;
+        this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentCornerStyle = item.dataset.value;
+        document.getElementById('product-corner-value').textContent = item.textContent;
+        this.style.display = 'none';
         renderPreview();
       });
 
@@ -946,7 +1074,7 @@
           if (currentShape === 'lined') {
             svg = SvgRenderer.convertToLined(svg);
           } else {
-            svg = SvgRenderer.applyCornerRadius(svg, templateCornerType);
+            svg = SvgRenderer.applyCornerRadius(svg, currentCornerStyle !== 'straight' ? currentCornerStyle : templateCornerType);
           }
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
           // Detect border info from post-autoFit SVG (matches gallery behavior).
