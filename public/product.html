@@ -801,7 +801,7 @@
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
         var newBorder = item.dataset.value;
-        if (newBorder === currentBorderStyle) { this.style.display = 'none'; return; }
+        if (newBorder === currentBorderStyle) return;
         // Check if template is preloaded
         if (!allTemplatesByBorder[newBorder]) {
           console.warn('Template for border style "' + newBorder + '" not yet loaded');
@@ -811,7 +811,6 @@
         item.classList.add('active');
         currentBorderStyle = newBorder;
         document.getElementById('product-border-value').textContent = item.textContent;
-        this.style.display = 'none';
         // Switch to new template
         var entry = allTemplatesByBorder[newBorder];
         rawCleanedSvg = entry.svg;
@@ -840,7 +839,6 @@
         item.classList.add('active');
         currentCornerStyle = item.dataset.value;
         document.getElementById('product-corner-value').textContent = item.textContent;
-        this.style.display = 'none';
         renderPreview();
       });
 
@@ -860,7 +858,6 @@
         item.classList.add('active');
         currentForceLines = parseInt(item.dataset.value, 10) || 0;
         document.getElementById('product-rows-value').textContent = item.textContent;
-        this.style.display = 'none';
         // Re-render with new line count
         rebuildWithFont(currentFont).then(function(svg) {
           baseSvg = svg;
