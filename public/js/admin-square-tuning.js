@@ -35,18 +35,17 @@ const SquareTuning = {
     { key: 'equal3',    label: '3 Equal Rows',     text: 'YOUR TEXT HERE',  rowMode: '3' }
   ],
 
-  // Tunable parameters per case
+  // Tunable parameters per case — no capping, free experimentation
   PARAMS: [
-    { key: 'heroCapH',     label: 'Cap H',     min: 0.10, max: 2.00, step: 0.02, decimals: 2 },
-    { key: 'heroDescent',  label: 'Descent',   min: 0.00, max: 1.00, step: 0.01, decimals: 2 },
-    { key: 'rowGap',       label: 'Row Gap',   min: -100, max: 200,  step: 5,    decimals: 0 },
-    { key: 'heroStroke',   label: 'H Stroke',  min: 0,    max: 30,   step: 0.5,  decimals: 1 },
-    { key: 'heroSpacing',  label: 'H Space',   min: -5,   max: 30,   step: 0.5,  decimals: 1 },
-    { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.5,  max: 2.0,  step: 0.05, decimals: 2 },
-    { key: 'smallCapH',    label: 'S Cap H',   min: 0.10, max: 2.00, step: 0.02, decimals: 2 },
-    { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 30,   step: 0.5,  decimals: 1 },
-    { key: 'smallSpacing', label: 'S Space',   min: -5,   max: 30,   step: 0.5,  decimals: 1 },
-    { key: 'lineSpacing', label: 'Line Sp',  min: 0.0,  max: 3.0,  step: 0.05, decimals: 2 }
+    { key: 'heroStroke',   label: 'H Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1 },
+    { key: 'heroSpacing',  label: 'H Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1 },
+    { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
+    { key: 'heroScaleX',   label: 'H ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
+    { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1 },
+    { key: 'smallSpacing', label: 'S Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1 },
+    { key: 'smallScaleY',  label: 'S ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
+    { key: 'smallScaleX',  label: 'S ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2 },
+    { key: 'rowGap',       label: 'Line Sp',   min: -100, max: 200,  step: 2,    decimals: 0 }
   ],
 
   async init() {
