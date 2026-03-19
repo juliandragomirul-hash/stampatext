@@ -2941,7 +2941,7 @@ const SvgRenderer = {
         }
         var smallIdx = (_sqHeroIdx === 0) ? 1 : 0;
 
-        // Admin config values
+        // Admin config values (visual transforms only — don't affect layout math)
         var _hScY = sqCfg ? sqCfg.heroScaleY : 1.10;
         var _hScX = sqCfg ? (sqCfg.heroScaleX || 1.0) : 1.0;
         var _sScY = sqCfg ? (sqCfg.smallScaleY || 1.0) : 1.0;
@@ -2956,41 +2956,49 @@ const SvgRenderer = {
 
         // Square side = max of current rect dimensions
         var squareSide = Math.max(newRectWidth, newRectHeight);
+        var capH = 0.72; // base cap height for layout math (no scaleY!)
         var pad = squareSide * 0.01; // 1% padding each side
-        var innerWidth = squareSide - pad * 2;
+        var innerSize = squareSide - pad * 2; // available inner space (both W and H)
 
-        // Step 1: Size small row to fill 98% width (innerWidth)
-        var smallBaseWidth = smallChars * avgCharWidth;
-        var smallScale = innerWidth / (smallBaseWidth || 1);
-        var smallFontSize = newFontSize * smallScale;
-        var smallVisH = smallFontSize * 0.72 * _sScY; // cap height × scaleY
+        // === HERO IS MASTER ===
+        // Step 1: Size hero to fill available height
+        // Hero gets 65% of inner height, small gets 35% (approximate starting ratio)
+        // Hero font = innerHeight × 0.65 / capH (layout capH, no scaleY)
+        var heroFontSize = (innerSize * 0.65) / capH;
+        var heroBaseWidth = heroChars * avgCharWidth * (heroFontSize / newFontSize);
+        var heroVisH = heroFontSize * capH; // layout height (no scaleY!)
 
-        // Step 2: Compute line gap
-        var lineGap = _lineSp; // direct pixel value from admin
+        // Step 2: Small row matches hero's visual width
+        // small font = heroVisualWidth / (smallChars × avgCharWidth) × newFontSize
+        var heroVisualWidth = heroBaseWidth; // hero width at heroFontSize
+        var smallFontSize = (heroVisualWidth / (smallChars * avgCharWidth)) * newFontSize;
+        smallFontSize = Math.max(smallFontSize, heroFontSize * 0.1); // min 10%
+        var smallVisH = smallFontSize * capH; // layout height (no scaleY!)
 
-        // Step 3: Available height for hero
-        var availForHero = innerWidth - smallVisH - lineGap; // inner = square minus padding
-        // Hero sized to fill available height
-        var heroCapH = 0.72;
-        var heroFontSize = availForHero / (heroCapH * _hScY);
-        // Clamp: hero can't be negative or absurdly small
-        heroFontSize = Math.max(heroFontSize, smallFontSize * 0.5);
-        var heroVisH = heroFontSize * heroCapH * _hScY;
+        // Step 3: Line gap
+        var lineGap = _lineSp;
 
-        // Step 4: If hero too tall, shrink to fit (never expand square)
-        if (heroVisH > availForHero) {
-          heroFontSize = availForHero / (heroCapH * _hScY);
-          heroVisH = heroFontSize * heroCapH * _hScY;
+        // Step 4: Total block height (layout only, no scaleY)
+        var totalBlockH = heroVisH + lineGap + smallVisH;
+
+        // Step 5: If block too tall, shrink hero proportionally
+        if (totalBlockH > innerSize) {
+          var shrink = innerSize / totalBlockH;
+          heroFontSize *= shrink;
+          heroVisH = heroFontSize * capH;
+          heroBaseWidth = heroChars * avgCharWidth * (heroFontSize / newFontSize);
+          heroVisualWidth = heroBaseWidth;
+          smallFontSize = (heroVisualWidth / (smallChars * avgCharWidth)) * newFontSize;
+          smallFontSize = Math.max(smallFontSize, heroFontSize * 0.1);
+          smallVisH = smallFontSize * capH;
+          totalBlockH = heroVisH + lineGap + smallVisH;
         }
 
-        // Step 5: Build font sizes array
+        // Step 6: Build font sizes array
         _sqComputedFontSizes = [];
         for (var si = 0; si < numLines; si++) {
           _sqComputedFontSizes.push(si === _sqHeroIdx ? heroFontSize : smallFontSize);
         }
-
-        // Step 6: Total block height for centering
-        var totalBlockH = heroVisH + lineGap + smallVisH;
         // Store for dy section
         var _sqTotalBlockH = totalBlockH;
         var _sqHeroVisH = heroVisH;
@@ -3075,25 +3083,19 @@ const SvgRenderer = {
       if (numTspans > 1) {
         if (_sqComputedFontSizes && _sqComputedFontSizes.length > 1) {
           // Square: center the 2-row block as a whole
-          // Total block = heroVisH + lineGap + smallVisH (computed in poster layout above)
-          var sqBlockH = _sqTotalBlockH || (_sqHeroVisH + _sqLineGap + _sqSmallVisH);
-          var sqHeroCapH = 0.72;
+          // Layout uses base capH=0.72 — NO scaleY (scaleY is visual only)
+          var sqCapH = 0.72;
+          var sqBlockH = _sqTotalBlockH; // already computed without scaleY
 
-          // First row capH (how far above baseline the first row extends)
-          var firstIsHero = (_sqHeroIdx === 0);
-          var firstCapPx = firstIsHero
-            ? _sqComputedFontSizes[0] * sqHeroCapH * (sqCfg ? sqCfg.heroScaleY : 1.10)
-            : _sqComputedFontSizes[0] * sqHeroCapH * (sqCfg ? (sqCfg.smallScaleY || 1.0) : 1.0);
+          // First row cap height in px (layout, no scaleY)
+          var firstCapPx = _sqComputedFontSizes[0] * sqCapH;
 
           // Center: first baseline dy = -(totalBlockH/2) + firstCapH
           var sqFirstDy = -(sqBlockH / 2) + firstCapPx;
 
           // Second row dy = baseline-to-baseline distance
-          // = first row below-baseline + gap + second row above-baseline
-          var firstDescPx = _sqComputedFontSizes[0] * 0.05; // small descent
-          var secondCapPx = !firstIsHero
-            ? _sqComputedFontSizes[1] * sqHeroCapH * (sqCfg ? sqCfg.heroScaleY : 1.10)
-            : _sqComputedFontSizes[1] * sqHeroCapH * (sqCfg ? (sqCfg.smallScaleY || 1.0) : 1.0);
+          var firstDescPx = _sqComputedFontSizes[0] * 0.05;
+          var secondCapPx = _sqComputedFontSizes[1] * sqCapH;
           var sqSecondDy = firstDescPx + (_sqLineGap || 0) + secondCapPx;
 
           // Apply admin dX/dY offsets per row
