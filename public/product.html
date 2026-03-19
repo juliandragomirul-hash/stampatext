@@ -104,7 +104,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Style</label>
-        <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:95px">
+        <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:135px">
           <span class="filter-bar-dropdown-value" id="product-border-value">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -115,6 +115,7 @@
           <div class="filter-bar-dropdown-item" data-value="stitch_circle">Stitch Dot</div>
           <div class="filter-bar-dropdown-item" data-value="sawtooth">Sawtooth</div>
           <div class="filter-bar-dropdown-item" data-value="perforated">Perforated</div>
+          <div class="filter-bar-dropdown-item" data-value="perforated_spaced">Spaced Perforated</div>
           <div class="filter-bar-dropdown-item" data-value="wavy">Wavy</div>
           <div class="filter-bar-dropdown-item" data-value="zigzag">Zigzag</div>
           <div class="filter-bar-dropdown-item" data-value="torn_edge">Torn Edge</div>
@@ -124,7 +125,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Corners</label>
-        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:85px">
+        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:140px">
           <span class="filter-bar-dropdown-value" id="product-corner-value">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -133,6 +134,10 @@
           <div class="filter-bar-dropdown-item" data-value="soft_round">Soft Round</div>
           <div class="filter-bar-dropdown-item" data-value="medium_round">Medium Round</div>
           <div class="filter-bar-dropdown-item" data-value="strong_round">Strong Round</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_top_straight">Mixed Top Straight</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_top_round">Mixed Top Round</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_diag_down">Mixed Diagonal ↘</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_diag_up">Mixed Diagonal ↗</div>
         </div>
       </div>
 
@@ -1069,8 +1074,14 @@
           // Lined: convert rect to 2 horizontal lines, skip corner radius
           if (currentShape === 'lined') {
             svg = SvgRenderer.convertToLined(svg);
+          } else if (currentCornerStyle && currentCornerStyle !== 'straight') {
+            svg = SvgRenderer.applyCornerRadius(svg, currentCornerStyle);
           } else {
-            svg = SvgRenderer.applyCornerRadius(svg, currentCornerStyle !== 'straight' ? currentCornerStyle : null);
+            // Straight: strip any rx/ry from rects to ensure sharp corners
+            svg = svg.replace(/<rect([^>]*)\s+rx=["'][^"']*["']([^>]*)>/gi, function(m, before, after) {
+              var cleaned = before.replace(/\s*ry=["'][^"']*["']/gi, '') + after.replace(/\s*ry=["'][^"']*["']/gi, '');
+              return '<rect' + cleaned + '>';
+            });
           }
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
           // Detect border info from post-autoFit SVG (matches gallery behavior).
