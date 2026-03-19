@@ -101,8 +101,8 @@
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-fill-list">
-          <div class="filter-bar-dropdown-item active" data-value="empty">Outlined</div>
-          <div class="filter-bar-dropdown-item" data-value="full">Filled</div>
+          <div class="filter-bar-dropdown-item active" data-value="empty">No</div>
+          <div class="filter-bar-dropdown-item" data-value="full">Yes</div>
         </div>
       </div>
 
@@ -594,6 +594,28 @@
                 };
               } catch (e) { /* skip failed fetches */ }
             }
+          }
+          // Generate border style thumbnails for dropdown
+          var borderList = document.getElementById('product-border-list');
+          if (borderList) {
+            borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
+              var bt = item.dataset.value;
+              var entry = allTemplatesByBorder[bt];
+              if (!entry) return;
+              try {
+                // Render a tiny stamp with just the border (no text, red color)
+                var thumbSvg = entry.svg;
+                // Remove text content but keep the rect/border structure
+                thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
+                thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
+                thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
+                // Create tiny inline SVG
+                var thumb = document.createElement('span');
+                thumb.style.cssText = 'display:inline-block;width:40px;height:20px;margin-right:6px;vertical-align:middle;';
+                thumb.innerHTML = thumbSvg.replace(/<svg/, '<svg width="40" height="20" preserveAspectRatio="xMidYMid meet"');
+                item.insertBefore(thumb, item.firstChild);
+              } catch (e) { /* skip thumbnail errors */ }
+            });
           }
         } catch (e) { console.warn('Failed to preload templates:', e.message); }
       })();
