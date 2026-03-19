@@ -35,21 +35,21 @@ const SquareTuning = {
     { key: 'equal3',    label: '3 Equal Rows',     text: 'YOUR TEXT HERE',  rowMode: '3' }
   ],
 
-  // Tunable parameters per case — no capping, free experimentation
+  // Tunable parameters per case — NO CAPPING, free experimentation
   PARAMS: [
-    { key: 'heroStroke',   label: 'H Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1, defaultVal: 8.0 },
-    { key: 'heroSpacing',  label: 'H Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1, defaultVal: 2.0 },
-    { key: 'heroScaleY',   label: 'H ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.10 },
-    { key: 'heroScaleX',   label: 'H ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.0 },
-    { key: 'heroDx',       label: 'H DX',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
-    { key: 'heroDy',       label: 'H DY',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
-    { key: 'smallStroke',  label: 'S Stroke',  min: 0,    max: 50,   step: 0.5,  decimals: 1, defaultVal: 5.0 },
-    { key: 'smallSpacing', label: 'S Space',   min: -20,  max: 50,   step: 0.5,  decimals: 1, defaultVal: 2.0 },
-    { key: 'smallScaleY',  label: 'S ScaleY',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.0 },
-    { key: 'smallScaleX',  label: 'S ScaleX',  min: 0.1,  max: 3.0,  step: 0.05, decimals: 2, defaultVal: 1.0 },
-    { key: 'smallDx',      label: 'S DX',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
-    { key: 'smallDy',      label: 'S DY',      min: -200, max: 200,  step: 2,    decimals: 0, defaultVal: 0 },
-    { key: 'rowGap',       label: 'Line Sp',   min: -100, max: 200,  step: 2,    decimals: 0, defaultVal: 0 }
+    { key: 'heroStroke',   label: 'H Stroke',  step: 0.5,  decimals: 1, defaultVal: 8.0 },
+    { key: 'heroSpacing',  label: 'H Space',   step: 0.5,  decimals: 1, defaultVal: 2.0 },
+    { key: 'heroScaleY',   label: 'H ScaleY',  step: 0.05, decimals: 2, defaultVal: 1.10 },
+    { key: 'heroScaleX',   label: 'H ScaleX',  step: 0.05, decimals: 2, defaultVal: 1.0 },
+    { key: 'heroDx',       label: 'H DX',      step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'heroDy',       label: 'H DY',      step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'smallStroke',  label: 'S Stroke',  step: 0.5,  decimals: 1, defaultVal: 5.0 },
+    { key: 'smallSpacing', label: 'S Space',   step: 0.5,  decimals: 1, defaultVal: 2.0 },
+    { key: 'smallScaleY',  label: 'S ScaleY',  step: 0.05, decimals: 2, defaultVal: 1.0 },
+    { key: 'smallScaleX',  label: 'S ScaleX',  step: 0.05, decimals: 2, defaultVal: 1.0 },
+    { key: 'smallDx',      label: 'S DX',      step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'smallDy',      label: 'S DY',      step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'rowGap',       label: 'Line Sp',   step: 2,    decimals: 0, defaultVal: 0 }
   ],
 
   async init() {
@@ -208,9 +208,10 @@ const SquareTuning = {
     var paramDef = this.PARAMS.find(function(p) { return p.key === paramKey; });
     if (!paramDef) return;
 
-    var val = cfg[paramKey] !== undefined ? cfg[paramKey] : 0;
+    var defVal = paramDef.defaultVal !== undefined ? paramDef.defaultVal : 0;
+    var val = cfg[paramKey] !== undefined ? cfg[paramKey] : defVal;
     val += dir * paramDef.step;
-    val = Math.max(paramDef.min, Math.min(paramDef.max, val));
+    // No capping — free experimentation
     val = Math.round(val * 1000) / 1000;
     cfg[paramKey] = val;
 
@@ -219,7 +220,7 @@ const SquareTuning = {
     if (valEl) valEl.textContent = val.toFixed(paramDef.decimals);
 
     // Update SvgRenderer config
-    SvgRenderer._squareConfig = this.config;
+    SvgRenderer._sqConfig = this.config;
 
     // Debounced re-render
     this.debouncedRender(fontKey, caseIdx);
