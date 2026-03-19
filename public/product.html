@@ -1071,7 +1071,7 @@
           if (currentShape === 'lined') {
             svg = SvgRenderer.convertToLined(svg);
           } else {
-            svg = SvgRenderer.applyCornerRadius(svg, currentCornerStyle !== 'straight' ? currentCornerStyle : templateCornerType);
+            svg = SvgRenderer.applyCornerRadius(svg, currentCornerStyle !== 'straight' ? currentCornerStyle : null);
           }
           svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
           // Detect border info from post-autoFit SVG (matches gallery behavior).
