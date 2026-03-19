@@ -41,14 +41,14 @@ const SquareTuning = {
     { key: 'heroSpacing',  label: 'H Space',   step: 0.5,  decimals: 1, defaultVal: 2.0 },
     { key: 'heroScaleY',   label: 'H ScaleY',  step: 0.05, decimals: 2, defaultVal: 1.10 },
     { key: 'heroScaleX',   label: 'H ScaleX',  step: 0.05, decimals: 2, defaultVal: 1.0 },
-    { key: 'heroDx',       label: 'H DX',      step: 2,    decimals: 0, defaultVal: 0 },
-    { key: 'heroDy',       label: 'H DY',      step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'heroDx',       label: 'H DX',      step: 10,   decimals: 0, defaultVal: 0 },
+    { key: 'heroDy',       label: 'H DY',      step: 10,   decimals: 0, defaultVal: 0 },
     { key: 'smallStroke',  label: 'S Stroke',  step: 0.5,  decimals: 1, defaultVal: 5.0 },
     { key: 'smallSpacing', label: 'S Space',   step: 0.5,  decimals: 1, defaultVal: 2.0 },
     { key: 'smallScaleY',  label: 'S ScaleY',  step: 0.05, decimals: 2, defaultVal: 1.0 },
     { key: 'smallScaleX',  label: 'S ScaleX',  step: 0.05, decimals: 2, defaultVal: 1.0 },
-    { key: 'smallDx',      label: 'S DX',      step: 2,    decimals: 0, defaultVal: 0 },
-    { key: 'smallDy',      label: 'S DY',      step: 2,    decimals: 0, defaultVal: 0 },
+    { key: 'smallDx',      label: 'S DX',      step: 10,   decimals: 0, defaultVal: 0 },
+    { key: 'smallDy',      label: 'S DY',      step: 10,   decimals: 0, defaultVal: 0 },
     { key: 'rowGap',       label: 'Line Sp',   step: 2,    decimals: 0, defaultVal: 0 }
   ],
 
