@@ -595,7 +595,7 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style thumbnails for dropdown
+          // Generate border style line samples for dropdown
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
@@ -603,17 +603,31 @@
               var entry = allTemplatesByBorder[bt];
               if (!entry) return;
               try {
-                // Render a tiny stamp with just the border (no text, red color)
+                // Extract just the top edge of the border as a horizontal strip
                 var thumbSvg = entry.svg;
-                // Remove text content but keep the rect/border structure
                 thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
                 thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
                 thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
-                // Create tiny inline SVG
-                var thumb = document.createElement('span');
-                thumb.style.cssText = 'display:inline-block;width:40px;height:20px;margin-right:6px;vertical-align:middle;';
-                thumb.innerHTML = thumbSvg.replace(/<svg/, '<svg width="40" height="20" preserveAspectRatio="xMidYMid meet"');
-                item.insertBefore(thumb, item.firstChild);
+                // Parse viewBox to crop to just the top edge
+                var vbMatch = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
+                if (vbMatch) {
+                  var vx = parseFloat(vbMatch[1]), vy = parseFloat(vbMatch[2]);
+                  var vw = parseFloat(vbMatch[3]), vh = parseFloat(vbMatch[4]);
+                  // Show only top 15% of the stamp (the top border edge)
+                  var stripH = vh * 0.15;
+                  thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + vy + ' ' + vw + ' ' + stripH + '"');
+                }
+                // Replace text label with line sample
+                item.textContent = '';
+                var sample = document.createElement('div');
+                sample.style.cssText = 'width:100%;height:12px;overflow:hidden;';
+                sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="12" preserveAspectRatio="none"');
+                item.appendChild(sample);
+                // Add label below
+                var label = document.createElement('span');
+                label.style.cssText = 'font-size:0.7rem;color:#666;display:block;text-align:center;margin-top:2px;';
+                label.textContent = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perforated',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'}[bt] || bt;
+                item.appendChild(label);
               } catch (e) { /* skip thumbnail errors */ }
             });
           }
