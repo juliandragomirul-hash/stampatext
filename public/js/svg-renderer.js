@@ -3024,17 +3024,24 @@ const SvgRenderer = {
             var isHero = (tspanFontIdx === _sqHeroIdx);
             tspanFontIdx++;
             attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
-            attrs = attrs.replace(/\s*transform=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*stroke-width=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*letter-spacing=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*stroke=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
             var scX = isHero ? _hScX : _sScX;
             var scY = isHero ? _hScY : _sScY;
             var strokeW = isHero ? _hStroke : _sStroke;
             var spacing = isHero ? _hSpace : _sSpace;
+            // ScaleY: multiply into font-size (transform on tspan not supported in SVG)
+            var effectiveFs = fs * scY;
+            // ScaleX: use textLength to stretch horizontally
+            var rowChars = sqTspanTexts[isHero ? _sqHeroIdx : smallIdx] || '';
+            var naturalWidth = rowChars.length * avgCharWidth * (fs / newFontSize);
+            var stretchedWidth = naturalWidth * scX;
             var extra = '';
-            if (scX !== 1.0 || scY !== 1.0) {
-              extra += ' transform="scale(' + scX.toFixed(2) + ', ' + scY.toFixed(2) + ')"';
+            if (scX !== 1.0) {
+              extra += ' textLength="' + stretchedWidth.toFixed(1) + '" lengthAdjust="spacingAndGlyphs"';
             }
             if (strokeW > 0) {
               extra += ' stroke-width="' + strokeW.toFixed(1) + '"';
@@ -3042,7 +3049,7 @@ const SvgRenderer = {
             if (spacing !== 0) {
               extra += ' letter-spacing="' + spacing.toFixed(1) + '"';
             }
-            return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '"' + extra + '>';
+            return '<tspan' + attrs + ' font-size="' + effectiveFs.toFixed(2) + '"' + extra + '>';
           }
           return match;
         });
