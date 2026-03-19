@@ -711,10 +711,10 @@
         var dropdowns = document.querySelectorAll('.filter-bar-dropdown-list');
         // Don't swallow clicks inside dropdowns/toggle boxes — let them handle their own events
         if (e.target.closest('.filter-bar-dropdown-list, .filter-bar-dropdown-box, .filter-bar-color-grid, .filter-bar-color-box, .filter-bar-font-list, .filter-bar-font-box, .filter-bar-swatch, .filter-bar-font-item, .filter-bar-dropdown-item')) return;
-        var anyOpen = (colorGrid && colorGrid.style.display === 'flex') ||
-                      (fontList && fontList.style.display === 'flex');
+        var isVisible = function(el) { return el && (el.style.display === 'flex' || el.style.display === 'block'); };
+        var anyOpen = isVisible(colorGrid) || isVisible(fontList);
         if (!anyOpen) {
-          dropdowns.forEach(function(l) { if (l.style.display === 'flex') anyOpen = true; });
+          dropdowns.forEach(function(l) { if (isVisible(l)) anyOpen = true; });
         }
         if (anyOpen) {
           e.preventDefault();
