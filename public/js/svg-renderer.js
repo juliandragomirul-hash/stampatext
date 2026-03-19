@@ -3004,7 +3004,11 @@ const SvgRenderer = {
         textBlockHeight = totalBlockH;
         lineHeight = heroFontSize * 1.15;
 
-        // Apply per-tspan font-size + transforms (scaleX, scaleY)
+        // Apply per-tspan font-size, transforms, stroke-width, letter-spacing
+        var _hStroke = sqCfg ? sqCfg.heroStroke : 8;
+        var _sStroke = sqCfg ? sqCfg.smallStroke : 5;
+        var _hSpace = sqCfg ? sqCfg.heroSpacing : 2;
+        var _sSpace = sqCfg ? sqCfg.smallSpacing : 2;
         var tspanFontIdx = 0;
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
           if (tspanFontIdx < _sqComputedFontSizes.length) {
@@ -3013,11 +3017,22 @@ const SvgRenderer = {
             tspanFontIdx++;
             attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*transform=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*stroke-width=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*letter-spacing=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*stroke=["'][^"']*["']/gi, '');
             var scX = isHero ? _hScX : _sScX;
             var scY = isHero ? _hScY : _sScY;
+            var strokeW = isHero ? _hStroke : _sStroke;
+            var spacing = isHero ? _hSpace : _sSpace;
             var extra = '';
             if (scX !== 1.0 || scY !== 1.0) {
-              extra = ' transform="scale(' + scX.toFixed(2) + ', ' + scY.toFixed(2) + ')"';
+              extra += ' transform="scale(' + scX.toFixed(2) + ', ' + scY.toFixed(2) + ')"';
+            }
+            if (strokeW > 0) {
+              extra += ' stroke-width="' + strokeW.toFixed(1) + '"';
+            }
+            if (spacing !== 0) {
+              extra += ' letter-spacing="' + spacing.toFixed(1) + '"';
             }
             return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '"' + extra + '>';
           }
