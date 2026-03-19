@@ -68,40 +68,7 @@
         <div class="filter-bar-color-grid" id="product-color-grid"></div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group">
-        <label class="filter-bar-label">Fill</label>
-        <div class="filter-bar-dropdown-box" id="product-fill-toggle" style="min-width:85px">
-          <span class="filter-bar-dropdown-value" id="product-fill-value">Outlined</span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-dropdown-list" id="product-fill-list">
-          <div class="filter-bar-dropdown-item active" data-value="empty">Outlined</div>
-          <div class="filter-bar-dropdown-item" data-value="full">Filled</div>
-        </div>
-      </div>
-
-      <div class="filter-bar-group filter-bar-font-group">
-        <label class="filter-bar-label">Font</label>
-        <div class="filter-bar-font-box" id="product-font-toggle">
-          <span class="filter-bar-font-value" id="product-font-value"></span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-font-list" id="product-font-list"></div>
-      </div>
-
-      <div class="filter-bar-group filter-bar-dropdown-group">
-        <label class="filter-bar-label">Frames</label>
-        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:70px">
-          <span class="filter-bar-dropdown-value" id="product-frame-value">Single</span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-dropdown-list" id="product-frame-list">
-          <div class="filter-bar-dropdown-item active" data-value="single">Single</div>
-          <div class="filter-bar-dropdown-item" data-value="double">Double</div>
-          <div class="filter-bar-dropdown-item" data-value="split">Split</div>
-        </div>
-      </div>
-
+      <!-- Compatibility group: Style, Corners, Frames, Fill -->
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:135px">
@@ -139,6 +106,44 @@
           <div class="filter-bar-dropdown-item" data-value="mixed_diag_down">Mixed Diagonal ↘</div>
           <div class="filter-bar-dropdown-item" data-value="mixed_diag_up">Mixed Diagonal ↗</div>
         </div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Frames</label>
+        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:70px">
+          <span class="filter-bar-dropdown-value" id="product-frame-value">Single</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-frame-list">
+          <div class="filter-bar-dropdown-item active" data-value="single">Single</div>
+          <div class="filter-bar-dropdown-item" data-value="double">Double</div>
+          <div class="filter-bar-dropdown-item" data-value="split">Split</div>
+        </div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group">
+        <label class="filter-bar-label">Fill</label>
+        <div class="filter-bar-dropdown-box" id="product-fill-toggle" style="min-width:85px">
+          <span class="filter-bar-dropdown-value" id="product-fill-value">Outlined</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-fill-list">
+          <div class="filter-bar-dropdown-item active" data-value="empty">Outlined</div>
+          <div class="filter-bar-dropdown-item" data-value="full">Filled</div>
+        </div>
+      </div>
+
+      <div style="border-left:1px solid #ddd;height:50px;margin:0 8px;align-self:center;"></div>
+
+      <!-- Universal group: Color, Font, Texture, Tilt, Rows -->
+
+      <div class="filter-bar-group filter-bar-font-group">
+        <label class="filter-bar-label">Font</label>
+        <div class="filter-bar-font-box" id="product-font-toggle">
+          <span class="filter-bar-font-value" id="product-font-value"></span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-font-list" id="product-font-list"></div>
       </div>
 
       <div class="filter-bar-group filter-bar-dropdown-group">
