@@ -514,21 +514,19 @@ const Gallery = {
                   variantMeasurements = {};
                   for (var mk in base.autoFitMeasurements) variantMeasurements[mk] = base.autoFitMeasurements[mk];
                   variantMeasurements.numTspans = flTspanCount;
-                  // Estimate longest line width: extract tspan texts, find longest
+                  // Estimate longest line width from the original measured width
+                  // Use character count INCLUDING spaces for accurate proportional estimate
                   var flTexts = [];
                   variantSvg.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
                     flTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
                   });
-                  if (flTexts.length > 0) {
-                    var fullText = flTexts.join('');
-                    var longestLine = '';
-                    for (var fli = 0; fli < flTexts.length; fli++) {
-                      if (flTexts[fli].length > longestLine.length) longestLine = flTexts[fli];
-                    }
-                    // Scale measuredWidth proportionally to longest line vs full text
-                    var widthRatio = longestLine.length / (fullText.length || 1);
-                    variantMeasurements.measuredWidth = base.autoFitMeasurements.measuredWidth * widthRatio;
+                  var origText = flTexts.join(' '); // rejoin with spaces = original text
+                  var longestLine = '';
+                  for (var fli = 0; fli < flTexts.length; fli++) {
+                    if (flTexts[fli].length > longestLine.length) longestLine = flTexts[fli];
                   }
+                  // measuredWidth scaled to longest line proportion
+                  variantMeasurements.measuredWidth = base.autoFitMeasurements.measuredWidth * (longestLine.length / (origText.length || 1));
                 }
                 variantPreSvg = variantSvg;
               }
