@@ -35,8 +35,8 @@ const SquareTuning = {
     { key: 'equal3',    label: '3 Equal Rows',     text: 'YOUR TEXT HERE',  rowMode: '3' }
   ],
 
-  // Tunable parameters per case — NO CAPPING, free experimentation
-  PARAMS: [
+  // Tunable parameters for 2-row hero modes — NO CAPPING
+  PARAMS_HERO: [
     { key: 'heroStroke',   label: 'H Stroke',  step: 2,    decimals: 0, defaultVal: 8 },
     { key: 'heroSpacing',  label: 'H Space',   step: 2,    decimals: 0, defaultVal: 2 },
     { key: 'heroScaleY',   label: 'H ScaleY',  step: 0.03, decimals: 2, defaultVal: 1.10 },
@@ -49,6 +49,17 @@ const SquareTuning = {
     { key: 'smallScaleX',  label: 'S ScaleX',  step: 0.03, decimals: 2, defaultVal: 1.0 },
     { key: 'smallDx',      label: 'S DX',      step: 20,   decimals: 0, defaultVal: 0 },
     { key: 'smallDy',      label: 'S DY',      step: 20,   decimals: 0, defaultVal: 0 },
+    { key: 'rowGap',       label: 'Line Sp',   step: 5,    decimals: 0, defaultVal: 0 }
+  ],
+
+  // Tunable parameters for 3-row equal mode — single set (uses hero* keys internally)
+  PARAMS_EQUAL: [
+    { key: 'heroStroke',   label: 'Stroke',    step: 2,    decimals: 0, defaultVal: 5 },
+    { key: 'heroSpacing',  label: 'Space',     step: 2,    decimals: 0, defaultVal: 3 },
+    { key: 'heroScaleY',   label: 'ScaleY',    step: 0.03, decimals: 2, defaultVal: 1.0 },
+    { key: 'heroScaleX',   label: 'ScaleX',    step: 0.03, decimals: 2, defaultVal: 1.0 },
+    { key: 'heroDx',       label: 'DX',        step: 20,   decimals: 0, defaultVal: 0 },
+    { key: 'heroDy',       label: 'DY',        step: 20,   decimals: 0, defaultVal: 0 },
     { key: 'rowGap',       label: 'Line Sp',   step: 5,    decimals: 0, defaultVal: 0 }
   ],
 
@@ -158,8 +169,9 @@ const SquareTuning = {
         var controls = document.createElement('div');
         controls.className = 'font-tune-controls';
 
-        for (var p = 0; p < this.PARAMS.length; p++) {
-          var param = this.PARAMS[p];
+        var params = (cs.rowMode === '3') ? this.PARAMS_EQUAL : this.PARAMS_HERO;
+        for (var p = 0; p < params.length; p++) {
+          var param = params[p];
           var val = caseConfig[param.key] !== undefined ? caseConfig[param.key] : (param.defaultVal !== undefined ? param.defaultVal : 0);
 
           var row = document.createElement('div');
@@ -205,7 +217,8 @@ const SquareTuning = {
     if (!this.config[fontKey][cs.key]) this.config[fontKey][cs.key] = {};
     var cfg = this.config[fontKey][cs.key];
 
-    var paramDef = this.PARAMS.find(function(p) { return p.key === paramKey; });
+    var params = (cs.rowMode === '3') ? this.PARAMS_EQUAL : this.PARAMS_HERO;
+    var paramDef = params.find(function(p) { return p.key === paramKey; });
     if (!paramDef) return;
 
     var defVal = paramDef.defaultVal !== undefined ? paramDef.defaultVal : 0;

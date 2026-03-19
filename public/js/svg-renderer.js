@@ -3012,8 +3012,9 @@ const SvgRenderer = {
         lineHeight = heroFontSize * 1.15;
 
         // Apply per-tspan font-size, stroke-width, letter-spacing
-        // ScaleY: applied via transform="scale(1, heroScaleY)" on <text> element
-        // Small row compensates: its font-size is divided by heroScaleY then multiplied by smallScaleY
+        // Apply per-tspan: font-size × scaleY, stroke, spacing, scaleX via textLength
+        // ScaleY multiplied into font-size (makes text taller)
+        // Stroke scaled inversely so it doesn't thicken with font size
         var _hStroke = sqCfg ? sqCfg.heroStroke : 8;
         var _sStroke = sqCfg ? sqCfg.smallStroke : 5;
         var _hSpace = sqCfg ? sqCfg.heroSpacing : 2;
@@ -3031,12 +3032,12 @@ const SvgRenderer = {
             attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
             var scX = isHero ? _hScX : _sScX;
+            var scY = isHero ? _hScY : _sScY;
             var strokeW = isHero ? _hStroke : _sStroke;
             var spacing = isHero ? _hSpace : _sSpace;
-            // Font-size: hero uses base fs (text-level scaleY handles stretch)
-            // Small: compensate for text-level heroScaleY, apply own smallScaleY
-            var effectiveFs = isHero ? fs : fs * (_sScY / (_hScY || 1));
-            // ScaleX: use textLength to stretch horizontally
+            // ScaleY: multiply into font-size (taller text)
+            var effectiveFs = fs * scY;
+            // ScaleX: use textLength to stretch/compress horizontally
             var rowText = sqTspanTexts[isHero ? _sqHeroIdx : smallIdx] || '';
             var naturalWidth = rowText.length * avgCharWidth * (fs / newFontSize);
             var stretchedWidth = naturalWidth * scX;
@@ -3053,12 +3054,6 @@ const SvgRenderer = {
             return '<tspan' + attrs + ' font-size="' + effectiveFs.toFixed(2) + '"' + extra + '>';
           }
           return match;
-        });
-
-        // Apply scaleY as transform on <text> element (same approach as rect Font Tuning)
-        result = result.replace(/<text([^>]*)>/gi, function(match, attrs) {
-          attrs = attrs.replace(/\s*transform=["'][^"']*["']/gi, '');
-          return '<text' + attrs + ' transform="scale(1,' + _hScY.toFixed(2) + ')">';
         });
 
         result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', heroFontSize.toFixed(2));
@@ -3118,14 +3113,12 @@ const SvgRenderer = {
           var _smallDx = sqCfg ? (sqCfg.smallDx || 0) : 0;
           var _smallDy = sqCfg ? (sqCfg.smallDy || 0) : 0;
 
-          // Divide dy values by heroScaleY to compensate for text-level transform
-          var _dyScYComp = _hScY || 1;
           var sqLineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
             var before = arguments[1];
             var isHeroRow = (sqLineIdx === _sqHeroIdx);
             var dyOffset = isHeroRow ? _heroDy : _smallDy;
-            var dyVal = (((sqLineIdx === 0) ? sqFirstDy : sqSecondDy) + dyOffset) / _dyScYComp;
+            var dyVal = ((sqLineIdx === 0) ? sqFirstDy : sqSecondDy) + dyOffset;
             sqLineIdx++;
             return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
           });
