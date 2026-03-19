@@ -504,31 +504,23 @@ const Gallery = {
           }
 
           var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
-          if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square' || appliedForceLines)) {
+          if (base.autoFitZoneInfo && base.autoFitMeasurements && !appliedForceLines && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
             try {
               var variantMeasurements = base.autoFitMeasurements;
               var variantPreSvg = base.preAutoFitSvg;
-              if (appliedForceLines) {
-                var flTspanCount = (variantSvg.match(/<tspan/gi) || []).length;
-                if (flTspanCount > 1) {
-                  variantMeasurements = {};
-                  for (var mk in base.autoFitMeasurements) variantMeasurements[mk] = base.autoFitMeasurements[mk];
-                  variantMeasurements.numTspans = flTspanCount;
-                  // Estimate longest line width from the original measured width
-                  // Use character count INCLUDING spaces for accurate proportional estimate
-                  var flTexts = [];
-                  variantSvg.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
-                    flTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
-                  });
-                  var origText = flTexts.join(' '); // rejoin with spaces = original text
-                  var longestLine = '';
-                  for (var fli = 0; fli < flTexts.length; fli++) {
-                    if (flTexts[fli].length > longestLine.length) longestLine = flTexts[fli];
-                  }
-                  // measuredWidth scaled to longest line proportion
-                  variantMeasurements.measuredWidth = base.autoFitMeasurements.measuredWidth * (longestLine.length / (origText.length || 1));
+              // Forced multi-line: use full async autoFit (same as product page)
+              if (appliedForceLines && base.autoFitZoneInfo) {
+                try {
+                  var zi = base.autoFitZoneInfo;
+                  var origSx = zi.originalScaleX || 1;
+                  variantSvg = await SvgRenderer.autoFitTextInString(
+                    variantSvg, zi.idx, zi.boundingWidth, zi.fontSize, origSx,
+                    frameMode, base.fillType || 'empty', base.cornerType || 'straight',
+                    null, stampShape
+                  );
+                } catch (flErr) {
+                  console.warn('[GALLERY] forceLines autoFit failed:', flErr.message);
                 }
-                variantPreSvg = variantSvg;
               }
               if (stampShape === 'square') {
                 var sqTspanCount = (variantSvg.match(/<tspan/gi) || []).length;
