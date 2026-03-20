@@ -1085,17 +1085,21 @@ const SvgRenderer = {
       rx = cornerRx || 0;
     }
 
-    function addShape(cx, cy, angle) {
+    function addShape(cx, cy, angle, rotDeg) {
       if (shapeType === 'circle') {
         shapes += '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + half + '" fill="' + color + '"/>';
       } else if (shapeType === 'square') {
-        shapes += '<rect x="' + (cx - half).toFixed(2) + '" y="' + (cy - half).toFixed(2) + '" width="' + size + '" height="' + size + '" fill="' + color + '"/>';
-      } else { // line
-        if (angle === 0) {
-          shapes += '<rect x="' + (cx - dashLen / 2).toFixed(2) + '" y="' + (cy - half).toFixed(2) + '" width="' + dashLen + '" height="' + size + '" fill="' + color + '"/>';
-        } else {
-          shapes += '<rect x="' + (cx - half).toFixed(2) + '" y="' + (cy - dashLen / 2).toFixed(2) + '" width="' + size + '" height="' + dashLen + '" fill="' + color + '"/>';
-        }
+        var rot = rotDeg || 0;
+        var sq = '<rect x="' + (cx - half).toFixed(2) + '" y="' + (cy - half).toFixed(2) + '" width="' + size + '" height="' + size + '" fill="' + color + '"';
+        if (rot !== 0) sq += ' transform="rotate(' + rot.toFixed(1) + ',' + cx.toFixed(2) + ',' + cy.toFixed(2) + ')"';
+        shapes += sq + '/>';
+      } else { // line — always draw horizontal, rotate if needed
+        var rot = rotDeg || 0;
+        var ln = '<rect x="' + (cx - dashLen / 2).toFixed(2) + '" y="' + (cy - half).toFixed(2) + '" width="' + dashLen + '" height="' + size + '" fill="' + color + '"';
+        // For straight edges: angle=0 means horizontal, angle=1 means vertical (90°)
+        var totalRot = (angle === 1 ? 90 : 0) + rot;
+        if (totalRot !== 0) ln += ' transform="rotate(' + totalRot.toFixed(1) + ',' + cx.toFixed(2) + ',' + cy.toFixed(2) + ')"';
+        shapes += ln + '/>';
       }
     }
 
@@ -1157,10 +1161,12 @@ const SvgRenderer = {
 
       function getPointOnSegment(seg, t) {
         if (seg.type === 'h' || seg.type === 'v') {
-          return {x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t, angle: seg.type === 'h' ? 0 : 1};
+          return {x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t, angle: seg.type === 'h' ? 0 : 1, rotDeg: 0};
         } else {
           var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
-          return {x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a), angle: 0};
+          // Tangent angle: perpendicular to radius = angle + 90°
+          var tangentDeg = (a + Math.PI / 2) * (180 / Math.PI);
+          return {x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a), angle: 0, rotDeg: tangentDeg};
         }
       }
 
@@ -1174,7 +1180,7 @@ const SvgRenderer = {
             var localT = segments[si].len > 0 ? (targetDist - cumDist) / segments[si].len : 0;
             localT = Math.max(0, Math.min(1, localT));
             var pt = getPointOnSegment(segments[si], localT);
-            addShape(pt.x, pt.y, pt.angle);
+            addShape(pt.x, pt.y, pt.angle, pt.rotDeg);
             break;
           }
           cumDist += segments[si].len;
