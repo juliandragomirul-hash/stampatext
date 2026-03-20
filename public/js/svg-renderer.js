@@ -1134,21 +1134,35 @@ const SvgRenderer = {
         rxTL = cornerRx.tl; rxTR = cornerRx.tr; rxBR = cornerRx.br; rxBL = cornerRx.bl;
       }
 
-      // Stitch line with rounded corners: use stroke-dasharray on a path (native curve following)
+      // Stitch line with rounded corners: two-path approach
+      // 1. Straight edges: normal dash frequency
+      // 2. Corner arcs: shorter, denser dashes for smooth curve feel
       if (shapeType === 'line') {
         var F = function(n) { return n.toFixed(2); };
-        // Build a closed path tracing the rounded rect perimeter
-        var d = 'M' + F(x + rxTL) + ',' + F(y);
-        d += ' H' + F(x + w - rxTR);
-        if (rxTR > 0) d += ' A' + F(rxTR) + ',' + F(rxTR) + ' 0 0 1 ' + F(x + w) + ',' + F(y + rxTR);
-        d += ' V' + F(y + h - rxBR);
-        if (rxBR > 0) d += ' A' + F(rxBR) + ',' + F(rxBR) + ' 0 0 1 ' + F(x + w - rxBR) + ',' + F(y + h);
-        d += ' H' + F(x + rxBL);
-        if (rxBL > 0) d += ' A' + F(rxBL) + ',' + F(rxBL) + ' 0 0 1 ' + F(x) + ',' + F(y + h - rxBL);
-        d += ' V' + F(y + rxTL);
-        if (rxTL > 0) d += ' A' + F(rxTL) + ',' + F(rxTL) + ' 0 0 1 ' + F(x + rxTL) + ',' + F(y);
-        d += ' Z';
-        shapes += '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
+        var cornerDashLen = dashLen * 0.4;
+        var cornerSpacing = spacing * 0.4;
+
+        // Path 1: straight edges only (no arcs)
+        var dEdges = '';
+        // Top edge
+        dEdges += 'M' + F(x + rxTL) + ',' + F(y) + ' H' + F(x + w - rxTR);
+        // Right edge
+        dEdges += ' M' + F(x + w) + ',' + F(y + rxTR) + ' V' + F(y + h - rxBR);
+        // Bottom edge
+        dEdges += ' M' + F(x + w - rxBR) + ',' + F(y + h) + ' H' + F(x + rxBL);
+        // Left edge
+        dEdges += ' M' + F(x) + ',' + F(y + h - rxBL) + ' V' + F(y + rxTL);
+        shapes += '<path d="' + dEdges + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
+
+        // Path 2: corner arcs only (denser dashes)
+        var dArcs = '';
+        if (rxTR > 0) dArcs += 'M' + F(x + w - rxTR) + ',' + F(y) + ' A' + F(rxTR) + ',' + F(rxTR) + ' 0 0 1 ' + F(x + w) + ',' + F(y + rxTR);
+        if (rxBR > 0) dArcs += ' M' + F(x + w) + ',' + F(y + h - rxBR) + ' A' + F(rxBR) + ',' + F(rxBR) + ' 0 0 1 ' + F(x + w - rxBR) + ',' + F(y + h);
+        if (rxBL > 0) dArcs += ' M' + F(x + rxBL) + ',' + F(y + h) + ' A' + F(rxBL) + ',' + F(rxBL) + ' 0 0 1 ' + F(x) + ',' + F(y + h - rxBL);
+        if (rxTL > 0) dArcs += ' M' + F(x) + ',' + F(y + rxTL) + ' A' + F(rxTL) + ',' + F(rxTL) + ' 0 0 1 ' + F(x + rxTL) + ',' + F(y);
+        if (dArcs) {
+          shapes += '<path d="' + dArcs.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + cornerDashLen.toFixed(1) + ' ' + cornerSpacing.toFixed(1) + '" stroke-linecap="butt"/>';
+        }
         return shapes;
       }
 
