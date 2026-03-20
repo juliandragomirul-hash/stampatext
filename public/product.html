@@ -595,41 +595,46 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style samples from actual preloaded templates
-          var borderLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
+          // Generate border style mini stamp previews from actual preloaded templates
+          var borderLabels = {simple:'PLAIN',stitch_line:'STITCH LINE',stitch_square:'STITCH SQUARE',stitch_circle:'STITCH DOT',sawtooth:'SAWTOOTH',perforated:'PERFORATED',perforated_spaced:'SPACED PERF.',wavy:'WAVY',zigzag:'ZIGZAG',torn_edge:'TORN EDGE',chalk:'CHALK'};
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
+            // Generate all thumbnails in parallel
+            var thumbPromises = [];
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
               var bt = item.dataset.value;
               var entry = allTemplatesByBorder[bt];
-              if (!entry) return;
-              try {
-                var thumbSvg = entry.svg;
-                // Remove text
-                thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
-                thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
-                thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
-                // Crop viewBox to middle horizontal strip (40-60% height)
-                var vbMatch = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
-                if (vbMatch) {
-                  var vx = parseFloat(vbMatch[1]), vy = parseFloat(vbMatch[2]);
-                  var vw = parseFloat(vbMatch[3]), vh = parseFloat(vbMatch[4]);
-                  var stripTop = vy + vh * 0.35;
-                  var stripH = vh * 0.30;
-                  thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + stripTop.toFixed(1) + ' ' + vw + ' ' + stripH.toFixed(1) + '"');
+              if (!entry || !entry.zones || !entry.zones[0]) return;
+              var zone = entry.zones[0];
+              var label = borderLabels[bt] || bt.toUpperCase();
+              var p = (async function(item, bt, entry, zone, label) {
+                try {
+                  // Replace text with style label
+                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, label, 0);
+                  // AutoFit text in the template
+                  thumbSvg = await SvgRenderer.autoFitTextInString(
+                    thumbSvg, 0,
+                    zone.bounding_width || 500, zone.font_size || 128,
+                    1, 'single', 'empty', 'straight', bt, 'rectangle'
+                  );
+                  thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
+                  thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
+                  thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
+                  // Display as scaled mini stamp
+                  item.textContent = '';
+                  item.style.cssText += 'padding:4px 6px;';
+                  var sample = document.createElement('div');
+                  sample.style.cssText = 'width:100%;height:32px;overflow:hidden;display:flex;align-items:center;justify-content:center;';
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="32" preserveAspectRatio="xMidYMid meet"');
+                  item.appendChild(sample);
+                } catch (e) {
+                  // Keep text label as fallback
+                  console.warn('Thumb gen failed for ' + bt + ':', e.message);
                 }
-                item.textContent = '';
-                item.style.cssText += 'padding:4px 8px;';
-                var sample = document.createElement('div');
-                sample.style.cssText = 'width:100%;height:16px;overflow:hidden;';
-                sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="16" preserveAspectRatio="none"');
-                item.appendChild(sample);
-                var label = document.createElement('span');
-                label.style.cssText = 'font-size:0.68rem;color:#666;display:block;text-align:center;';
-                label.textContent = borderLabels[bt] || bt;
-                item.appendChild(label);
-              } catch (e) { /* keep text label as fallback */ }
+              })(item, bt, entry, zone, label);
+              thumbPromises.push(p);
             });
+            await Promise.all(thumbPromises);
           }
         } catch (e) { console.warn('Failed to preload templates:', e.message); }
       })();
