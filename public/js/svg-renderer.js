@@ -1128,12 +1128,31 @@ const SvgRenderer = {
     }
 
     if (rx > 0 && !isLined) {
-      // Rounded corners: place shapes along the entire rounded rect perimeter
       // Support per-corner radii for mixed corners
       var rxTR = rx, rxBR = rx, rxBL = rx, rxTL = rx;
       if (typeof cornerRx === 'object' && cornerRx.tl !== undefined) {
         rxTL = cornerRx.tl; rxTR = cornerRx.tr; rxBR = cornerRx.br; rxBL = cornerRx.bl;
       }
+
+      // Stitch line with rounded corners: use stroke-dasharray on a path (native curve following)
+      if (shapeType === 'line') {
+        var F = function(n) { return n.toFixed(2); };
+        // Build a closed path tracing the rounded rect perimeter
+        var d = 'M' + F(x + rxTL) + ',' + F(y);
+        d += ' H' + F(x + w - rxTR);
+        if (rxTR > 0) d += ' A' + F(rxTR) + ',' + F(rxTR) + ' 0 0 1 ' + F(x + w) + ',' + F(y + rxTR);
+        d += ' V' + F(y + h - rxBR);
+        if (rxBR > 0) d += ' A' + F(rxBR) + ',' + F(rxBR) + ' 0 0 1 ' + F(x + w - rxBR) + ',' + F(y + h);
+        d += ' H' + F(x + rxBL);
+        if (rxBL > 0) d += ' A' + F(rxBL) + ',' + F(rxBL) + ' 0 0 1 ' + F(x) + ',' + F(y + h - rxBL);
+        d += ' V' + F(y + rxTL);
+        if (rxTL > 0) d += ' A' + F(rxTL) + ',' + F(rxTL) + ' 0 0 1 ' + F(x + rxTL) + ',' + F(y);
+        d += ' Z';
+        shapes += '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
+        return shapes;
+      }
+
+      // Stitch dot/square: use perimeter-walking approach (rotation for squares)
 
       var arcLenTR = rxTR * Math.PI / 2;
       var arcLenBR = rxBR * Math.PI / 2;
