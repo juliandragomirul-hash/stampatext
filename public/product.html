@@ -607,46 +607,33 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style samples: zoomed top border edge from real templates
-          var borderTextLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
+          // Generate border style samples: hand-crafted SVG patterns
+          var borderPatterns = {
+            simple: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4"/>',
+            stitch_line: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4" stroke-dasharray="18 8"/>',
+            stitch_square: '<g>' + (function(){var s='';for(var i=0;i<10;i++)s+='<rect x="'+(i*20+2)+'" y="1" width="8" height="8" fill="#cc0000"/>';return s;})() + '</g>',
+            stitch_circle: '<g>' + (function(){var s='';for(var i=0;i<10;i++)s+='<circle cx="'+(i*20+6)+'" cy="5" r="4" fill="#cc0000"/>';return s;})() + '</g>',
+            sawtooth: '<path d="M0,9 ' + (function(){var s='';for(var i=0;i<14;i++)s+='L'+(i*15+7.5)+',1 L'+((i+1)*15)+',9 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2.5"/>',
+            perforated: '<g><line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4"/>' + (function(){var s='';for(var i=0;i<12;i++)s+='<circle cx="'+(i*17+8)+'" cy="5" r="3" fill="#fff"/>';return s;})() + '</g>',
+            perforated_spaced: '<g><line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4"/>' + (function(){var s='';for(var i=0;i<8;i++)s+='<circle cx="'+(i*25+12)+'" cy="5" r="3" fill="#fff"/>';return s;})() + '</g>',
+            wavy: '<path d="M0,5 ' + (function(){var s='';for(var i=0;i<7;i++)s+='Q'+(i*30+15)+','+(i%2===0?-2:12)+' '+((i+1)*30)+',5 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="3"/>',
+            zigzag: '<path d="M0,8 ' + (function(){var s='';for(var i=0;i<10;i++)s+='L'+(i*20+10)+',2 L'+((i+1)*20)+',8 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2.5" stroke-linejoin="miter"/>',
+            torn_edge: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4" opacity="0.6" filter="url(#torn-thumb)"/><defs><filter id="torn-thumb"><feTurbulence baseFrequency="0.08" numOctaves="2"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter></defs>',
+            chalk: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="5" filter="url(#chalk-thumb)"/><defs><filter id="chalk-thumb"><feTurbulence baseFrequency="0.15" numOctaves="3"/><feDisplacementMap in="SourceGraphic" scale="2"/></filter></defs>'
+          };
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
-            var thumbPromises = [];
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
               var bt = item.dataset.value;
-              var entry = allTemplatesByBorder[bt];
-              if (!entry || !entry.zones || !entry.zones[0]) return;
-              var zone = entry.zones[0];
-              var label = borderTextLabels[bt] || bt;
-              var p = (async function(item, bt, entry, zone, label) {
-                try {
-                  var thumbSvg = entry.svg;
-                  // Remove text — we only want the border pattern
-                  thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
-                  thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
-                  thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
-                  // Crop viewBox to top horizontal strip (top 15% of height)
-                  var vbMatch = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
-                  if (vbMatch) {
-                    var vx = parseFloat(vbMatch[1]), vy = parseFloat(vbMatch[2]);
-                    var vw = parseFloat(vbMatch[3]), vh = parseFloat(vbMatch[4]);
-                    var cropH = vh * 0.15;
-                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + vy + ' ' + vw + ' ' + cropH.toFixed(1) + '"');
-                  }
-                  thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
-                  item.textContent = '';
-                  item.style.cssText += 'padding:2px 6px;';
-                  var sample = document.createElement('div');
-                  sample.style.cssText = 'width:100%;height:12px;overflow:hidden;background:transparent;';
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="12" preserveAspectRatio="none" style="background:transparent"');
-                  item.appendChild(sample);
-                } catch (e) {
-                  console.warn('Thumb gen failed for ' + bt + ':', e.message);
-                }
-              })(item, bt, entry, zone, label);
-              thumbPromises.push(p);
+              var pattern = borderPatterns[bt];
+              if (!pattern) return;
+              item.textContent = '';
+              item.style.cssText += 'padding:3px 6px;';
+              var sample = document.createElement('div');
+              sample.style.cssText = 'width:100%;height:10px;overflow:hidden;';
+              sample.innerHTML = '<svg viewBox="0 0 200 10" width="100%" height="10" preserveAspectRatio="none">' + pattern + '</svg>';
+              item.appendChild(sample);
             });
-            await Promise.all(thumbPromises);
             // Copy active border thumbnail into trigger box
             var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');
             if (activeBorderItem) {
