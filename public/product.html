@@ -645,6 +645,44 @@
             });
             await Promise.all(thumbPromises);
           }
+          // Generate corner style mini stamp previews using plain template
+          var cornerList = document.getElementById('product-corner-list');
+          var plainEntry = allTemplatesByBorder['simple'];
+          if (cornerList && plainEntry && plainEntry.zones && plainEntry.zones[0]) {
+            var cZone = plainEntry.zones[0];
+            var cornerThumbPromises = [];
+            cornerList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
+              var ct = item.dataset.value;
+              var label = item.textContent.toUpperCase();
+              var p = (async function(item, ct, label) {
+                try {
+                  var thumbSvg = SvgRenderer.replaceTextInString(plainEntry.svg, 0, label);
+                  thumbSvg = await SvgRenderer.autoFitTextInString(
+                    thumbSvg, 0,
+                    cZone.bounding_width || 500, cZone.font_size || 128,
+                    1, 'single', 'empty', ct, 'simple', 'rectangle'
+                  );
+                  thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
+                  thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
+                  if (ct !== 'straight') {
+                    thumbSvg = SvgRenderer.applyCornerRadius(thumbSvg, ct);
+                  }
+                  thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
+                  item.textContent = '';
+                  item.style.cssText += 'padding:3px 6px;';
+                  var sample = document.createElement('div');
+                  sample.style.cssText = 'width:100%;height:32px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
+                  thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="32" preserveAspectRatio="xMidYMid meet" style="background:transparent"');
+                  item.appendChild(sample);
+                } catch (e) {
+                  console.warn('Corner thumb failed for ' + ct + ':', e.message);
+                }
+              })(item, ct, label);
+              cornerThumbPromises.push(p);
+            });
+            await Promise.all(cornerThumbPromises);
+          }
         } catch (e) { console.warn('Failed to preload templates:', e.message); }
       })();
 
@@ -899,7 +937,8 @@
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentCornerStyle = item.dataset.value;
-        document.getElementById('product-corner-value').textContent = item.textContent;
+        var cornerDisplayLabels = {straight:'Straight',soft_round:'Soft Round',medium_round:'Medium Round',strong_round:'Strong Round',mixed_top_straight:'Mixed TS',mixed_top_round:'Mixed TR',mixed_diag_down:'Mixed D↘',mixed_diag_up:'Mixed D↗'};
+        document.getElementById('product-corner-value').textContent = cornerDisplayLabels[currentCornerStyle] || currentCornerStyle;
         renderPreview();
       });
 
