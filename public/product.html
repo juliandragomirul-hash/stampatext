@@ -664,7 +664,11 @@
                   );
                   thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
                   thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
-                  if (ct !== 'straight') {
+                  if (ct === 'straight') {
+                    // Strip any rx/ry to ensure straight corners
+                    thumbSvg = thumbSvg.replace(/\s*rx=["'][\d.]+["']/gi, '');
+                    thumbSvg = thumbSvg.replace(/\s*ry=["'][\d.]+["']/gi, '');
+                  } else {
                     thumbSvg = SvgRenderer.applyCornerRadius(thumbSvg, ct);
                   }
                   thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
