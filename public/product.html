@@ -609,17 +609,17 @@
           }
           // Generate border style samples: hand-crafted SVG patterns
           var borderPatterns = {
-            simple: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4"/>',
-            stitch_line: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4" stroke-dasharray="18 8"/>',
-            stitch_square: '<g>' + (function(){var s='';for(var i=0;i<10;i++)s+='<rect x="'+(i*20+2)+'" y="1" width="8" height="8" fill="#cc0000"/>';return s;})() + '</g>',
-            stitch_circle: '<g>' + (function(){var s='';for(var i=0;i<10;i++)s+='<circle cx="'+(i*20+6)+'" cy="5" r="4" fill="#cc0000"/>';return s;})() + '</g>',
-            sawtooth: '<path d="M0,9 ' + (function(){var s='';for(var i=0;i<14;i++)s+='L'+(i*15+7.5)+',1 L'+((i+1)*15)+',9 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2.5"/>',
-            perforated: '<g><line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4"/>' + (function(){var s='';for(var i=0;i<12;i++)s+='<circle cx="'+(i*17+8)+'" cy="5" r="3" fill="#fff"/>';return s;})() + '</g>',
-            perforated_spaced: '<g><line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4"/>' + (function(){var s='';for(var i=0;i<8;i++)s+='<circle cx="'+(i*25+12)+'" cy="5" r="3" fill="#fff"/>';return s;})() + '</g>',
-            wavy: '<path d="M0,5 ' + (function(){var s='';for(var i=0;i<7;i++)s+='Q'+(i*30+15)+','+(i%2===0?-2:12)+' '+((i+1)*30)+',5 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="3"/>',
-            zigzag: '<path d="M0,8 ' + (function(){var s='';for(var i=0;i<10;i++)s+='L'+(i*20+10)+',2 L'+((i+1)*20)+',8 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2.5" stroke-linejoin="miter"/>',
-            torn_edge: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="4" opacity="0.6" filter="url(#torn-thumb)"/><defs><filter id="torn-thumb"><feTurbulence baseFrequency="0.08" numOctaves="2"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter></defs>',
-            chalk: '<line x1="0" y1="5" x2="200" y2="5" stroke="#cc0000" stroke-width="5" filter="url(#chalk-thumb)"/><defs><filter id="chalk-thumb"><feTurbulence baseFrequency="0.15" numOctaves="3"/><feDisplacementMap in="SourceGraphic" scale="2"/></filter></defs>'
+            simple: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5"/>',
+            stitch_line: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5" stroke-dasharray="12 6"/>',
+            stitch_square: '<g>' + (function(){var s='';for(var i=0;i<12;i++)s+='<rect x="'+(i*17+3)+'" y="0.5" width="5" height="5" fill="#cc0000"/>';return s;})() + '</g>',
+            stitch_circle: '<g>' + (function(){var s='';for(var i=0;i<12;i++)s+='<circle cx="'+(i*17+6)+'" cy="3" r="2.5" fill="#cc0000"/>';return s;})() + '</g>',
+            sawtooth: '<path d="M0,5 ' + (function(){var s='';for(var i=0;i<18;i++)s+='L'+(i*11.5+5.75)+',1 L'+((i+1)*11.5)+',5 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="1.5"/>',
+            perforated: '<g><line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5"/>' + (function(){var s='';for(var i=0;i<14;i++)s+='<circle cx="'+(i*14.5+7)+'" cy="3" r="1.8" fill="#fff"/>';return s;})() + '</g>',
+            perforated_spaced: '<g><line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5"/>' + (function(){var s='';for(var i=0;i<9;i++)s+='<circle cx="'+(i*22+11)+'" cy="3" r="1.8" fill="#fff"/>';return s;})() + '</g>',
+            wavy: '<path d="M0,3 ' + (function(){var s='';for(var i=0;i<9;i++)s+='Q'+(i*22+11)+','+(i%2===0?0:6)+' '+((i+1)*22)+',3 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2"/>',
+            zigzag: '<path d="M0,5 ' + (function(){var s='';for(var i=0;i<13;i++)s+='L'+(i*15.5+7.75)+',1 L'+((i+1)*15.5)+',5 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="1.5" stroke-linejoin="miter"/>',
+            torn_edge: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="3" opacity="0.6" filter="url(#torn-thumb)"/><defs><filter id="torn-thumb"><feTurbulence baseFrequency="0.08" numOctaves="2"/><feDisplacementMap in="SourceGraphic" scale="2"/></filter></defs>',
+            chalk: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="3.5" filter="url(#chalk-thumb)"/><defs><filter id="chalk-thumb"><feTurbulence baseFrequency="0.15" numOctaves="3"/><feDisplacementMap in="SourceGraphic" scale="1.5"/></filter></defs>'
           };
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
@@ -630,8 +630,8 @@
               item.textContent = '';
               item.style.cssText += 'padding:3px 6px;';
               var sample = document.createElement('div');
-              sample.style.cssText = 'width:100%;height:10px;overflow:hidden;';
-              sample.innerHTML = '<svg viewBox="0 0 200 10" width="100%" height="10" preserveAspectRatio="none">' + pattern + '</svg>';
+              sample.style.cssText = 'width:100%;height:6px;overflow:hidden;';
+              sample.innerHTML = '<svg viewBox="0 0 200 6" width="100%" height="6" preserveAspectRatio="none">' + pattern + '</svg>';
               item.appendChild(sample);
             });
             // Copy active border thumbnail into trigger box
