@@ -625,14 +625,13 @@
                   thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
                   thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
                   thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
-                  // Crop viewBox to middle horizontal strip (40-60% height)
+                  // Crop viewBox to top horizontal strip (top 15% of height)
                   var vbMatch = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
                   if (vbMatch) {
                     var vx = parseFloat(vbMatch[1]), vy = parseFloat(vbMatch[2]);
                     var vw = parseFloat(vbMatch[3]), vh = parseFloat(vbMatch[4]);
-                    var stripTop = vy + vh * 0.35;
-                    var stripH = vh * 0.30;
-                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + stripTop.toFixed(1) + ' ' + vw + ' ' + stripH.toFixed(1) + '"');
+                    var cropH = vh * 0.15;
+                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + vy + ' ' + vw + ' ' + cropH.toFixed(1) + '"');
                   }
                   thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
                   item.textContent = '';
