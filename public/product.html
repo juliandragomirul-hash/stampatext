@@ -870,7 +870,8 @@
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentBorderStyle = newBorder;
-        document.getElementById('product-border-value').textContent = item.textContent;
+        var borderDisplayLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
+        document.getElementById('product-border-value').textContent = borderDisplayLabels[newBorder] || newBorder;
         // Switch to new template
         var entry = allTemplatesByBorder[newBorder];
         rawCleanedSvg = entry.svg;
