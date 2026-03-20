@@ -1139,8 +1139,11 @@ const SvgRenderer = {
       // 2. Corner arcs: shorter, denser dashes for smooth curve feel
       if (shapeType === 'line') {
         var F = function(n) { return n.toFixed(2); };
-        var cornerDashLen = dashLen * 0.4;
-        var cornerSpacing = spacing * 0.4;
+        // Scale corner dash density to arc length — smaller radius = shorter dashes
+        var maxRx = Math.max(rxTL, rxTR, rxBR, rxBL);
+        var arcScale = Math.min(1, maxRx / 120); // 0..1 based on corner size
+        var cornerDashLen = dashLen * (0.15 + 0.25 * arcScale);  // 15-40% of edge dash
+        var cornerSpacing = spacing * (0.15 + 0.25 * arcScale);
 
         // Path 1: straight edges only (no arcs)
         var dEdges = '';
