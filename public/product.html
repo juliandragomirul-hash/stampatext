@@ -595,23 +595,21 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style mini stamp previews from actual preloaded templates
-          var borderLabels = {simple:'PLAIN',stitch_line:'STITCH LINE',stitch_square:'STITCH SQUARE',stitch_circle:'STITCH DOT',sawtooth:'SAWTOOTH',perforated:'PERFORATED',perforated_spaced:'SPACED PERF.',wavy:'WAVY',zigzag:'ZIGZAG',torn_edge:'TORN EDGE',chalk:'CHALK'};
+          // Generate border style samples: zoomed top border edge from real templates
+          var borderTextLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
-            // Generate all thumbnails in parallel
             var thumbPromises = [];
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
               var bt = item.dataset.value;
               var entry = allTemplatesByBorder[bt];
               if (!entry || !entry.zones || !entry.zones[0]) return;
               var zone = entry.zones[0];
-              var label = borderLabels[bt] || bt.toUpperCase();
+              var label = borderTextLabels[bt] || bt;
               var p = (async function(item, bt, entry, zone, label) {
                 try {
-                  // Replace text with style label
-                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, 0, label);
-                  // AutoFit text in the template
+                  // Render a real stamp with dummy text for proper border generation
+                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, 0, 'SAMPLE');
                   thumbSvg = await SvgRenderer.autoFitTextInString(
                     thumbSvg, 0,
                     zone.bounding_width || 500, zone.font_size || 128,
@@ -620,15 +618,28 @@
                   thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
                   thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
                   thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
-                  // Display as scaled mini stamp
+                  // Zoom into top border: crop viewBox to top 25%
+                  var vbMatch = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
+                  if (vbMatch) {
+                    var vx = parseFloat(vbMatch[1]), vy = parseFloat(vbMatch[2]);
+                    var vw = parseFloat(vbMatch[3]), vh = parseFloat(vbMatch[4]);
+                    var cropH = vh * 0.25;
+                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + vy + ' ' + vw + ' ' + cropH.toFixed(1) + '"');
+                  }
+                  // Remove text elements (we only want the border pattern)
+                  thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
+                  // Build dropdown item: border sample + label
                   item.textContent = '';
-                  item.style.cssText += 'padding:4px 6px;';
+                  item.style.cssText += 'padding:3px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;';
                   var sample = document.createElement('div');
-                  sample.style.cssText = 'width:100%;height:32px;overflow:hidden;display:flex;align-items:center;justify-content:center;';
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="32" preserveAspectRatio="xMidYMid meet"');
+                  sample.style.cssText = 'width:100%;height:18px;overflow:hidden;';
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="18" preserveAspectRatio="xMidYMin slice"');
                   item.appendChild(sample);
+                  var lbl = document.createElement('span');
+                  lbl.style.cssText = 'font-size:0.65rem;color:#555;line-height:1;';
+                  lbl.textContent = label;
+                  item.appendChild(lbl);
                 } catch (e) {
-                  // Keep text label as fallback
                   console.warn('Thumb gen failed for ' + bt + ':', e.message);
                 }
               })(item, bt, entry, zone, label);
