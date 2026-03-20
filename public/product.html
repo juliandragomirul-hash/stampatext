@@ -182,20 +182,21 @@
       <input type="hidden" id="product-shape-value" value="rectangle">
     </div>
 
-    <div class="product-layout" style="flex-direction:column;align-items:center;">
-      <!-- Stamp preview -->
-      <div class="product-preview" id="product-preview" style="max-width:700px;width:100%;">
+    <div class="product-layout" style="display:flex;align-items:flex-start;gap:24px;">
+      <!-- Left: Stamp preview -->
+      <div class="product-preview" id="product-preview" style="flex:1;min-width:0;">
         <div class="stamp-loading">Loading preview...</div>
       </div>
 
-      <!-- Description (updates live with param changes) -->
-      <div class="product-description-live" id="product-description" style="text-align:center;font-size:0.85rem;color:#555;margin:8px 0 12px;max-width:700px;"></div>
-
-      <!-- Action buttons -->
-      <div style="display:flex;gap:12px;margin-bottom:20px;">
-        <button class="btn btn-primary" id="btn-download-open" style="padding:10px 32px;font-size:1rem;border-radius:6px;">Download</button>
-        <button class="btn" id="btn-save" style="padding:10px 32px;font-size:1rem;border-radius:6px;background:#555;color:#fff;border:none;cursor:pointer;">Save</button>
+      <!-- Right: Description + buttons -->
+      <div style="flex:0 0 280px;display:flex;flex-direction:column;justify-content:center;padding-top:20px;">
+        <div id="product-description" style="font-size:0.85rem;color:#555;line-height:1.5;margin-bottom:20px;"></div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary" id="btn-download-open" style="padding:10px 24px;font-size:0.95rem;border-radius:6px;">Download</button>
+          <button class="btn" id="btn-save" style="padding:10px 24px;font-size:0.95rem;border-radius:6px;background:#555;color:#fff;border:none;cursor:pointer;">Save</button>
+        </div>
       </div>
+    </div>
 
       <!-- Download popup (hidden by default) -->
       <div id="download-popup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:24px;z-index:1000;min-width:320px;">
