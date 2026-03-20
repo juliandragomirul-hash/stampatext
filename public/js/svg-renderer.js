@@ -841,26 +841,32 @@ const SvgRenderer = {
    * Generate white border shapes (circles or diamonds) along all 4 edges of a rect.
    * Used for "winding" (scalloped) and "zig-zag" (saw-tooth) border effects.
    */
-  _generateBorderShapes: function(x, y, w, h, shapeType, radius, spacingMult, shape) {
+  _generateBorderShapes: function(x, y, w, h, shapeType, radius, spacingMult, shape, cornerRx) {
     var shapes = '';
     var spacing = radius * (spacingMult || 2.5);
+    var rx = cornerRx || 0;
 
-    // Horizontal edges (top + bottom)
-    var numH = Math.max(1, Math.round(w / spacing));
-    var hSpacing = w / numH;
+    // Horizontal edges (top + bottom) — shorten by rx for rounded corners
+    var hStart = x + rx;
+    var hEnd = x + w - rx;
+    var hLen = hEnd - hStart;
+    var numH = Math.max(1, Math.round(hLen / spacing));
+    var hSpacing = hLen / numH;
     for (var i = 0; i <= numH; i++) {
-      var cx = x + i * hSpacing;
+      var cx = hStart + i * hSpacing;
       shapes += this._borderShape(shapeType, cx, y, radius);
       shapes += this._borderShape(shapeType, cx, y + h, radius);
     }
 
-    // Vertical edges (left + right), skip corners (already covered by horizontal)
-    // Skip for lined shape (no vertical sides)
+    // Vertical edges (left + right) — shorten by rx, skip for lined
     if (shape !== 'lined') {
-      var numV = Math.max(1, Math.round(h / spacing));
-      var vSpacing = h / numV;
-      for (var i = 1; i < numV; i++) {
-        var cy = y + i * vSpacing;
+      var vStart = y + rx;
+      var vEnd = y + h - rx;
+      var vLen = vEnd - vStart;
+      var numV = Math.max(1, Math.round(vLen / spacing));
+      var vSpacing = vLen / numV;
+      for (var i = 0; i <= numV; i++) {
+        var cy = vStart + i * vSpacing;
         shapes += this._borderShape(shapeType, x, cy, radius);
         shapes += this._borderShape(shapeType, x + w, cy, radius);
       }
@@ -1048,12 +1054,13 @@ const SvgRenderer = {
     return filterDef + paths;
   },
 
-  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape) {
+  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape, cornerRx) {
     var shapes = '';
     var half = size / 2;
     var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
     var isLined = (shape === 'lined');
+    var rx = cornerRx || 0;
 
     function addShape(cx, cy, angle) {
       if (shapeType === 'circle') {
@@ -1069,8 +1076,8 @@ const SvgRenderer = {
       }
     }
 
-    // Corners — skip for lined (no corners when no vertical sides)
-    if (!isLined) {
+    // Corners — skip for lined (no corners when no vertical sides) and when rounded
+    if (!isLined && rx === 0) {
       if (shapeType === 'line') {
         var arm = dashLen * 0.6;
         // Top-left
@@ -1093,18 +1100,24 @@ const SvgRenderer = {
       }
     }
 
-    // Top edge
-    var numH = Math.max(1, Math.round(w / step));
-    var hStep = w / numH;
-    for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
+    // Top edge — shorten by rx at each end for rounded corners
+    var hStart = x + rx;
+    var hEnd = x + w - rx;
+    var hLen = hEnd - hStart;
+    var numH = Math.max(1, Math.round(hLen / step));
+    var hStep = hLen / numH;
+    for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y, 0);
     // Bottom edge
-    for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
-    // Left + Right edges — skip for lined
+    for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y + h, 0);
+    // Left + Right edges — skip for lined, shorten by rx for rounded
     if (!isLined) {
-      var numV = Math.max(1, Math.round(h / step));
-      var vStep = h / numV;
-      for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
-      for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
+      var vStart = y + rx;
+      var vEnd = y + h - rx;
+      var vLen = vEnd - vStart;
+      var numV = Math.max(1, Math.round(vLen / step));
+      var vStep = vLen / numV;
+      for (var i = 0; i <= numV; i++) addShape(x, vStart + i * vStep, 1);
+      for (var i = 0; i <= numV; i++) addShape(x + w, vStart + i * vStep, 1);
     }
 
     return shapes;
@@ -3432,6 +3445,14 @@ const SvgRenderer = {
         return '<rect' + na + (selfClose || '') + '>';
       });
 
+      // ---- Compute corner radius for decorative borders ----
+      var DECO_CORNER_RX = {
+        soft_round: 35, medium_round: 80, strong_round: 120,
+        mixed_top_straight: 120, mixed_top_round: 120,
+        mixed_diag_down: 120, mixed_diag_up: 120
+      };
+      var decoCornerRx = (cornerType && cornerType !== 'straight') ? (DECO_CORNER_RX[cornerType] || 0) : 0;
+
       // ---- BORDER SHAPES (winding/zigzag) ----
       if (borderShapeData) {
         var bParts = borderShapeData.type.split('-');
@@ -3448,7 +3469,7 @@ const SvgRenderer = {
         var shapesHtml = SvgRenderer._generateBorderShapes(
           borderShapeData.x, borderShapeData.y,
           borderShapeData.w, borderShapeData.h,
-          bShape, bRadius, bSpacingMult, stampShape
+          bShape, bRadius, bSpacingMult, stampShape, decoCornerRx
         );
         result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
       }
@@ -3464,7 +3485,7 @@ const SvgRenderer = {
         var stitchHtml = SvgRenderer._generateStitchShapes(
           stitchData.x - sOffset, stitchData.y - sOffset,
           stitchData.w + sOffset * 2, stitchData.h + sOffset * 2,
-          sType, sSize, sSpacing, stitchData.color, stampShape
+          sType, sSize, sSpacing, stitchData.color, stampShape, decoCornerRx
         );
         result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
         // Tag SVG so cropViewBoxToStamp can add stitch margin
