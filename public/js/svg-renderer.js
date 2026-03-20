@@ -1064,15 +1064,15 @@ const SvgRenderer = {
     return filterDef + paths;
   },
 
-  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape, cornerType) {
+  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape, cornerType, rxOffset) {
     var shapes = '';
     var half = size / 2;
     var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
     var isLined = (shape === 'lined');
 
-    // Build trace from corner type
-    var trace = SvgRenderer._generateTrace(x, y, w, h, cornerType || 'straight');
+    // Build trace from corner type, with rxOffset for parallel curves
+    var trace = SvgRenderer._generateTrace(x, y, w, h, cornerType || 'straight', rxOffset || 0);
 
     function addShape(cx, cy, angle, rotDeg) {
       if (shapeType === 'circle') {
@@ -3535,7 +3535,7 @@ const SvgRenderer = {
         var stitchHtml = SvgRenderer._generateStitchShapes(
           stitchData.x - sOffset, stitchData.y - sOffset,
           stitchData.w + sOffset * 2, stitchData.h + sOffset * 2,
-          sType, sSize, sSpacing, stitchData.color, stampShape, cornerType
+          sType, sSize, sSpacing, stitchData.color, stampShape, cornerType, sOffset
         );
         result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
         // Tag SVG so cropViewBoxToStamp can add stitch margin
@@ -4959,7 +4959,7 @@ const SvgRenderer = {
    * Returns { d, rxTL, rxTR, rxBR, rxBL, x, y, w, h, segments[] }
    * @param {string} cornerType - 'straight', 'soft_round', 'medium_round', 'strong_round', 'mixed_*'
    */
-  _generateTrace: function(x, y, w, h, cornerType) {
+  _generateTrace: function(x, y, w, h, cornerType, rxOffset) {
     var CORNER_RX = {
       soft_round: 35, medium_round: 80, strong_round: 120
     };
@@ -4973,6 +4973,14 @@ const SvgRenderer = {
         var uniform = CORNER_RX[cornerType] || 0;
         rxTL = rxTR = rxBR = rxBL = uniform;
       }
+    }
+
+    // Apply rxOffset for parallel curves (e.g., stitch offset outward needs larger rx)
+    if (rxOffset) {
+      if (rxTL > 0) rxTL = Math.max(0, rxTL + rxOffset);
+      if (rxTR > 0) rxTR = Math.max(0, rxTR + rxOffset);
+      if (rxBR > 0) rxBR = Math.max(0, rxBR + rxOffset);
+      if (rxBL > 0) rxBL = Math.max(0, rxBL + rxOffset);
     }
 
     // Clamp rx values to half the rect dimension
