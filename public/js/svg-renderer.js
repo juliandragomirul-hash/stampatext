@@ -1078,7 +1078,12 @@ const SvgRenderer = {
     var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
     var isLined = (shape === 'lined');
-    var rx = cornerRx || 0;
+    var rx = 0;
+    if (typeof cornerRx === 'object' && cornerRx !== null && cornerRx.tl !== undefined) {
+      rx = Math.max(cornerRx.tl, cornerRx.tr, cornerRx.br, cornerRx.bl); // any corner rounded = use perimeter path
+    } else {
+      rx = cornerRx || 0;
+    }
 
     function addShape(cx, cy, angle) {
       if (shapeType === 'circle') {
@@ -1120,28 +1125,34 @@ const SvgRenderer = {
 
     if (rx > 0 && !isLined) {
       // Rounded corners: place shapes along the entire rounded rect perimeter
-      // Generate points along the perimeter path (edges + corner arcs)
-      var points = [];
-      var arcLen = rx * Math.PI / 2; // quarter-circle arc length
-      var topEdge = w - 2 * rx;
-      var rightEdge = h - 2 * rx;
-      var bottomEdge = topEdge;
-      var leftEdge = rightEdge;
-      var perimeter = topEdge + rightEdge + bottomEdge + leftEdge + 4 * arcLen;
+      // Support per-corner radii for mixed corners
+      var rxTR = rx, rxBR = rx, rxBL = rx, rxTL = rx;
+      if (typeof cornerRx === 'object' && cornerRx.tl !== undefined) {
+        rxTL = cornerRx.tl; rxTR = cornerRx.tr; rxBR = cornerRx.br; rxBL = cornerRx.bl;
+      }
+
+      var arcLenTR = rxTR * Math.PI / 2;
+      var arcLenBR = rxBR * Math.PI / 2;
+      var arcLenBL = rxBL * Math.PI / 2;
+      var arcLenTL = rxTL * Math.PI / 2;
+      var topEdge = w - rxTL - rxTR;
+      var rightEdge = h - rxTR - rxBR;
+      var bottomEdge = w - rxBR - rxBL;
+      var leftEdge = h - rxBL - rxTL;
+      var perimeter = topEdge + rightEdge + bottomEdge + leftEdge + arcLenTR + arcLenBR + arcLenBL + arcLenTL;
       var numPoints = Math.max(4, Math.round(perimeter / step));
       var ptStep = perimeter / numPoints;
 
       // Walk the perimeter: top edge → TR arc → right edge → BR arc → bottom edge → BL arc → left edge → TL arc
       var segments = [
-        // {type, length, startX, startY, endX, endY}  or arc params
-        {type:'h', len: topEdge, sx: x+rx, sy: y, ex: x+w-rx, ey: y},
-        {type:'arc', len: arcLen, cx: x+w-rx, cy: y+rx, startAngle: -Math.PI/2, endAngle: 0, r: rx},
-        {type:'v', len: rightEdge, sx: x+w, sy: y+rx, ex: x+w, ey: y+h-rx},
-        {type:'arc', len: arcLen, cx: x+w-rx, cy: y+h-rx, startAngle: 0, endAngle: Math.PI/2, r: rx},
-        {type:'h', len: bottomEdge, sx: x+w-rx, sy: y+h, ex: x+rx, ey: y+h},
-        {type:'arc', len: arcLen, cx: x+rx, cy: y+h-rx, startAngle: Math.PI/2, endAngle: Math.PI, r: rx},
-        {type:'v', len: leftEdge, sx: x, sy: y+h-rx, ex: x, ey: y+rx},
-        {type:'arc', len: arcLen, cx: x+rx, cy: y+rx, startAngle: Math.PI, endAngle: Math.PI*1.5, r: rx}
+        {type:'h', len: topEdge, sx: x+rxTL, sy: y, ex: x+w-rxTR, ey: y},
+        {type:'arc', len: arcLenTR, cx: x+w-rxTR, cy: y+rxTR, startAngle: -Math.PI/2, endAngle: 0, r: rxTR},
+        {type:'v', len: rightEdge, sx: x+w, sy: y+rxTR, ex: x+w, ey: y+h-rxBR},
+        {type:'arc', len: arcLenBR, cx: x+w-rxBR, cy: y+h-rxBR, startAngle: 0, endAngle: Math.PI/2, r: rxBR},
+        {type:'h', len: bottomEdge, sx: x+w-rxBR, sy: y+h, ex: x+rxBL, ey: y+h},
+        {type:'arc', len: arcLenBL, cx: x+rxBL, cy: y+h-rxBL, startAngle: Math.PI/2, endAngle: Math.PI, r: rxBL},
+        {type:'v', len: leftEdge, sx: x, sy: y+h-rxBL, ex: x, ey: y+rxTL},
+        {type:'arc', len: arcLenTL, cx: x+rxTL, cy: y+rxTL, startAngle: Math.PI, endAngle: Math.PI*1.5, r: rxTL}
       ];
 
       function getPointOnSegment(seg, t) {
@@ -3519,11 +3530,18 @@ const SvgRenderer = {
 
       // ---- Compute corner radius for decorative borders ----
       var DECO_CORNER_RX = {
-        soft_round: 35, medium_round: 80, strong_round: 120,
-        mixed_top_straight: 120, mixed_top_round: 120,
-        mixed_diag_down: 120, mixed_diag_up: 120
+        soft_round: 35, medium_round: 80, strong_round: 120
       };
-      var decoCornerRx = (cornerType && cornerType !== 'straight') ? (DECO_CORNER_RX[cornerType] || 0) : 0;
+      var decoCornerRx = 0;
+      if (cornerType && cornerType !== 'straight') {
+        if (cornerType.indexOf('mixed_') === 0) {
+          // Per-corner radii for mixed corners
+          var mixedCorners = SvgRenderer._getMixedCorners(cornerType);
+          if (mixedCorners) decoCornerRx = mixedCorners; // {tl, tr, br, bl}
+        } else {
+          decoCornerRx = DECO_CORNER_RX[cornerType] || 0;
+        }
+      }
 
       // ---- BORDER SHAPES (winding/zigzag) ----
       if (borderShapeData) {
