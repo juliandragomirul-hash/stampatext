@@ -607,53 +607,34 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style mini stamp previews (same method as Corners)
-          var borderLabelsForThumb = {simple:'PLAIN',stitch_line:'STITCH LINE',stitch_square:'STITCH SQ.',stitch_circle:'STITCH DOT',sawtooth:'SAWTOOTH',perforated:'PERFORATED',perforated_spaced:'SPACED P.',wavy:'WAVY',zigzag:'ZIGZAG',torn_edge:'TORN EDGE',chalk:'CHALK'};
+          // Generate border style icons: hand-crafted thick zoomed-in pattern samples
+          var W = 160, H = 16, c = '#cc0000';
+          var borderIcons = {
+            simple: '<line x1="0" y1="8" x2="'+W+'" y2="8" stroke="'+c+'" stroke-width="6"/>',
+            stitch_line: '<line x1="0" y1="8" x2="'+W+'" y2="8" stroke="'+c+'" stroke-width="6" stroke-dasharray="24 10"/>',
+            stitch_square: (function(){var s='';for(var i=0;i<8;i++)s+='<rect x="'+(i*20+2)+'" y="2" width="12" height="12" fill="'+c+'"/>';return s;})(),
+            stitch_circle: (function(){var s='';for(var i=0;i<10;i++)s+='<circle cx="'+(i*16+8)+'" cy="8" r="5.5" fill="'+c+'"/>';return s;})(),
+            sawtooth: '<path d="M0,14 '+(function(){var s='';for(var i=0;i<10;i++)s+='L'+(i*16+8)+',2 L'+((i+1)*16)+',14 ';return s;})()+'" fill="none" stroke="'+c+'" stroke-width="3"/>',
+            perforated: '<line x1="0" y1="8" x2="'+W+'" y2="8" stroke="'+c+'" stroke-width="8"/>'+(function(){var s='';for(var i=0;i<8;i++)s+='<circle cx="'+(i*20+10)+'" cy="8" r="4" fill="#fff"/>';return s;})(),
+            perforated_spaced: '<line x1="0" y1="8" x2="'+W+'" y2="8" stroke="'+c+'" stroke-width="8"/>'+(function(){var s='';for(var i=0;i<5;i++)s+='<circle cx="'+(i*32+16)+'" cy="8" r="4" fill="#fff"/>';return s;})(),
+            wavy: '<path d="M0,8 '+(function(){var s='';for(var i=0;i<4;i++)s+='Q'+(i*40+20)+','+(i%2===0?-2:18)+' '+((i+1)*40)+',8 ';return s;})()+'" fill="none" stroke="'+c+'" stroke-width="5"/>',
+            zigzag: '<path d="M0,13 '+(function(){var s='';for(var i=0;i<7;i++)s+='L'+(i*23+11.5)+',3 L'+((i+1)*23)+',13 ';return s;})()+'" fill="none" stroke="'+c+'" stroke-width="3" stroke-linejoin="miter"/>',
+            torn_edge: '<line x1="0" y1="8" x2="'+W+'" y2="8" stroke="'+c+'" stroke-width="7" filter="url(#torn-ic)"/><defs><filter id="torn-ic"><feTurbulence baseFrequency="0.06" numOctaves="3"/><feDisplacementMap in="SourceGraphic" scale="4"/></filter></defs>',
+            chalk: '<line x1="0" y1="8" x2="'+W+'" y2="8" stroke="'+c+'" stroke-width="8" filter="url(#chalk-ic)"/><defs><filter id="chalk-ic"><feTurbulence baseFrequency="0.12" numOctaves="4"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter></defs>'
+          };
           var borderList = document.getElementById('product-border-list');
-          var plainEntryForBorder = allTemplatesByBorder['simple'];
-          if (borderList && plainEntryForBorder && plainEntryForBorder.zones && plainEntryForBorder.zones[0]) {
-            var bZone = plainEntryForBorder.zones[0];
-            var borderThumbPromises = [];
+          if (borderList) {
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
               var bt = item.dataset.value;
-              var entry = allTemplatesByBorder[bt] || plainEntryForBorder;
-              var label = borderLabelsForThumb[bt] || bt.toUpperCase();
-              var p = (async function(item, bt, entry, label) {
-                try {
-                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, 0, label);
-                  thumbSvg = await SvgRenderer.autoFitTextInString(
-                    thumbSvg, 0,
-                    bZone.bounding_width || 500, bZone.font_size || 128,
-                    1, 'single', 'empty', 'straight', bt, 'rectangle'
-                  );
-                  thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
-                  thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
-                  thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
-                  // Crop to top border strip (top 18%)
-                  var vbM = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
-                  if (vbM) {
-                    var bvx = parseFloat(vbM[1]), bvy = parseFloat(vbM[2]);
-                    var bvw = parseFloat(vbM[3]), bvh = parseFloat(vbM[4]);
-                    var bCropH = bvh * 0.18;
-                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + bvx + ' ' + bvy + ' ' + bvw + ' ' + bCropH.toFixed(1) + '"');
-                  }
-                  // Remove text and white rects
-                  thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
-                  thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
-                  item.textContent = '';
-                  item.style.cssText += 'padding:3px 6px;';
-                  var sample = document.createElement('div');
-                  sample.style.cssText = 'width:160px;height:10px;overflow:hidden;background:transparent;';
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="160" height="10" preserveAspectRatio="none" style="background:transparent"');
-                  item.appendChild(sample);
-                } catch (e) {
-                  console.warn('Border thumb failed for ' + bt + ':', e.message);
-                }
-              })(item, bt, entry, label);
-              borderThumbPromises.push(p);
+              var icon = borderIcons[bt];
+              if (!icon) return;
+              item.textContent = '';
+              item.style.cssText += 'padding:3px 6px;';
+              var sample = document.createElement('div');
+              sample.style.cssText = 'width:'+W+'px;height:'+H+'px;overflow:hidden;';
+              sample.innerHTML = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">'+icon+'</svg>';
+              item.appendChild(sample);
             });
-            await Promise.all(borderThumbPromises);
-            // Copy active border thumbnail into trigger box
             var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');
             if (activeBorderItem) {
               var abThumb = activeBorderItem.querySelector('div');
