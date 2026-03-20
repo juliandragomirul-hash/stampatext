@@ -632,8 +632,10 @@
                   item.textContent = '';
                   item.style.cssText += 'padding:3px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;';
                   var sample = document.createElement('div');
-                  sample.style.cssText = 'width:100%;height:18px;overflow:hidden;';
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="18" preserveAspectRatio="xMidYMin slice"');
+                  sample.style.cssText = 'width:100%;height:18px;overflow:hidden;background:transparent;';
+                  // Remove any white background rects from the SVG
+                  thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="18" preserveAspectRatio="xMidYMin slice" style="background:transparent"');
                   item.appendChild(sample);
                   var lbl = document.createElement('span');
                   lbl.style.cssText = 'font-size:0.65rem;color:#555;line-height:1;';
