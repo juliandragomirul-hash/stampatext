@@ -1118,30 +1118,66 @@ const SvgRenderer = {
       }
     }
 
-    // When rounded corners: add a rounded rect underneath for smooth corner arcs
     if (rx > 0 && !isLined) {
-      var cornerSw = (shapeType === 'line') ? size : size * 0.8;
-      shapes += '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + rx + '" ry="' + rx + '" fill="none" stroke="' + color + '" stroke-width="' + cornerSw.toFixed(1) + '"/>';
-    }
+      // Rounded corners: place shapes along the entire rounded rect perimeter
+      // Generate points along the perimeter path (edges + corner arcs)
+      var points = [];
+      var arcLen = rx * Math.PI / 2; // quarter-circle arc length
+      var topEdge = w - 2 * rx;
+      var rightEdge = h - 2 * rx;
+      var bottomEdge = topEdge;
+      var leftEdge = rightEdge;
+      var perimeter = topEdge + rightEdge + bottomEdge + leftEdge + 4 * arcLen;
+      var numPoints = Math.max(4, Math.round(perimeter / step));
+      var ptStep = perimeter / numPoints;
 
-    if (rx > 0) {
-      // Rounded: place shapes along shortened edges (skip corner zones)
+      // Walk the perimeter: top edge → TR arc → right edge → BR arc → bottom edge → BL arc → left edge → TL arc
+      var segments = [
+        // {type, length, startX, startY, endX, endY}  or arc params
+        {type:'h', len: topEdge, sx: x+rx, sy: y, ex: x+w-rx, ey: y},
+        {type:'arc', len: arcLen, cx: x+w-rx, cy: y+rx, startAngle: -Math.PI/2, endAngle: 0, r: rx},
+        {type:'v', len: rightEdge, sx: x+w, sy: y+rx, ex: x+w, ey: y+h-rx},
+        {type:'arc', len: arcLen, cx: x+w-rx, cy: y+h-rx, startAngle: 0, endAngle: Math.PI/2, r: rx},
+        {type:'h', len: bottomEdge, sx: x+w-rx, sy: y+h, ex: x+rx, ey: y+h},
+        {type:'arc', len: arcLen, cx: x+rx, cy: y+h-rx, startAngle: Math.PI/2, endAngle: Math.PI, r: rx},
+        {type:'v', len: leftEdge, sx: x, sy: y+h-rx, ex: x, ey: y+rx},
+        {type:'arc', len: arcLen, cx: x+rx, cy: y+rx, startAngle: Math.PI, endAngle: Math.PI*1.5, r: rx}
+      ];
+
+      function getPointOnSegment(seg, t) {
+        if (seg.type === 'h' || seg.type === 'v') {
+          return {x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t, angle: seg.type === 'h' ? 0 : 1};
+        } else {
+          var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
+          return {x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a), angle: 0};
+        }
+      }
+
+      var dist = 0;
+      for (var pi = 0; pi < numPoints; pi++) {
+        var targetDist = pi * ptStep;
+        // Find which segment this point falls in
+        var cumDist = 0;
+        for (var si = 0; si < segments.length; si++) {
+          if (cumDist + segments[si].len >= targetDist || si === segments.length - 1) {
+            var localT = segments[si].len > 0 ? (targetDist - cumDist) / segments[si].len : 0;
+            localT = Math.max(0, Math.min(1, localT));
+            var pt = getPointOnSegment(segments[si], localT);
+            addShape(pt.x, pt.y, pt.angle);
+            break;
+          }
+          cumDist += segments[si].len;
+        }
+      }
+    } else if (rx > 0 && isLined) {
+      // Lined + rounded: just shorten horizontal edges
       var hStart = x + rx;
       var hEnd = x + w - rx;
       var hLen = hEnd - hStart;
       var numH = Math.max(1, Math.round(hLen / step));
-      var hStep = hLen / numH;
-      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y, 0);
-      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y + h, 0);
-      if (!isLined) {
-        var vStart = y + rx;
-        var vEnd = y + h - rx;
-        var vLen = vEnd - vStart;
-        var numV = Math.max(1, Math.round(vLen / step));
-        var vStep = vLen / numV;
-        for (var i = 0; i <= numV; i++) addShape(x, vStart + i * vStep, 1);
-        for (var i = 0; i <= numV; i++) addShape(x + w, vStart + i * vStep, 1);
-      }
+      var hStep2 = hLen / numH;
+      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep2, y, 0);
+      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep2, y + h, 0);
     } else {
       // Straight: original iteration (skip corners, already handled above)
       var numH = Math.max(1, Math.round(w / step));
