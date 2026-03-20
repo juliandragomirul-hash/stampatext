@@ -62,7 +62,7 @@
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:135px">
-          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:34px;overflow:hidden;">Plain</span>
+          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:10px;overflow:hidden;">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-border-list">
@@ -629,12 +629,22 @@
                   thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
                   thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
                   thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
+                  // Crop to top border strip (top 18%)
+                  var vbM = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
+                  if (vbM) {
+                    var bvx = parseFloat(vbM[1]), bvy = parseFloat(vbM[2]);
+                    var bvw = parseFloat(vbM[3]), bvh = parseFloat(vbM[4]);
+                    var bCropH = bvh * 0.18;
+                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + bvx + ' ' + bvy + ' ' + bvw + ' ' + bCropH.toFixed(1) + '"');
+                  }
+                  // Remove text and white rects
+                  thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
+                  thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
                   item.textContent = '';
                   item.style.cssText += 'padding:3px 6px;';
                   var sample = document.createElement('div');
-                  sample.style.cssText = 'width:100%;height:32px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
-                  thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="32" preserveAspectRatio="xMidYMid meet" style="background:transparent"');
+                  sample.style.cssText = 'width:160px;height:10px;overflow:hidden;background:transparent;';
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="160" height="10" preserveAspectRatio="none" style="background:transparent"');
                   item.appendChild(sample);
                 } catch (e) {
                   console.warn('Border thumb failed for ' + bt + ':', e.message);
