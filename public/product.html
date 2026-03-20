@@ -62,7 +62,7 @@
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:135px">
-          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:12px;overflow:hidden;">Plain</span>
+          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:34px;overflow:hidden;">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-border-list">
@@ -607,33 +607,42 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style samples: hand-crafted SVG patterns
-          var borderPatterns = {
-            simple: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5"/>',
-            stitch_line: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5" stroke-dasharray="12 6"/>',
-            stitch_square: '<g>' + (function(){var s='';for(var i=0;i<12;i++)s+='<rect x="'+(i*17+3)+'" y="0.5" width="5" height="5" fill="#cc0000"/>';return s;})() + '</g>',
-            stitch_circle: '<g>' + (function(){var s='';for(var i=0;i<12;i++)s+='<circle cx="'+(i*17+6)+'" cy="3" r="2.5" fill="#cc0000"/>';return s;})() + '</g>',
-            sawtooth: '<path d="M0,5 ' + (function(){var s='';for(var i=0;i<18;i++)s+='L'+(i*11.5+5.75)+',1 L'+((i+1)*11.5)+',5 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="1.5"/>',
-            perforated: '<g><line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5"/>' + (function(){var s='';for(var i=0;i<14;i++)s+='<circle cx="'+(i*14.5+7)+'" cy="3" r="1.8" fill="#fff"/>';return s;})() + '</g>',
-            perforated_spaced: '<g><line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="2.5"/>' + (function(){var s='';for(var i=0;i<9;i++)s+='<circle cx="'+(i*22+11)+'" cy="3" r="1.8" fill="#fff"/>';return s;})() + '</g>',
-            wavy: '<path d="M0,3 ' + (function(){var s='';for(var i=0;i<9;i++)s+='Q'+(i*22+11)+','+(i%2===0?0:6)+' '+((i+1)*22)+',3 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2"/>',
-            zigzag: '<path d="M0,5 ' + (function(){var s='';for(var i=0;i<13;i++)s+='L'+(i*15.5+7.75)+',1 L'+((i+1)*15.5)+',5 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="1.5" stroke-linejoin="miter"/>',
-            torn_edge: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="3" opacity="0.6" filter="url(#torn-thumb)"/><defs><filter id="torn-thumb"><feTurbulence baseFrequency="0.08" numOctaves="2"/><feDisplacementMap in="SourceGraphic" scale="2"/></filter></defs>',
-            chalk: '<line x1="0" y1="3" x2="200" y2="3" stroke="#cc0000" stroke-width="3.5" filter="url(#chalk-thumb)"/><defs><filter id="chalk-thumb"><feTurbulence baseFrequency="0.15" numOctaves="3"/><feDisplacementMap in="SourceGraphic" scale="1.5"/></filter></defs>'
-          };
+          // Generate border style mini stamp previews (same method as Corners)
+          var borderLabelsForThumb = {simple:'PLAIN',stitch_line:'STITCH LINE',stitch_square:'STITCH SQ.',stitch_circle:'STITCH DOT',sawtooth:'SAWTOOTH',perforated:'PERFORATED',perforated_spaced:'SPACED P.',wavy:'WAVY',zigzag:'ZIGZAG',torn_edge:'TORN EDGE',chalk:'CHALK'};
           var borderList = document.getElementById('product-border-list');
-          if (borderList) {
+          var plainEntryForBorder = allTemplatesByBorder['simple'];
+          if (borderList && plainEntryForBorder && plainEntryForBorder.zones && plainEntryForBorder.zones[0]) {
+            var bZone = plainEntryForBorder.zones[0];
+            var borderThumbPromises = [];
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
               var bt = item.dataset.value;
-              var pattern = borderPatterns[bt];
-              if (!pattern) return;
-              item.textContent = '';
-              item.style.cssText += 'padding:3px 6px;';
-              var sample = document.createElement('div');
-              sample.style.cssText = 'width:100%;height:6px;overflow:hidden;';
-              sample.innerHTML = '<svg viewBox="0 0 200 6" width="100%" height="6" preserveAspectRatio="none">' + pattern + '</svg>';
-              item.appendChild(sample);
+              var entry = allTemplatesByBorder[bt] || plainEntryForBorder;
+              var label = borderLabelsForThumb[bt] || bt.toUpperCase();
+              var p = (async function(item, bt, entry, label) {
+                try {
+                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, 0, label);
+                  thumbSvg = await SvgRenderer.autoFitTextInString(
+                    thumbSvg, 0,
+                    bZone.bounding_width || 500, bZone.font_size || 128,
+                    1, 'single', 'empty', 'straight', bt, 'rectangle'
+                  );
+                  thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
+                  thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
+                  thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
+                  item.textContent = '';
+                  item.style.cssText += 'padding:3px 6px;';
+                  var sample = document.createElement('div');
+                  sample.style.cssText = 'width:100%;height:32px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
+                  thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="32" preserveAspectRatio="xMidYMid meet" style="background:transparent"');
+                  item.appendChild(sample);
+                } catch (e) {
+                  console.warn('Border thumb failed for ' + bt + ':', e.message);
+                }
+              })(item, bt, entry, label);
+              borderThumbPromises.push(p);
             });
+            await Promise.all(borderThumbPromises);
             // Copy active border thumbnail into trigger box
             var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');
             if (activeBorderItem) {
