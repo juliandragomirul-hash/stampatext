@@ -846,29 +846,47 @@ const SvgRenderer = {
     var spacing = radius * (spacingMult || 2.5);
     var rx = cornerRx || 0;
 
-    // Horizontal edges (top + bottom) — shorten by rx for rounded corners
-    var hStart = x + rx;
-    var hEnd = x + w - rx;
-    var hLen = hEnd - hStart;
-    var numH = Math.max(1, Math.round(hLen / spacing));
-    var hSpacing = hLen / numH;
-    for (var i = 0; i <= numH; i++) {
-      var cx = hStart + i * hSpacing;
-      shapes += this._borderShape(shapeType, cx, y, radius);
-      shapes += this._borderShape(shapeType, cx, y + h, radius);
-    }
-
-    // Vertical edges (left + right) — shorten by rx, skip for lined
-    if (shape !== 'lined') {
-      var vStart = y + rx;
-      var vEnd = y + h - rx;
-      var vLen = vEnd - vStart;
-      var numV = Math.max(1, Math.round(vLen / spacing));
-      var vSpacing = vLen / numV;
-      for (var i = 0; i <= numV; i++) {
-        var cy = vStart + i * vSpacing;
-        shapes += this._borderShape(shapeType, x, cy, radius);
-        shapes += this._borderShape(shapeType, x + w, cy, radius);
+    if (rx > 0) {
+      // Rounded: shorten edges, skip corners (underlying rect rx shows through)
+      var hStart = x + rx;
+      var hEnd = x + w - rx;
+      var hLen = hEnd - hStart;
+      var numH = Math.max(1, Math.round(hLen / spacing));
+      var hSpacing = hLen / numH;
+      for (var i = 0; i <= numH; i++) {
+        var cx = hStart + i * hSpacing;
+        shapes += this._borderShape(shapeType, cx, y, radius);
+        shapes += this._borderShape(shapeType, cx, y + h, radius);
+      }
+      if (shape !== 'lined') {
+        var vStart = y + rx;
+        var vEnd = y + h - rx;
+        var vLen = vEnd - vStart;
+        var numV = Math.max(1, Math.round(vLen / spacing));
+        var vSpacing = vLen / numV;
+        for (var i = 0; i <= numV; i++) {
+          var cy = vStart + i * vSpacing;
+          shapes += this._borderShape(shapeType, x, cy, radius);
+          shapes += this._borderShape(shapeType, x + w, cy, radius);
+        }
+      }
+    } else {
+      // Straight: original full-edge iteration with corners
+      var numH = Math.max(1, Math.round(w / spacing));
+      var hSpacing = w / numH;
+      for (var i = 0; i <= numH; i++) {
+        var cx = x + i * hSpacing;
+        shapes += this._borderShape(shapeType, cx, y, radius);
+        shapes += this._borderShape(shapeType, cx, y + h, radius);
+      }
+      if (shape !== 'lined') {
+        var numV = Math.max(1, Math.round(h / spacing));
+        var vSpacing = h / numV;
+        for (var i = 1; i < numV; i++) {
+          var cy = y + i * vSpacing;
+          shapes += this._borderShape(shapeType, x, cy, radius);
+          shapes += this._borderShape(shapeType, x + w, cy, radius);
+        }
       }
     }
 
@@ -1100,24 +1118,42 @@ const SvgRenderer = {
       }
     }
 
-    // Top edge — shorten by rx at each end for rounded corners
-    var hStart = x + rx;
-    var hEnd = x + w - rx;
-    var hLen = hEnd - hStart;
-    var numH = Math.max(1, Math.round(hLen / step));
-    var hStep = hLen / numH;
-    for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y, 0);
-    // Bottom edge
-    for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y + h, 0);
-    // Left + Right edges — skip for lined, shorten by rx for rounded
-    if (!isLined) {
-      var vStart = y + rx;
-      var vEnd = y + h - rx;
-      var vLen = vEnd - vStart;
-      var numV = Math.max(1, Math.round(vLen / step));
-      var vStep = vLen / numV;
-      for (var i = 0; i <= numV; i++) addShape(x, vStart + i * vStep, 1);
-      for (var i = 0; i <= numV; i++) addShape(x + w, vStart + i * vStep, 1);
+    // When rounded corners: add a rounded rect underneath for smooth corner arcs
+    if (rx > 0 && !isLined) {
+      var cornerSw = (shapeType === 'line') ? size : size * 0.8;
+      shapes += '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + rx + '" ry="' + rx + '" fill="none" stroke="' + color + '" stroke-width="' + cornerSw.toFixed(1) + '"/>';
+    }
+
+    if (rx > 0) {
+      // Rounded: place shapes along shortened edges (skip corner zones)
+      var hStart = x + rx;
+      var hEnd = x + w - rx;
+      var hLen = hEnd - hStart;
+      var numH = Math.max(1, Math.round(hLen / step));
+      var hStep = hLen / numH;
+      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y, 0);
+      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep, y + h, 0);
+      if (!isLined) {
+        var vStart = y + rx;
+        var vEnd = y + h - rx;
+        var vLen = vEnd - vStart;
+        var numV = Math.max(1, Math.round(vLen / step));
+        var vStep = vLen / numV;
+        for (var i = 0; i <= numV; i++) addShape(x, vStart + i * vStep, 1);
+        for (var i = 0; i <= numV; i++) addShape(x + w, vStart + i * vStep, 1);
+      }
+    } else {
+      // Straight: original iteration (skip corners, already handled above)
+      var numH = Math.max(1, Math.round(w / step));
+      var hStep = w / numH;
+      for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
+      for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
+      if (!isLined) {
+        var numV = Math.max(1, Math.round(h / step));
+        var vStep = h / numV;
+        for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
+        for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
+      }
     }
 
     return shapes;
