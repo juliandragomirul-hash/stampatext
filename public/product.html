@@ -595,38 +595,40 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style pattern samples for dropdown
-          var borderPatterns = {
-            simple: '<line x1="0" y1="10" x2="200" y2="10" stroke="#cc0000" stroke-width="4"/>',
-            stitch_line: '<line x1="0" y1="10" x2="200" y2="10" stroke="#cc0000" stroke-width="3" stroke-dasharray="12,6"/>',
-            stitch_square: '<g>' + (function(){var s='';for(var i=0;i<8;i++)s+='<rect x="'+(i*26+2)+'" y="6" width="8" height="8" fill="#cc0000"/>';return s;})() + '</g>',
-            stitch_circle: '<g>' + (function(){var s='';for(var i=0;i<8;i++)s+='<circle cx="'+(i*26+6)+'" cy="10" r="4" fill="#cc0000"/>';return s;})() + '</g>',
-            sawtooth: '<path d="M0,16 ' + (function(){var s='';for(var i=0;i<10;i++)s+='L'+(i*20+10)+',4 L'+((i+1)*20)+',16 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="3"/>',
-            perforated: '<path d="M0,16 ' + (function(){var s='';for(var i=0;i<10;i++)s+='L'+(i*20+10)+',4 L'+((i+1)*20)+',16 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2" stroke-dasharray="4,3"/>',
-            perforated_spaced: '<path d="M0,16 ' + (function(){var s='';for(var i=0;i<7;i++)s+='L'+(i*30+15)+',4 L'+((i+1)*30)+',16 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2" stroke-dasharray="6,8"/>',
-            wavy: '<path d="M0,10 ' + (function(){var s='';for(var i=0;i<7;i++)s+='Q'+(i*30+15)+','+(i%2===0?0:20)+' '+((i+1)*30)+',10 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="3"/>',
-            zigzag: '<path d="M0,16 ' + (function(){var s='';for(var i=0;i<10;i++)s+='L'+(i*20+10)+',4 L'+((i+1)*20)+',16 ';return s;})() + '" fill="none" stroke="#cc0000" stroke-width="3" stroke-linejoin="miter"/>',
-            torn_edge: '<path d="M0,10 ' + (function(){var s='';for(var i=0;i<20;i++){var y=10+Math.sin(i*1.7)*4+(i%3)*2;s+='L'+(i*10)+','+y.toFixed(1)+' ';}return s;})() + '" fill="none" stroke="#cc0000" stroke-width="2.5" opacity="0.7"/>',
-            chalk: '<line x1="0" y1="10" x2="200" y2="10" stroke="#cc0000" stroke-width="5" opacity="0.6" filter="url(#chalk-preview)"/>'
-          };
+          // Generate border style samples from actual preloaded templates
           var borderLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
               var bt = item.dataset.value;
-              var pattern = borderPatterns[bt];
-              if (!pattern) return;
-              item.textContent = '';
-              item.style.cssText += 'padding:4px 8px;';
-              var sample = document.createElement('div');
-              sample.style.cssText = 'width:100%;height:20px;overflow:hidden;';
-              var chalkFilter = bt === 'chalk' ? '<defs><filter id="chalk-preview"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter></defs>' : '';
-              sample.innerHTML = '<svg width="100%" height="20" viewBox="0 0 200 20" preserveAspectRatio="none">' + chalkFilter + pattern + '</svg>';
-              item.appendChild(sample);
-              var label = document.createElement('span');
-              label.style.cssText = 'font-size:0.68rem;color:#666;display:block;text-align:center;';
-              label.textContent = borderLabels[bt] || bt;
-              item.appendChild(label);
+              var entry = allTemplatesByBorder[bt];
+              if (!entry) return;
+              try {
+                var thumbSvg = entry.svg;
+                // Remove text
+                thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
+                thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
+                thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
+                // Crop viewBox to middle horizontal strip (40-60% height)
+                var vbMatch = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
+                if (vbMatch) {
+                  var vx = parseFloat(vbMatch[1]), vy = parseFloat(vbMatch[2]);
+                  var vw = parseFloat(vbMatch[3]), vh = parseFloat(vbMatch[4]);
+                  var stripTop = vy + vh * 0.35;
+                  var stripH = vh * 0.30;
+                  thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + stripTop.toFixed(1) + ' ' + vw + ' ' + stripH.toFixed(1) + '"');
+                }
+                item.textContent = '';
+                item.style.cssText += 'padding:4px 8px;';
+                var sample = document.createElement('div');
+                sample.style.cssText = 'width:100%;height:16px;overflow:hidden;';
+                sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="16" preserveAspectRatio="none"');
+                item.appendChild(sample);
+                var label = document.createElement('span');
+                label.style.cssText = 'font-size:0.68rem;color:#666;display:block;text-align:center;';
+                label.textContent = borderLabels[bt] || bt;
+                item.appendChild(label);
+              } catch (e) { /* keep text label as fallback */ }
             });
           }
         } catch (e) { console.warn('Failed to preload templates:', e.message); }
