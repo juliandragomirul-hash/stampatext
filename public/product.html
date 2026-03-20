@@ -63,7 +63,7 @@
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:135px">
-          <span class="filter-bar-dropdown-value" id="product-border-value">Plain</span>
+          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:18px;overflow:hidden;">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-border-list">
@@ -109,7 +109,7 @@
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Corners</label>
         <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:80px">
-          <span class="filter-bar-dropdown-value" id="product-corner-value">Straight</span>
+          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:28px;overflow:hidden;">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-corner-list">
@@ -642,6 +642,12 @@
               thumbPromises.push(p);
             });
             await Promise.all(thumbPromises);
+            // Copy active border thumbnail into trigger box
+            var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');
+            if (activeBorderItem) {
+              var abThumb = activeBorderItem.querySelector('div');
+              if (abThumb) document.getElementById('product-border-value').innerHTML = abThumb.innerHTML;
+            }
           }
           // Generate corner style mini stamp previews using plain template
           var cornerList = document.getElementById('product-corner-list');
@@ -684,6 +690,12 @@
               cornerThumbPromises.push(p);
             });
             await Promise.all(cornerThumbPromises);
+            // Copy active corner thumbnail into trigger box
+            var activeCornerItem = cornerList.querySelector('.filter-bar-dropdown-item.active');
+            if (activeCornerItem) {
+              var acThumb = activeCornerItem.querySelector('div');
+              if (acThumb) document.getElementById('product-corner-value').innerHTML = acThumb.innerHTML;
+            }
           }
         } catch (e) { console.warn('Failed to preload templates:', e.message); }
       })();
@@ -910,8 +922,15 @@
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentBorderStyle = newBorder;
-        var borderDisplayLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
-        document.getElementById('product-border-value').textContent = borderDisplayLabels[newBorder] || newBorder;
+        // Copy SVG thumbnail from dropdown item into trigger box
+        var thumbDiv = item.querySelector('div');
+        var triggerEl = document.getElementById('product-border-value');
+        if (thumbDiv) {
+          triggerEl.innerHTML = thumbDiv.innerHTML;
+        } else {
+          var borderDisplayLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
+          triggerEl.textContent = borderDisplayLabels[newBorder] || newBorder;
+        }
         // Switch to new template
         var entry = allTemplatesByBorder[newBorder];
         rawCleanedSvg = entry.svg;
@@ -939,8 +958,15 @@
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentCornerStyle = item.dataset.value;
-        var cornerDisplayLabels = {straight:'Straight',soft_round:'Round S',medium_round:'Round M',strong_round:'Round L',mixed_top_straight:'Top straight',mixed_top_round:'Top round',mixed_diag_down:'Diagonal ↘',mixed_diag_up:'Diagonal ↗'};
-        document.getElementById('product-corner-value').textContent = cornerDisplayLabels[currentCornerStyle] || currentCornerStyle;
+        // Copy SVG thumbnail from dropdown item into trigger box
+        var cThumbDiv = item.querySelector('div');
+        var cTriggerEl = document.getElementById('product-corner-value');
+        if (cThumbDiv) {
+          cTriggerEl.innerHTML = cThumbDiv.innerHTML;
+        } else {
+          var cornerDisplayLabels = {straight:'Straight',soft_round:'Round S',medium_round:'Round M',strong_round:'Round L',mixed_top_straight:'Top straight',mixed_top_round:'Top round',mixed_diag_down:'Diagonal ↘',mixed_diag_up:'Diagonal ↗'};
+          cTriggerEl.textContent = cornerDisplayLabels[currentCornerStyle] || currentCornerStyle;
+        }
         renderPreview();
       });
 
