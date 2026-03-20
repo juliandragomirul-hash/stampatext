@@ -5310,7 +5310,7 @@ const SvgRenderer = {
     }
     // Filled stitch is already visually dense — skip double frame entirely
     if (bi.stitch && isFull) return svgStr;
-    var innerSw = Math.max(4, Math.round(osw * 0.24));
+    var innerSw = Math.max(4, Math.round(osw * 0.36));
     if (bi.brush) innerSw = Math.max(6, Math.round(osw * 0.5));
     if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.3));
     var inset;
