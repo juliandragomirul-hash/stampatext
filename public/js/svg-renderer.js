@@ -5326,8 +5326,9 @@ const SvgRenderer = {
     } else {
       inset = osw / 2 + innerSw * 1.5;
     }
-    // Stitch shapes extend outward — inner rect just needs minimal offset from rect edge
-    if (bi.stitch) inset = innerSw / 2 + 2;
+    // Stitch: outlined needs minimal offset, filled needs more for visible inner frame
+    if (bi.stitch && !isFull) inset = innerSw / 2 + 2;
+    if (bi.stitch && isFull) inset = osw / 2 + innerSw;
     if (bi.border) inset = isFull ? osw * 0.3 : osw * 0.65;
     if (bi.brush) inset = Math.max(inset, osw * 0.95);
     if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
