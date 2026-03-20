@@ -610,7 +610,7 @@
               var p = (async function(item, bt, entry, zone, label) {
                 try {
                   // Replace text with style label
-                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, label, 0);
+                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, 0, label);
                   // AutoFit text in the template
                   thumbSvg = await SvgRenderer.autoFitTextInString(
                     thumbSvg, 0,
