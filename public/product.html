@@ -62,7 +62,7 @@
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:135px">
-          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:18px;overflow:hidden;">Plain</span>
+          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:12px;overflow:hidden;">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-border-list">
@@ -620,34 +620,26 @@
               var label = borderTextLabels[bt] || bt;
               var p = (async function(item, bt, entry, zone, label) {
                 try {
-                  // Render a real stamp with dummy text for proper border generation
-                  var thumbSvg = SvgRenderer.replaceTextInString(entry.svg, 0, 'SAMPLE');
-                  thumbSvg = await SvgRenderer.autoFitTextInString(
-                    thumbSvg, 0,
-                    zone.bounding_width || 500, zone.font_size || 128,
-                    1, 'single', 'empty', 'straight', bt, 'rectangle'
-                  );
+                  var thumbSvg = entry.svg;
+                  // Remove text — we only want the border pattern
+                  thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
                   thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
-                  thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
                   thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
-                  // Zoom into top border: crop viewBox to top 25%
+                  // Crop viewBox to middle horizontal strip (40-60% height)
                   var vbMatch = thumbSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
                   if (vbMatch) {
                     var vx = parseFloat(vbMatch[1]), vy = parseFloat(vbMatch[2]);
                     var vw = parseFloat(vbMatch[3]), vh = parseFloat(vbMatch[4]);
-                    var cropH = vh * 0.25;
-                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + vy + ' ' + vw + ' ' + cropH.toFixed(1) + '"');
+                    var stripTop = vy + vh * 0.35;
+                    var stripH = vh * 0.30;
+                    thumbSvg = thumbSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + vx + ' ' + stripTop.toFixed(1) + ' ' + vw + ' ' + stripH.toFixed(1) + '"');
                   }
-                  // Remove text elements (we only want the border pattern)
-                  thumbSvg = thumbSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
-                  // Build dropdown item: border sample + label
-                  item.textContent = '';
-                  item.style.cssText += 'padding:3px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;';
-                  var sample = document.createElement('div');
-                  sample.style.cssText = 'width:100%;height:18px;overflow:hidden;background:transparent;';
-                  // Remove any white background rects from the SVG
                   thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="18" preserveAspectRatio="xMidYMin slice" style="background:transparent"');
+                  item.textContent = '';
+                  item.style.cssText += 'padding:2px 6px;';
+                  var sample = document.createElement('div');
+                  sample.style.cssText = 'width:100%;height:12px;overflow:hidden;background:transparent;';
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="12" preserveAspectRatio="none" style="background:transparent"');
                   item.appendChild(sample);
                 } catch (e) {
                   console.warn('Thumb gen failed for ' + bt + ':', e.message);
