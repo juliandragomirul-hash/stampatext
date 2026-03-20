@@ -5036,6 +5036,109 @@ const SvgRenderer = {
    * tl/tr/br/bl = top-left, top-right, bottom-right, bottom-left corner radius.
    * When a radius is 0, a sharp corner is drawn (no arc).
    */
+  /**
+   * Generate a trace object for a rounded rect — the foundation for all border generators.
+   * Returns { d, rxTL, rxTR, rxBR, rxBL, x, y, w, h, segments[] }
+   * @param {string} cornerType - 'straight', 'soft_round', 'medium_round', 'strong_round', 'mixed_*'
+   */
+  _generateTrace: function(x, y, w, h, cornerType) {
+    var CORNER_RX = {
+      soft_round: 35, medium_round: 80, strong_round: 120
+    };
+    var rxTL = 0, rxTR = 0, rxBR = 0, rxBL = 0;
+
+    if (cornerType && cornerType !== 'straight') {
+      if (cornerType.indexOf('mixed_') === 0) {
+        var mixed = this._getMixedCorners(cornerType);
+        if (mixed) { rxTL = mixed.tl; rxTR = mixed.tr; rxBR = mixed.br; rxBL = mixed.bl; }
+      } else {
+        var uniform = CORNER_RX[cornerType] || 0;
+        rxTL = rxTR = rxBR = rxBL = uniform;
+      }
+    }
+
+    // Clamp rx values to half the rect dimension
+    var maxRx = Math.min(w / 2, h / 2);
+    rxTL = Math.min(rxTL, maxRx); rxTR = Math.min(rxTR, maxRx);
+    rxBR = Math.min(rxBR, maxRx); rxBL = Math.min(rxBL, maxRx);
+
+    // Generate path d
+    var d = this._rectToPath(x, y, w, h, rxTL, rxTR, rxBR, rxBL);
+
+    // Build segments for perimeter-walking generators
+    var arcLenTR = rxTR * Math.PI / 2;
+    var arcLenBR = rxBR * Math.PI / 2;
+    var arcLenBL = rxBL * Math.PI / 2;
+    var arcLenTL = rxTL * Math.PI / 2;
+    var segments = [
+      {type:'h', len: w - rxTL - rxTR, sx: x + rxTL, sy: y, ex: x + w - rxTR, ey: y},
+      {type:'arc', len: arcLenTR, cx: x + w - rxTR, cy: y + rxTR, startAngle: -Math.PI/2, endAngle: 0, r: rxTR},
+      {type:'v', len: h - rxTR - rxBR, sx: x + w, sy: y + rxTR, ex: x + w, ey: y + h - rxBR},
+      {type:'arc', len: arcLenBR, cx: x + w - rxBR, cy: y + h - rxBR, startAngle: 0, endAngle: Math.PI/2, r: rxBR},
+      {type:'h', len: w - rxBR - rxBL, sx: x + w - rxBR, sy: y + h, ex: x + rxBL, ey: y + h},
+      {type:'arc', len: arcLenBL, cx: x + rxBL, cy: y + h - rxBL, startAngle: Math.PI/2, endAngle: Math.PI, r: rxBL},
+      {type:'v', len: h - rxBL - rxTL, sx: x, sy: y + h - rxBL, ex: x, ey: y + rxTL},
+      {type:'arc', len: arcLenTL, cx: x + rxTL, cy: y + rxTL, startAngle: Math.PI, endAngle: Math.PI * 1.5, r: rxTL}
+    ];
+
+    var perimeter = 0;
+    for (var i = 0; i < segments.length; i++) perimeter += segments[i].len;
+
+    return {
+      d: d, x: x, y: y, w: w, h: h,
+      rxTL: rxTL, rxTR: rxTR, rxBR: rxBR, rxBL: rxBL,
+      segments: segments, perimeter: perimeter,
+      hasRounding: (rxTL + rxTR + rxBR + rxBL) > 0
+    };
+  },
+
+  /**
+   * Walk a trace's perimeter and return evenly spaced points with tangent angles.
+   * @param {object} trace - from _generateTrace
+   * @param {number} step - distance between points
+   * @returns {Array} [{x, y, angle, rotDeg}]
+   */
+  _walkTrace: function(trace, step) {
+    var points = [];
+    var numPoints = Math.max(4, Math.round(trace.perimeter / step));
+    var ptStep = trace.perimeter / numPoints;
+
+    function getPointOnSegment(seg, t) {
+      if (seg.type === 'h' || seg.type === 'v') {
+        return {
+          x: seg.sx + (seg.ex - seg.sx) * t,
+          y: seg.sy + (seg.ey - seg.sy) * t,
+          angle: seg.type === 'h' ? 0 : 1,
+          rotDeg: 0
+        };
+      } else {
+        var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
+        var tangentDeg = (a + Math.PI / 2) * (180 / Math.PI);
+        return {
+          x: seg.cx + seg.r * Math.cos(a),
+          y: seg.cy + seg.r * Math.sin(a),
+          angle: 0,
+          rotDeg: tangentDeg
+        };
+      }
+    }
+
+    for (var pi = 0; pi < numPoints; pi++) {
+      var targetDist = pi * ptStep;
+      var cumDist = 0;
+      for (var si = 0; si < trace.segments.length; si++) {
+        if (cumDist + trace.segments[si].len >= targetDist || si === trace.segments.length - 1) {
+          var localT = trace.segments[si].len > 0 ? (targetDist - cumDist) / trace.segments[si].len : 0;
+          localT = Math.max(0, Math.min(1, localT));
+          points.push(getPointOnSegment(trace.segments[si], localT));
+          break;
+        }
+        cumDist += trace.segments[si].len;
+      }
+    }
+    return points;
+  },
+
   _rectToPath(x, y, w, h, tl, tr, br, bl) {
     var d = 'M' + (x + tl).toFixed(2) + ' ' + y.toFixed(2);
     d += ' L' + (x + w - tr).toFixed(2) + ' ' + y.toFixed(2);
