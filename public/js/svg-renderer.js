@@ -841,34 +841,28 @@ const SvgRenderer = {
    * Generate white border shapes (circles or diamonds) along all 4 edges of a rect.
    * Used for "winding" (scalloped) and "zig-zag" (saw-tooth) border effects.
    */
-  _generateBorderShapes: function(x, y, w, h, shapeType, radius, spacingMult, shape, cornerRx) {
+  _generateBorderShapes: function(x, y, w, h, shapeType, radius, spacingMult, shape, cornerType) {
     var shapes = '';
     var spacing = radius * (spacingMult || 2.5);
-    var rx = cornerRx || 0;
+    var trace = SvgRenderer._generateTrace(x, y, w, h, cornerType || 'straight');
 
-    if (rx > 0) {
-      // Rounded: shorten edges, skip corners (underlying rect rx shows through)
-      var hStart = x + rx;
-      var hEnd = x + w - rx;
-      var hLen = hEnd - hStart;
-      var numH = Math.max(1, Math.round(hLen / spacing));
-      var hSpacing = hLen / numH;
+    if (shape === 'lined') {
+      // Lined: top + bottom only
+      var numH = Math.max(1, Math.round(w / spacing));
+      var hSpacing = w / numH;
       for (var i = 0; i <= numH; i++) {
-        var cx = hStart + i * hSpacing;
+        var cx = x + i * hSpacing;
         shapes += this._borderShape(shapeType, cx, y, radius);
         shapes += this._borderShape(shapeType, cx, y + h, radius);
       }
-      if (shape !== 'lined') {
-        var vStart = y + rx;
-        var vEnd = y + h - rx;
-        var vLen = vEnd - vStart;
-        var numV = Math.max(1, Math.round(vLen / spacing));
-        var vSpacing = vLen / numV;
-        for (var i = 0; i <= numV; i++) {
-          var cy = vStart + i * vSpacing;
-          shapes += this._borderShape(shapeType, x, cy, radius);
-          shapes += this._borderShape(shapeType, x + w, cy, radius);
-        }
+      return shapes;
+    }
+
+    if (trace.hasRounding) {
+      // Rounded: walk the trace perimeter, place shapes at each point
+      var points = SvgRenderer._walkTrace(trace, spacing);
+      for (var i = 0; i < points.length; i++) {
+        shapes += this._borderShape(shapeType, points[i].x, points[i].y, radius);
       }
     } else {
       // Straight: original full-edge iteration with corners
@@ -879,14 +873,12 @@ const SvgRenderer = {
         shapes += this._borderShape(shapeType, cx, y, radius);
         shapes += this._borderShape(shapeType, cx, y + h, radius);
       }
-      if (shape !== 'lined') {
-        var numV = Math.max(1, Math.round(h / spacing));
-        var vSpacing = h / numV;
-        for (var i = 1; i < numV; i++) {
-          var cy = y + i * vSpacing;
-          shapes += this._borderShape(shapeType, x, cy, radius);
-          shapes += this._borderShape(shapeType, x + w, cy, radius);
-        }
+      var numV = Math.max(1, Math.round(h / spacing));
+      var vSpacing = h / numV;
+      for (var i = 1; i < numV; i++) {
+        var cy = y + i * vSpacing;
+        shapes += this._borderShape(shapeType, x, cy, radius);
+        shapes += this._borderShape(shapeType, x + w, cy, radius);
       }
     }
 
@@ -1072,18 +1064,15 @@ const SvgRenderer = {
     return filterDef + paths;
   },
 
-  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape, cornerRx) {
+  _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape, cornerType) {
     var shapes = '';
     var half = size / 2;
     var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
     var isLined = (shape === 'lined');
-    var rx = 0;
-    if (typeof cornerRx === 'object' && cornerRx !== null && cornerRx.tl !== undefined) {
-      rx = Math.max(cornerRx.tl, cornerRx.tr, cornerRx.br, cornerRx.bl); // any corner rounded = use perimeter path
-    } else {
-      rx = cornerRx || 0;
-    }
+
+    // Build trace from corner type
+    var trace = SvgRenderer._generateTrace(x, y, w, h, cornerType || 'straight');
 
     function addShape(cx, cy, angle, rotDeg) {
       if (shapeType === 'circle') {
@@ -1096,155 +1085,84 @@ const SvgRenderer = {
       } else { // line — always draw horizontal, rotate if needed
         var rot = rotDeg || 0;
         var ln = '<rect x="' + (cx - dashLen / 2).toFixed(2) + '" y="' + (cy - half).toFixed(2) + '" width="' + dashLen + '" height="' + size + '" fill="' + color + '"';
-        // For straight edges: angle=0 means horizontal, angle=1 means vertical (90°)
         var totalRot = (angle === 1 ? 90 : 0) + rot;
         if (totalRot !== 0) ln += ' transform="rotate(' + totalRot.toFixed(1) + ',' + cx.toFixed(2) + ',' + cy.toFixed(2) + ')"';
         shapes += ln + '/>';
       }
     }
 
-    // Corners — skip for lined (no corners when no vertical sides) and when rounded
-    if (!isLined && rx === 0) {
-      if (shapeType === 'line') {
-        var arm = dashLen * 0.6;
-        // Top-left
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-        // Top-right
-        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-        // Bottom-left
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-        // Bottom-right
-        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-      } else {
-        addShape(x, y, 0);
-        addShape(x + w, y, 0);
-        addShape(x, y + h, 0);
-        addShape(x + w, y + h, 0);
-      }
-    }
-
-    if (rx > 0 && !isLined) {
-      // Support per-corner radii for mixed corners
-      var rxTR = rx, rxBR = rx, rxBL = rx, rxTL = rx;
-      if (typeof cornerRx === 'object' && cornerRx.tl !== undefined) {
-        rxTL = cornerRx.tl; rxTR = cornerRx.tr; rxBR = cornerRx.br; rxBL = cornerRx.bl;
-      }
-
-      // Stitch line with rounded corners: two-path approach
-      // 1. Straight edges: normal dash frequency
-      // 2. Corner arcs: shorter, denser dashes for smooth curve feel
-      if (shapeType === 'line') {
-        var F = function(n) { return n.toFixed(2); };
-        // Scale corner dash density to arc length — smaller radius = shorter dashes
-        var maxRx = Math.max(rxTL, rxTR, rxBR, rxBL);
-        var arcScale = Math.min(1, maxRx / 120); // 0..1 based on corner size
-        var cornerDashLen = dashLen * (0.15 + 0.25 * arcScale);  // 15-40% of edge dash
-        var cornerSpacing = spacing * (0.15 + 0.25 * arcScale);
-
-        // Path 1: straight edges only (no arcs)
-        var dEdges = '';
-        // Top edge
-        dEdges += 'M' + F(x + rxTL) + ',' + F(y) + ' H' + F(x + w - rxTR);
-        // Right edge
-        dEdges += ' M' + F(x + w) + ',' + F(y + rxTR) + ' V' + F(y + h - rxBR);
-        // Bottom edge
-        dEdges += ' M' + F(x + w - rxBR) + ',' + F(y + h) + ' H' + F(x + rxBL);
-        // Left edge
-        dEdges += ' M' + F(x) + ',' + F(y + h - rxBL) + ' V' + F(y + rxTL);
-        shapes += '<path d="' + dEdges + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
-
-        // Path 2: corner arcs only (denser dashes)
-        var dArcs = '';
-        if (rxTR > 0) dArcs += 'M' + F(x + w - rxTR) + ',' + F(y) + ' A' + F(rxTR) + ',' + F(rxTR) + ' 0 0 1 ' + F(x + w) + ',' + F(y + rxTR);
-        if (rxBR > 0) dArcs += ' M' + F(x + w) + ',' + F(y + h - rxBR) + ' A' + F(rxBR) + ',' + F(rxBR) + ' 0 0 1 ' + F(x + w - rxBR) + ',' + F(y + h);
-        if (rxBL > 0) dArcs += ' M' + F(x + rxBL) + ',' + F(y + h) + ' A' + F(rxBL) + ',' + F(rxBL) + ' 0 0 1 ' + F(x) + ',' + F(y + h - rxBL);
-        if (rxTL > 0) dArcs += ' M' + F(x) + ',' + F(y + rxTL) + ' A' + F(rxTL) + ',' + F(rxTL) + ' 0 0 1 ' + F(x + rxTL) + ',' + F(y);
-        if (dArcs) {
-          shapes += '<path d="' + dArcs.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + cornerDashLen.toFixed(1) + ' ' + cornerSpacing.toFixed(1) + '" stroke-linecap="butt"/>';
-        }
-        return shapes;
-      }
-
-      // Stitch dot/square: use perimeter-walking approach (rotation for squares)
-
-      var arcLenTR = rxTR * Math.PI / 2;
-      var arcLenBR = rxBR * Math.PI / 2;
-      var arcLenBL = rxBL * Math.PI / 2;
-      var arcLenTL = rxTL * Math.PI / 2;
-      var topEdge = w - rxTL - rxTR;
-      var rightEdge = h - rxTR - rxBR;
-      var bottomEdge = w - rxBR - rxBL;
-      var leftEdge = h - rxBL - rxTL;
-      var perimeter = topEdge + rightEdge + bottomEdge + leftEdge + arcLenTR + arcLenBR + arcLenBL + arcLenTL;
-      var numPoints = Math.max(4, Math.round(perimeter / step));
-      var ptStep = perimeter / numPoints;
-
-      // Walk the perimeter: top edge → TR arc → right edge → BR arc → bottom edge → BL arc → left edge → TL arc
-      var segments = [
-        {type:'h', len: topEdge, sx: x+rxTL, sy: y, ex: x+w-rxTR, ey: y},
-        {type:'arc', len: arcLenTR, cx: x+w-rxTR, cy: y+rxTR, startAngle: -Math.PI/2, endAngle: 0, r: rxTR},
-        {type:'v', len: rightEdge, sx: x+w, sy: y+rxTR, ex: x+w, ey: y+h-rxBR},
-        {type:'arc', len: arcLenBR, cx: x+w-rxBR, cy: y+h-rxBR, startAngle: 0, endAngle: Math.PI/2, r: rxBR},
-        {type:'h', len: bottomEdge, sx: x+w-rxBR, sy: y+h, ex: x+rxBL, ey: y+h},
-        {type:'arc', len: arcLenBL, cx: x+rxBL, cy: y+h-rxBL, startAngle: Math.PI/2, endAngle: Math.PI, r: rxBL},
-        {type:'v', len: leftEdge, sx: x, sy: y+h-rxBL, ex: x, ey: y+rxTL},
-        {type:'arc', len: arcLenTL, cx: x+rxTL, cy: y+rxTL, startAngle: Math.PI, endAngle: Math.PI*1.5, r: rxTL}
-      ];
-
-      function getPointOnSegment(seg, t) {
-        if (seg.type === 'h' || seg.type === 'v') {
-          return {x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t, angle: seg.type === 'h' ? 0 : 1, rotDeg: 0};
-        } else {
-          var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
-          // Tangent angle: perpendicular to radius = angle + 90°
-          var tangentDeg = (a + Math.PI / 2) * (180 / Math.PI);
-          return {x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a), angle: 0, rotDeg: tangentDeg};
-        }
-      }
-
-      var dist = 0;
-      for (var pi = 0; pi < numPoints; pi++) {
-        var targetDist = pi * ptStep;
-        // Find which segment this point falls in
-        var cumDist = 0;
-        for (var si = 0; si < segments.length; si++) {
-          if (cumDist + segments[si].len >= targetDist || si === segments.length - 1) {
-            var localT = segments[si].len > 0 ? (targetDist - cumDist) / segments[si].len : 0;
-            localT = Math.max(0, Math.min(1, localT));
-            var pt = getPointOnSegment(segments[si], localT);
-            addShape(pt.x, pt.y, pt.angle, pt.rotDeg);
-            break;
-          }
-          cumDist += segments[si].len;
-        }
-      }
-    } else if (rx > 0 && isLined) {
-      // Lined + rounded: just shorten horizontal edges
-      var hStart = x + rx;
-      var hEnd = x + w - rx;
-      var hLen = hEnd - hStart;
-      var numH = Math.max(1, Math.round(hLen / step));
-      var hStep2 = hLen / numH;
-      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep2, y, 0);
-      for (var i = 0; i <= numH; i++) addShape(hStart + i * hStep2, y + h, 0);
-    } else {
-      // Straight: original iteration (skip corners, already handled above)
+    if (isLined) {
+      // Lined: top + bottom edges only, no corners
       var numH = Math.max(1, Math.round(w / step));
       var hStep = w / numH;
       for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
       for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
-      if (!isLined) {
-        var numV = Math.max(1, Math.round(h / step));
-        var vStep = h / numV;
-        for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
-        for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
-      }
+      return shapes;
     }
 
+    if (!trace.hasRounding) {
+      // Straight corners: original behavior with L-corner pieces
+      if (shapeType === 'line') {
+        var arm = dashLen * 0.6;
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
+        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
+      } else {
+        addShape(x, y, 0); addShape(x + w, y, 0);
+        addShape(x, y + h, 0); addShape(x + w, y + h, 0);
+      }
+      // Straight edges
+      var numH = Math.max(1, Math.round(w / step));
+      var hStep = w / numH;
+      for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
+      for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
+      var numV = Math.max(1, Math.round(h / step));
+      var vStep = h / numV;
+      for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
+      for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
+      return shapes;
+    }
+
+    // ---- Rounded corners: use trace ----
+
+    // Stitch line: two-path dasharray approach (edges + arcs)
+    if (shapeType === 'line') {
+      var F = function(n) { return n.toFixed(2); };
+      var maxRx = Math.max(trace.rxTL, trace.rxTR, trace.rxBR, trace.rxBL);
+      var arcScale = Math.min(1, maxRx / 120);
+      var cornerDashLen = dashLen * (0.15 + 0.25 * arcScale);
+      var cornerSpacing = spacing * (0.15 + 0.25 * arcScale);
+
+      // Path 1: straight edges
+      var dEdges = '';
+      dEdges += 'M' + F(x + trace.rxTL) + ',' + F(y) + ' H' + F(x + w - trace.rxTR);
+      dEdges += ' M' + F(x + w) + ',' + F(y + trace.rxTR) + ' V' + F(y + h - trace.rxBR);
+      dEdges += ' M' + F(x + w - trace.rxBR) + ',' + F(y + h) + ' H' + F(x + trace.rxBL);
+      dEdges += ' M' + F(x) + ',' + F(y + h - trace.rxBL) + ' V' + F(y + trace.rxTL);
+      shapes += '<path d="' + dEdges + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
+
+      // Path 2: corner arcs (denser dashes)
+      var dArcs = '';
+      if (trace.rxTR > 0) dArcs += 'M' + F(x+w-trace.rxTR) + ',' + F(y) + ' A' + F(trace.rxTR) + ',' + F(trace.rxTR) + ' 0 0 1 ' + F(x+w) + ',' + F(y+trace.rxTR);
+      if (trace.rxBR > 0) dArcs += ' M' + F(x+w) + ',' + F(y+h-trace.rxBR) + ' A' + F(trace.rxBR) + ',' + F(trace.rxBR) + ' 0 0 1 ' + F(x+w-trace.rxBR) + ',' + F(y+h);
+      if (trace.rxBL > 0) dArcs += ' M' + F(x+trace.rxBL) + ',' + F(y+h) + ' A' + F(trace.rxBL) + ',' + F(trace.rxBL) + ' 0 0 1 ' + F(x) + ',' + F(y+h-trace.rxBL);
+      if (trace.rxTL > 0) dArcs += ' M' + F(x) + ',' + F(y+trace.rxTL) + ' A' + F(trace.rxTL) + ',' + F(trace.rxTL) + ' 0 0 1 ' + F(x+trace.rxTL) + ',' + F(y);
+      if (dArcs) {
+        shapes += '<path d="' + dArcs.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + cornerDashLen.toFixed(1) + ' ' + cornerSpacing.toFixed(1) + '" stroke-linecap="butt"/>';
+      }
+      return shapes;
+    }
+
+    // Stitch dot/square: walk the trace perimeter
+    var points = SvgRenderer._walkTrace(trace, step);
+    for (var i = 0; i < points.length; i++) {
+      addShape(points[i].x, points[i].y, points[i].angle, points[i].rotDeg);
+    }
     return shapes;
   },
 
@@ -3601,7 +3519,7 @@ const SvgRenderer = {
         var shapesHtml = SvgRenderer._generateBorderShapes(
           borderShapeData.x, borderShapeData.y,
           borderShapeData.w, borderShapeData.h,
-          bShape, bRadius, bSpacingMult, stampShape, decoCornerRx
+          bShape, bRadius, bSpacingMult, stampShape, cornerType
         );
         result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
       }
@@ -3617,7 +3535,7 @@ const SvgRenderer = {
         var stitchHtml = SvgRenderer._generateStitchShapes(
           stitchData.x - sOffset, stitchData.y - sOffset,
           stitchData.w + sOffset * 2, stitchData.h + sOffset * 2,
-          sType, sSize, sSpacing, stitchData.color, stampShape, decoCornerRx
+          sType, sSize, sSpacing, stitchData.color, stampShape, cornerType
         );
         result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
         // Tag SVG so cropViewBoxToStamp can add stitch margin
