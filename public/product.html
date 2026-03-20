@@ -53,8 +53,6 @@
   <section class="product-details">
     <a href="/" class="product-back" id="product-back">&larr; Back to gallery</a>
 
-    <div class="product-description" id="product-description">Loading...</div>
-
     <!-- Customize bar (horizontal, gallery filter bar style) -->
     <div class="product-customize-bar">
       <div id="product-template-info" class="product-template-info" style="display:none;"></div>
@@ -184,15 +182,27 @@
       <input type="hidden" id="product-shape-value" value="rectangle">
     </div>
 
-    <div class="product-layout">
-      <!-- Left: Large preview -->
-      <div class="product-preview" id="product-preview">
+    <div class="product-layout" style="flex-direction:column;align-items:center;">
+      <!-- Stamp preview -->
+      <div class="product-preview" id="product-preview" style="max-width:700px;width:100%;">
         <div class="stamp-loading">Loading preview...</div>
       </div>
-      <button id="btn-mark-incompat" style="display:none;margin:8px 0;padding:6px 16px;background:#ff4444;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.8rem;">Mark as incompatible</button>
 
-      <!-- Right: Download options -->
-      <div class="product-download-panel">
+      <!-- Description (updates live with param changes) -->
+      <div class="product-description-live" id="product-description" style="text-align:center;font-size:0.85rem;color:#555;margin:8px 0 12px;max-width:700px;"></div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:12px;margin-bottom:20px;">
+        <button class="btn btn-primary" id="btn-download-open" style="padding:10px 32px;font-size:1rem;border-radius:6px;">Download</button>
+        <button class="btn" id="btn-save" style="padding:10px 32px;font-size:1rem;border-radius:6px;background:#555;color:#fff;border:none;cursor:pointer;">Save</button>
+      </div>
+
+      <!-- Download popup (hidden by default) -->
+      <div id="download-popup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:24px;z-index:1000;min-width:320px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <span style="font-weight:700;font-size:1.1rem;">Download options</span>
+          <button id="download-popup-close" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#999;">&times;</button>
+        </div>
         <div class="product-download-section" id="product-download-section">
           <div class="download-formats">
             <div class="download-format-col">
@@ -222,6 +232,8 @@
           </div>
         </div>
       </div>
+      <!-- Download popup backdrop -->
+      <div id="download-popup-backdrop" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:999;"></div>
     </div>
 
     <!-- Auth Modal (Login / Sign Up) -->
@@ -996,40 +1008,41 @@
       // Download confirm
       document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
 
-      // Mark incompatible button (admin-only)
-      (async function() {
+      // Download popup open/close
+      document.getElementById('btn-download-open').addEventListener('click', function() {
+        document.getElementById('download-popup').style.display = 'block';
+        document.getElementById('download-popup-backdrop').style.display = 'block';
+      });
+      document.getElementById('download-popup-close').addEventListener('click', function() {
+        document.getElementById('download-popup').style.display = 'none';
+        document.getElementById('download-popup-backdrop').style.display = 'none';
+      });
+      document.getElementById('download-popup-backdrop').addEventListener('click', function() {
+        document.getElementById('download-popup').style.display = 'none';
+        this.style.display = 'none';
+      });
+
+      // Save button — shows auth modal for anonymous users
+      document.getElementById('btn-save').addEventListener('click', async function() {
         try {
           var { data: { user } } = await sb.auth.getUser();
-          if (user && user.email === 'juliandragomirul@gmail.com') {
-            var markBtn = document.getElementById('btn-mark-incompat');
-            markBtn.style.display = 'block';
-            markBtn.addEventListener('click', async function() {
-              var combo = {
-                style: currentBorderStyle || 'simple',
-                corners: currentCornerStyle || 'straight',
-                frames: currentFrame || 'single',
-                fill: currentFill || 'empty'
-              };
-              try {
-                var resp = await fetch('/api/admin/param-compat', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(combo)
-                });
-                var result = await resp.json();
-                markBtn.textContent = 'Marked! (' + result.count + ' total)';
-                markBtn.style.background = '#666';
-                setTimeout(function() {
-                  markBtn.textContent = 'Mark as incompatible';
-                  markBtn.style.background = '#ff4444';
-                }, 2000);
-              } catch (e) {
-                markBtn.textContent = 'Error: ' + e.message;
-              }
-            });
+          if (user) {
+            // Logged in — save functionality (TODO: implement later)
+            this.textContent = 'Saved!';
+            this.style.background = '#4CAF50';
+            setTimeout(function() {
+              document.getElementById('btn-save').textContent = 'Save';
+              document.getElementById('btn-save').style.background = '#555';
+            }, 2000);
+          } else {
+            // Not logged in — show auth modal
+            document.getElementById('auth-modal').style.display = 'flex';
           }
-        } catch (e) { /* not logged in */ }
-      })();
+        } catch (e) {
+          // Auth error — show auth modal
+          document.getElementById('auth-modal').style.display = 'flex';
+        }
+      });
 
       // Credits modal close
       document.getElementById('credits-modal-close').addEventListener('click', function() {
