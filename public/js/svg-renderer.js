@@ -5316,8 +5316,7 @@ const SvgRenderer = {
         if (wswM) wavySw = parseFloat(wswM[1]);
       }
     }
-    // Filled stitch is already visually dense — skip double frame entirely
-    if (bi.stitch && isFull) return svgStr;
+    // Filled stitch: allow inner frame for "3-frame" look (stitch outer + plain inner + fill)
     var innerSw = Math.max(4, Math.round(osw * 0.36));
     if (bi.brush) innerSw = Math.max(6, Math.round(osw * 0.5));
     if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.3));
