@@ -106,14 +106,18 @@
         try {
           var container = document.getElementById('results-batches');
           var text = document.getElementById('stamp-input').value.trim();
-          sessionStorage.setItem('stx-gallery-cache', JSON.stringify({
+          var cacheData = JSON.stringify({
             text: text,
             html: container.innerHTML,
             scrollY: window.scrollY,
             generatedCount: Gallery.generatedCount,
             totalCombos: Gallery.totalCombos
-          }));
-        } catch (e) { /* sessionStorage full or unavailable */ }
+          });
+          sessionStorage.setItem('stx-gallery-cache', cacheData);
+          console.log('[CACHE] Saved gallery cache: ' + (cacheData.length / 1024).toFixed(0) + 'KB for text="' + text + '"');
+        } catch (err) {
+          console.warn('[CACHE] Failed to save gallery cache:', err.message);
+        }
         // Let the default link navigation proceed
       }
     });
@@ -162,6 +166,7 @@
       // Check for cached gallery (instant restore from product page back-navigation)
       var cached = null;
       try { cached = JSON.parse(sessionStorage.getItem('stx-gallery-cache')); } catch(e) {}
+      console.log('[CACHE] Restore check: cached=' + !!cached + ' cachedText=' + (cached ? cached.text : 'N/A') + ' urlText=' + textParam + ' match=' + (cached && cached.text === textParam));
       if (cached && cached.text === textParam && cached.html) {
         // Instant restore — no regeneration!
         Gallery.currentText = textParam;
