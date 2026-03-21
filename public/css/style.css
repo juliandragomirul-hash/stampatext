@@ -762,9 +762,9 @@ body.gallery-active .stamp-hero-input-wrapper {
 
 /* ========== STAMP RESULTS ========== */
 .stamp-results {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 0 0.5rem;
+  padding: 0 2rem;
 }
 
 .gallery-count {
