@@ -982,24 +982,98 @@
         this.style.display = 'none';
       });
 
-      // Save button — shows auth modal for anonymous users
-      document.getElementById('btn-save').addEventListener('click', async function() {
+      // ---- Save button logic ----
+      var userSaves = [];
+      var saveSession = null;
+
+      function getCurrentComboParams() {
+        return 'id=' + encodeURIComponent(tplId) +
+          '&text=' + encodeURIComponent(userText) +
+          '&color=' + currentColor.replace('#', '') +
+          '&font=' + encodeURIComponent(currentFont) +
+          '&frame=' + currentFrame +
+          '&fill=' + currentFill +
+          '&shape=' + currentShape +
+          '&tilt=' + currentTilt +
+          '&style=' + currentBorderStyle +
+          '&corners=' + (currentCornerStyle || 'straight') +
+          '&texture=' + encodeURIComponent(currentTexture || '') +
+          '&rows=' + (currentForceLines || 0);
+      }
+
+      function isComboSaved() {
+        var current = getCurrentComboParams();
+        return userSaves.some(function(s) { return s.params === current; });
+      }
+
+      function updateSaveButton() {
+        var btn = document.getElementById('btn-save');
+        if (!saveSession) {
+          btn.disabled = false;
+          btn.textContent = 'Save';
+          btn.style.opacity = '1';
+          return;
+        }
+        if (isComboSaved()) {
+          btn.disabled = true;
+          btn.textContent = 'Saved';
+          btn.style.opacity = '0.5';
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Save';
+          btn.style.opacity = '1';
+        }
+      }
+
+      // Load user's saves on page load
+      (async function() {
         try {
-          var { data: { user } } = await sb.auth.getUser();
-          if (user) {
-            // Logged in — save functionality (TODO: implement later)
-            this.textContent = 'Saved!';
-            this.style.background = '#4CAF50';
-            setTimeout(function() {
-              document.getElementById('btn-save').textContent = 'Save';
-              document.getElementById('btn-save').style.background = '#555';
-            }, 2000);
+          var sess = (await sb.auth.getSession()).data.session;
+          if (sess) {
+            saveSession = sess;
+            var resp = await fetch('/api/saves', {
+              headers: { 'Authorization': 'Bearer ' + sess.access_token }
+            });
+            if (resp.ok) userSaves = await resp.json();
+            updateSaveButton();
+          }
+        } catch (e) { /* not logged in */ }
+      })();
+
+      document.getElementById('btn-save').addEventListener('click', async function() {
+        var btn = this;
+        try {
+          if (!saveSession) {
+            var sess = (await sb.auth.getSession()).data.session;
+            if (!sess) {
+              document.getElementById('auth-modal').style.display = 'flex';
+              return;
+            }
+            saveSession = sess;
+          }
+          // Save the combo
+          var params = getCurrentComboParams();
+          var descEl = document.getElementById('product-description');
+          var description = descEl ? descEl.textContent : '';
+          btn.disabled = true;
+          btn.textContent = 'Saving...';
+          var resp = await fetch('/api/saves', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + saveSession.access_token
+            },
+            body: JSON.stringify({ params: params, description: description })
+          });
+          if (resp.ok) {
+            var saved = await resp.json();
+            userSaves.push(saved);
+            updateSaveButton();
           } else {
-            // Not logged in — show auth modal
-            document.getElementById('auth-modal').style.display = 'flex';
+            btn.textContent = 'Error';
+            setTimeout(function() { updateSaveButton(); }, 2000);
           }
         } catch (e) {
-          // Auth error — show auth modal
           document.getElementById('auth-modal').style.display = 'flex';
         }
       });
@@ -1259,6 +1333,7 @@
         } finally {
           previewEl.style.opacity = '1';
           isProcessing = false;
+          if (typeof updateSaveButton === 'function') updateSaveButton();
         }
       }
 

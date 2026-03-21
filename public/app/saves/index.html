@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Saved Designs — StampaText</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .saves-container { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
+    .saves-header { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+    .saves-empty { color: #888; font-style: italic; margin: 2rem 0; }
+    .saves-day-group { margin-bottom: 1.5rem; }
+    .saves-day-label { font-size: 0.85rem; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid #eee; }
+    .saves-item { display: flex; align-items: center; gap: 8px; padding: 0.5rem 0; }
+    .saves-item a { color: #333; text-decoration: none; font-size: 0.9rem; line-height: 1.4; flex: 1; }
+    .saves-item a:hover { color: #dc2626; text-decoration: underline; }
+    .saves-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
+    .saves-delete:hover { color: #dc2626; background: #fef2f2; }
+    .saves-back { display: inline-block; margin-bottom: 1rem; color: #666; text-decoration: none; font-size: 0.9rem; }
+    .saves-back:hover { color: #333; }
+  </style>
+</head>
+<body>
+  <div class="saves-container">
+    <a href="/" class="saves-back">&larr; Back to StampaText</a>
+    <div class="saves-header">My Saved Designs</div>
+    <div id="saves-list">
+      <div class="saves-empty">Loading...</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script>
+    (async function() {
+      // Check auth
+      var session = (await sb.auth.getSession()).data.session;
+      if (!session) {
+        window.location.href = '/?login=1';
+        return;
+      }
+
+      // Fetch saves
+      var resp = await fetch('/api/saves', {
+        headers: { 'Authorization': 'Bearer ' + session.access_token }
+      });
+      var saves = await resp.json();
+      var container = document.getElementById('saves-list');
+
+      if (!saves || saves.length === 0) {
+        container.innerHTML = '<div class="saves-empty">No saved designs yet. Go to a stamp and click Save!</div>';
+        return;
+      }
+
+      // Group by day
+      var today = new Date().toISOString().split('T')[0];
+      var yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      var groups = {};
+      saves.forEach(function(s) {
+        var day = new Date(s.created_at).toISOString().split('T')[0];
+        if (!groups[day]) groups[day] = [];
+        groups[day].push(s);
+      });
+
+      function formatDay(dateStr) {
+        if (dateStr === today) return 'Today';
+        if (dateStr === yesterday) return 'Yesterday';
+        var d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      }
+
+      // Render
+      var html = '';
+      var days = Object.keys(groups).sort().reverse();
+      days.forEach(function(day) {
+        html += '<div class="saves-day-group">';
+        html += '<div class="saves-day-label">' + formatDay(day) + '</div>';
+        groups[day].forEach(function(s) {
+          var href = '/product.html?' + s.params;
+          var desc = s.description || s.params;
+          html += '<div class="saves-item" data-id="' + s.id + '">';
+          html += '<a href="' + href + '">' + desc + '</a>';
+          html += '<button class="saves-delete" title="Delete">&times;</button>';
+          html += '</div>';
+        });
+        html += '</div>';
+      });
+      container.innerHTML = html;
+
+      // Delete handler
+      container.addEventListener('click', async function(e) {
+        var btn = e.target.closest('.saves-delete');
+        if (!btn) return;
+        var item = btn.closest('.saves-item');
+        var id = item.dataset.id;
+        if (!id) return;
+        btn.textContent = '...';
+        var resp = await fetch('/api/saves/' + id, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + session.access_token }
+        });
+        if (resp.ok) {
+          item.remove();
+          // Check if day group is now empty
+          var dayGroup = container.querySelector('.saves-day-group');
+          if (dayGroup && !dayGroup.querySelector('.saves-item')) {
+            dayGroup.remove();
+          }
+          // Check if all empty
+          if (!container.querySelector('.saves-item')) {
+            container.innerHTML = '<div class="saves-empty">No saved designs yet. Go to a stamp and click Save!</div>';
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

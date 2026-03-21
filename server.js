@@ -362,6 +362,70 @@ app.delete('/api/admin/param-compat', (req, res) => {
   }
 });
 
+// ---- API: Saved designs ----
+// Helper: verify auth token and return user
+async function verifyAuth(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
+// POST /api/saves — Save a combo
+app.post('/api/saves', async (req, res) => {
+  try {
+    const user = await verifyAuth(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const { params, description } = req.body;
+    if (!params) return res.status(400).json({ error: 'Missing params' });
+    const { data, error } = await supabase
+      .from('saved_designs')
+      .insert({ user_id: user.id, params, description: description || '' })
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save' });
+  }
+});
+
+// GET /api/saves — List user's saves
+app.get('/api/saves', async (req, res) => {
+  try {
+    const user = await verifyAuth(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const { data, error } = await supabase
+      .from('saved_designs')
+      .select('id, params, description, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch saves' });
+  }
+});
+
+// DELETE /api/saves/:id — Delete a save
+app.delete('/api/saves/:id', async (req, res) => {
+  try {
+    const user = await verifyAuth(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const { error } = await supabase
+      .from('saved_designs')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', user.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete' });
+  }
+});
+
 // ---- HTML routes ----
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'index.html'));
@@ -369,6 +433,10 @@ app.get('/app', (req, res) => {
 
 app.get('/app/profile', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'profile', 'index.html'));
+});
+
+app.get('/app/saves', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app', 'saves', 'index.html'));
 });
 
 app.get('/admin', (req, res) => {
