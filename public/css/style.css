@@ -700,7 +700,8 @@ a:hover {
 .stamp-hero-subtitle {
   font-size: 1.2rem;
   color: #888;
-  margin-bottom: 3.6rem;
+  margin-top: 3.6rem;
+  margin-bottom: 0;
 }
 
 .stamp-hero-input-wrapper {
