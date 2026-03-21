@@ -1899,5 +1899,186 @@ const Gallery = {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  // ========== NEW GALLERY: Shuffle Bag Randomized Combos ==========
+
+  // Param pools for randomization
+  COMBO_POOLS: {
+    color: ['#000000','#8B0000','#CC0000','#FF0000','#2D572C','#32CD32','#003366','#1E90FF','#4B0082','#FF6600','#DAA520','#FF1493'],
+    corners: ['straight','soft_round','medium_round','strong_round','mixed_top_straight','mixed_top_round','mixed_diag_down','mixed_diag_up'],
+    frames: ['single','double','split'],
+    fill: ['empty'],
+    texture: ['','grungy','scratched','noise'],
+    tilt: [0, -10]
+  },
+
+  comboBags: {},
+  generatedCount: 0,
+  lastCombo: null,
+  totalCombos: 0,
+
+  _shuffle: function(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  },
+
+  resetBags: function() {
+    var self = this;
+    this.comboBags = {};
+    Object.keys(this.COMBO_POOLS).forEach(function(key) {
+      self.comboBags[key] = self._shuffle(self.COMBO_POOLS[key].slice());
+    });
+    this.generatedCount = 0;
+    this.lastCombo = null;
+    // Total = product of all pool sizes × number of base templates
+    this.totalCombos = 1;
+    Object.keys(this.COMBO_POOLS).forEach(function(key) {
+      self.totalCombos *= self.COMBO_POOLS[key].length;
+    });
+    this.totalCombos *= Math.max(1, this.baseResults.length);
+  },
+
+  drawCombo: function() {
+    var combo = {};
+    var self = this;
+    Object.keys(this.COMBO_POOLS).forEach(function(key) {
+      if (self.comboBags[key].length === 0) {
+        self.comboBags[key] = self._shuffle(self.COMBO_POOLS[key].slice());
+      }
+      var pick = self.comboBags[key].pop();
+      // Adjacency contrast: color, font (via template), style must differ from previous
+      if (self.lastCombo && pick === self.lastCombo[key] && self.comboBags[key].length > 0) {
+        self.comboBags[key].unshift(pick);
+        pick = self.comboBags[key].pop();
+      }
+      combo[key] = pick;
+    });
+    // Pick a random base template (provides font + style variety)
+    var baseIdx = Math.floor(Math.random() * this.baseResults.length);
+    // Ensure different template from previous
+    if (this.lastCombo && this.baseResults.length > 1) {
+      var attempts = 0;
+      while (baseIdx === this.lastCombo._baseIdx && attempts < 5) {
+        baseIdx = Math.floor(Math.random() * this.baseResults.length);
+        attempts++;
+      }
+    }
+    combo._baseIdx = baseIdx;
+    return combo;
+  },
+
+  async generateBatch(count) {
+    var container = document.getElementById('results-batches');
+    var self = this;
+    var remaining = this.totalCombos - this.generatedCount;
+    var actualCount = Math.min(count, remaining);
+    if (actualCount <= 0) return;
+
+    // Create grid for this batch
+    var grid = document.createElement('div');
+    grid.className = 'stamp-results-grid';
+    container.appendChild(grid);
+
+    for (var i = 0; i < actualCount; i++) {
+      var combo = this.drawCombo();
+      this.lastCombo = combo;
+      this.generatedCount++;
+
+      var base = this.baseResults[combo._baseIdx];
+      if (!base) continue;
+
+      try {
+        // Start from base SVG (already autoFit'd with a font)
+        var svg = base.svgString;
+
+        // Apply color
+        svg = SvgRenderer.colorize(svg, combo.color);
+        svg = SvgRenderer.applyThinStroke(svg);
+        svg = SvgRenderer.cropViewBoxToStamp(svg);
+
+        // Apply corners
+        if (combo.corners && combo.corners !== 'straight') {
+          svg = SvgRenderer.applyCornerRadius(svg, combo.corners);
+        } else {
+          svg = svg.replace(/\s*rx=["'][\d.]+["']/gi, '').replace(/\s*ry=["'][\d.]+["']/gi, '');
+        }
+
+        // Apply frame
+        var bi = SvgRenderer.detectBorderType(svg);
+        SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: combo.fill });
+        if (combo.frames === 'double') {
+          svg = SvgRenderer.addDoubleFrame(svg, bi, combo.color, 'double');
+        } else if (combo.frames === 'split') {
+          svg = SvgRenderer.addSplitBorder(svg, bi);
+        }
+
+        // Apply texture
+        if (combo.texture) {
+          try { svg = await SvgRenderer.applyTexture(svg, combo.texture); } catch(e) {}
+        }
+
+        // Apply watermark
+        svg = SvgRenderer.addWatermark(svg);
+
+        // Apply tilt
+        if (combo.tilt !== 0) {
+          svg = SvgRenderer.applyTilt(svg, combo.tilt);
+        }
+
+        // Build product URL with all combo params
+        var productUrl = '/product.html?id=' + encodeURIComponent(base.templateId) +
+          '&text=' + encodeURIComponent(self.currentText) +
+          '&color=' + encodeURIComponent(combo.color.replace('#', '')) +
+          '&font=' + encodeURIComponent(base.fontKey || 'Oswald') +
+          '&frame=' + encodeURIComponent(combo.frames) +
+          '&fill=' + encodeURIComponent(combo.fill) +
+          '&shape=rectangle' +
+          '&tilt=' + combo.tilt +
+          (combo.texture ? '&texture=' + encodeURIComponent(combo.texture) : '') +
+          '&corners=' + encodeURIComponent(combo.corners);
+
+        // Create card
+        var card = document.createElement('div');
+        card.className = 'stamp-card';
+
+        var previewLink = document.createElement('a');
+        previewLink.className = 'stamp-card-preview';
+        previewLink.href = productUrl;
+        var img = SvgRenderer.createSvgImage(svg);
+        previewLink.appendChild(img);
+        card.appendChild(previewLink);
+        grid.appendChild(card);
+      } catch (err) {
+        console.warn('[Gallery] Combo render failed:', err.message);
+      }
+    }
+
+    // Update "Show more" button + remaining count
+    this.updateShowMore();
+  },
+
+  updateShowMore: function() {
+    var remaining = this.totalCombos - this.generatedCount;
+    var moreDiv = document.getElementById('gallery-load-more');
+    if (!moreDiv) {
+      moreDiv = document.createElement('div');
+      moreDiv.id = 'gallery-load-more';
+      moreDiv.style.cssText = 'text-align:center;padding:1.5rem 0;';
+      document.getElementById('results-batches').appendChild(moreDiv);
+    }
+    if (remaining > 0) {
+      moreDiv.innerHTML = '<button class="btn btn-primary" id="btn-show-more" style="padding:10px 30px;font-size:1rem;">Show 5 more</button>' +
+        '<div style="color:#888;font-size:0.85rem;margin-top:0.5rem;">Available remaining: ' + remaining.toLocaleString() + '</div>';
+      var self = this;
+      document.getElementById('btn-show-more').addEventListener('click', function() {
+        self.generateBatch(5);
+      });
+    } else {
+      moreDiv.innerHTML = '<div style="color:#888;font-size:0.85rem;">All combinations shown!</div>';
+    }
   }
 };

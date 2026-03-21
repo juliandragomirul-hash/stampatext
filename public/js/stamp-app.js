@@ -248,15 +248,11 @@
 
     try {
       await Gallery.processAll(text);
-      await Gallery.showInitialRandom();
+      Gallery.resetBags();
+      await Gallery.generateBatch(12);
 
-      // Update URL so back navigation restores search (include active shape + rows)
-      var activeShape = Gallery.activeShape || 'rectangle';
-      var newUrl = '/?text=' + encodeURIComponent(text) + '&shape=' + activeShape;
-      var rowsSelect = document.getElementById('filter-rows');
-      if (rowsSelect && rowsSelect.value && activeShape === 'square') {
-        newUrl += '&rows=' + rowsSelect.value;
-      }
+      // Update URL
+      var newUrl = '/?text=' + encodeURIComponent(text);
       history.replaceState(null, '', newUrl);
     } catch (err) {
       console.error('Stamp error:', err);
