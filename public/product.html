@@ -607,51 +607,55 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style icons using real pipeline generators with shape='lined'
-          var IW = 107, IH = 16, ic = '#cc0000';
-          // Fake rect dimensions for generator calls (tuned for icon size)
-          var gx = 0, gy = 8, gw = 800, gh = 100, gsw = 30;
-          var borderIcons = {};
-          // Plain: simple line
-          borderIcons.simple = '<line x1="0" y1="8" x2="800" y2="8" stroke="'+ic+'" stroke-width="'+gsw+'"/>';
-          // Stitch line: use dasharray on path (same as real pipeline)
-          var slDash = Math.round(gsw * 3.5), slGap = Math.round(gsw * 2);
-          borderIcons.stitch_line = '<path d="M0,8 H800" fill="none" stroke="'+ic+'" stroke-width="'+gsw+'" stroke-dasharray="'+slDash+' '+slGap+'" stroke-linecap="butt"/>';
-          // Stitch square: real generator
-          borderIcons.stitch_square = SvgRenderer._generateStitchShapes(gx, gy, gw, gh, 'square', gsw * 0.7, gsw * 1.8, ic, 'lined', 'straight', 0);
-          // Stitch dot: real generator
-          borderIcons.stitch_circle = SvgRenderer._generateStitchShapes(gx, gy, gw, gh, 'circle', gsw * 0.6, gsw * 1.6, ic, 'lined', 'straight', 0);
-          // Sawtooth: real generator (circle=diamond shapes along top)
-          borderIcons.sawtooth = SvgRenderer._generateBorderShapes(gx, gy, gw, gh, 'circle', gsw * 0.5, 2.0, 'lined', 'straight');
-          // Perforated: real generator (circle holes)
-          borderIcons.perforated = '<rect x="0" y="'+(-gsw*0.5)+'" width="800" height="'+(gsw*2)+'" fill="'+ic+'"/>' +
-            SvgRenderer._generateBorderShapes(gx, gy, gw, gh, 'circle', gsw * 0.5, 2.5, 'lined', 'straight').replace(/fill="[^"]*"/g, 'fill="#FFFFFF"');
-          // Spaced perforated: same but wider spacing
-          borderIcons.perforated_spaced = '<rect x="0" y="'+(-gsw*0.5)+'" width="800" height="'+(gsw*2)+'" fill="'+ic+'"/>' +
-            SvgRenderer._generateBorderShapes(gx, gy, gw, gh, 'circle', gsw * 0.5, 5.0, 'lined', 'straight').replace(/fill="[^"]*"/g, 'fill="#FFFFFF"');
-          // Wavy: real generator
-          borderIcons.wavy = SvgRenderer._generateWavyBorder(gx, gy, gw, gh, ic, gsw, 'gentle', false, 'lined');
-          // Zigzag: real generator
-          borderIcons.zigzag = SvgRenderer._generateZigzagBorder(gx, gy, gw, gh, ic, gsw, false, 'lined');
-          // Torn edge: line with displacement filter
-          borderIcons.torn_edge = '<defs><filter id="torn-ic" x="-5%" y="-50%" width="110%" height="200%"><feTurbulence baseFrequency="0.03" numOctaves="4" seed="2"/><feDisplacementMap in="SourceGraphic" scale="8"/></filter></defs>' +
-            '<line x1="0" y1="8" x2="800" y2="8" stroke="'+ic+'" stroke-width="'+gsw+'" filter="url(#torn-ic)"/>';
-          // Chalk: line with chalk-like filter
-          borderIcons.chalk = '<defs><filter id="chalk-ic" x="-5%" y="-50%" width="110%" height="200%"><feTurbulence baseFrequency="0.06" numOctaves="5" seed="3"/><feDisplacementMap in="SourceGraphic" scale="6"/><feComponentTransfer><feFuncA type="discrete" tableValues="0 1 1 0.9 1 0 1 0.8 1 0"/></feComponentTransfer></filter></defs>' +
-            '<line x1="0" y1="8" x2="800" y2="8" stroke="'+ic+'" stroke-width="'+gsw+'" filter="url(#chalk-ic)"/>';
+          // Generate border style icons: crop 100×20px from top edge center of real rendered stamps
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
-            borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
+            var savedRaw = rawCleanedSvg;
+            var savedZones = storedZones;
+            var savedBorderType = templateBorderType;
+            var borderItems = borderList.querySelectorAll('.filter-bar-dropdown-item');
+            // Generate icons sequentially (each mutates rawCleanedSvg)
+            for (var bi = 0; bi < borderItems.length; bi++) {
+              var item = borderItems[bi];
               var bt = item.dataset.value;
-              var icon = borderIcons[bt];
-              if (!icon) return;
-              item.textContent = '';
-              item.style.cssText += 'padding:3px 6px;';
-              var sample = document.createElement('div');
-              sample.style.cssText = 'width:'+IW+'px;height:'+IH+'px;overflow:hidden;';
-              sample.innerHTML = '<svg viewBox="-10 -20 820 56" width="'+IW+'" height="'+IH+'" preserveAspectRatio="none">'+icon+'</svg>';
-              item.appendChild(sample);
-            });
+              var entry = allTemplatesByBorder[bt];
+              if (!entry) continue;
+              try {
+                rawCleanedSvg = entry.svg;
+                storedZones = entry.zones;
+                templateBorderType = bt;
+                var iconSvg = await rebuildWithFont(currentFont, 'single');
+                iconSvg = SvgRenderer.colorize(iconSvg, '#cc0000');
+                iconSvg = SvgRenderer.applyThinStroke(iconSvg);
+                iconSvg = SvgRenderer.cropViewBoxToStamp(iconSvg);
+                // Remove text
+                iconSvg = iconSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
+                // Crop viewBox to top edge center strip
+                var vbM = iconSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
+                if (vbM) {
+                  var vx = parseFloat(vbM[1]), vy = parseFloat(vbM[2]);
+                  var vw = parseFloat(vbM[3]), vh = parseFloat(vbM[4]);
+                  var cropW = vw * 0.6;
+                  var cropH = vh * 0.12;
+                  var cropX = vx + (vw - cropW) / 2;
+                  var cropY = vy - cropH * 0.15;
+                  iconSvg = iconSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + cropX.toFixed(1) + ' ' + cropY.toFixed(1) + ' ' + cropW.toFixed(1) + ' ' + cropH.toFixed(1) + '"');
+                }
+                item.textContent = '';
+                item.style.cssText += 'padding:2px 4px;';
+                var sample = document.createElement('div');
+                sample.style.cssText = 'width:100px;height:20px;overflow:hidden;';
+                sample.innerHTML = iconSvg.replace(/<svg/, '<svg width="100" height="20" preserveAspectRatio="none" style="background:transparent"');
+                item.appendChild(sample);
+              } catch (e) {
+                console.warn('Style icon failed for ' + bt + ':', e.message);
+              }
+            }
+            // Restore original template
+            rawCleanedSvg = savedRaw;
+            storedZones = savedZones;
+            templateBorderType = savedBorderType;
+            // Copy active icon to trigger
             var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');
             if (activeBorderItem) {
               var abThumb = activeBorderItem.querySelector('div');
