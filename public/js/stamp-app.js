@@ -17,6 +17,50 @@
   var currentPageSize = DEFAULT_PAGE_SIZE;
   var isProcessing = false;
 
+  // ---- Typewriter placeholder animation ----
+  (function() {
+    var input = document.getElementById('stamp-input');
+    if (!input) return;
+    var text = 'TYPE YOUR TEXT...';
+    var charIndex = 0;
+    var typingTimer = null;
+    var cycleTimer = null;
+    var isTyping = false;
+    var isFocused = false;
+
+    function typeNext() {
+      if (isFocused || input.value) return;
+      charIndex++;
+      input.placeholder = text.substring(0, charIndex);
+      if (charIndex < text.length) {
+        typingTimer = setTimeout(typeNext, 3000 / text.length);
+      } else {
+        // Pause 10s then restart
+        cycleTimer = setTimeout(startTyping, 10000);
+      }
+    }
+
+    function startTyping() {
+      charIndex = 0;
+      input.placeholder = '';
+      typingTimer = setTimeout(typeNext, 500);
+    }
+
+    input.addEventListener('focus', function() {
+      isFocused = true;
+      clearTimeout(typingTimer);
+      clearTimeout(cycleTimer);
+      if (!input.value) input.placeholder = '';
+    });
+
+    input.addEventListener('blur', function() {
+      isFocused = false;
+      if (!input.value) startTyping();
+    });
+
+    startTyping();
+  })();
+
   // ---- Save scroll position before unload ----
   window.addEventListener('beforeunload', function () {
     sessionStorage.setItem('stampScrollY', window.scrollY);
