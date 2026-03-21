@@ -578,9 +578,9 @@
       var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
       var cleanedSvg = SvgRenderer.cleanSvgString(rawSvg);
 
-      // Set current border/corner style from loaded template
-      currentBorderStyle = templateBorderType || 'simple';
-      currentCornerStyle = templateCornerType || 'straight';
+      // Set current border/corner style from loaded template (URL params take priority)
+      if (!params.get('style')) currentBorderStyle = templateBorderType || 'simple';
+      if (!params.get('corners')) currentCornerStyle = templateCornerType || 'straight';
 
       // Store this template's SVG indexed by border type
       allTemplatesByBorder[currentBorderStyle] = {
