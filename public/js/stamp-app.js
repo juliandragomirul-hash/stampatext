@@ -130,8 +130,7 @@
         handleStamp();
       }
     } else {
-      // No text param — show showcase with all models
-      Gallery.showShowcase();
+      // No text param — clean homepage, no pregenerated gallery
     }
 
     // Select all toggles in preferences modal
