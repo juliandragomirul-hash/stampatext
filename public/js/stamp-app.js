@@ -12,6 +12,47 @@
     '#FF0000', '#FF6600', '#1E90FF', '#FF1493', '#32CD32'
   ];
 
+  // ---- IndexedDB Gallery Cache ----
+  var GalleryCache = {
+    DB_NAME: 'stampatext-gallery',
+    STORE: 'cache',
+    _db: null,
+    open: function() {
+      var self = this;
+      return new Promise(function(resolve, reject) {
+        if (self._db) return resolve(self._db);
+        var req = indexedDB.open(self.DB_NAME, 1);
+        req.onupgradeneeded = function(e) { e.target.result.createObjectStore(self.STORE); };
+        req.onsuccess = function(e) { self._db = e.target.result; resolve(self._db); };
+        req.onerror = function() { reject(new Error('IndexedDB failed')); };
+      });
+    },
+    save: function(text, html, scrollY, generatedCount, totalCombos) {
+      return this.open().then(function(db) {
+        return new Promise(function(resolve, reject) {
+          var tx = db.transaction('cache', 'readwrite');
+          tx.objectStore('cache').put({ text: text, html: html, scrollY: scrollY, generatedCount: generatedCount, totalCombos: totalCombos }, 'gallery');
+          tx.oncomplete = resolve;
+          tx.onerror = function() { reject(tx.error); };
+        });
+      });
+    },
+    load: function(text) {
+      return this.open().then(function(db) {
+        return new Promise(function(resolve, reject) {
+          var tx = db.transaction('cache', 'readonly');
+          var req = tx.objectStore('cache').get('gallery');
+          req.onsuccess = function() {
+            var data = req.result;
+            if (data && data.text === text && data.html) resolve(data);
+            else resolve(null);
+          };
+          req.onerror = function() { resolve(null); };
+        });
+      }).catch(function() { return null; });
+    }
+  };
+
   // ---- State ----
   var currentFilters = { colors: [], tilts: [], textures: [], shapes: [], objects: [], frames: [], borders: [], corners: [], fills: [] };
   var currentPageSize = DEFAULT_PAGE_SIZE;
@@ -98,24 +139,21 @@
     // Build color palette
     buildColorPalette();
 
-    // Delegated click handler for stamp cards — cache gallery combos before navigating
+    // Delegated click handler for stamp cards — cache gallery to IndexedDB before navigating
     document.getElementById('results-batches').addEventListener('click', function(e) {
       var link = e.target.closest('a.stamp-card-preview');
       if (link) {
-        try {
-          var text = document.getElementById('stamp-input').value.trim();
-          var cacheData = JSON.stringify({
-            text: text,
-            combos: Gallery.generatedCombos,
-            scrollY: window.scrollY,
-            generatedCount: Gallery.generatedCount,
-            totalCombos: Gallery.totalCombos
-          });
-          sessionStorage.setItem('stx-gallery-cache', cacheData);
-          console.log('[CACHE] Saved ' + Gallery.generatedCombos.length + ' combos (' + (cacheData.length / 1024).toFixed(1) + 'KB)');
-        } catch (err) {
-          console.warn('[CACHE] Failed to save:', err.message);
-        }
+        e.preventDefault();
+        var href = link.href;
+        var text = document.getElementById('stamp-input').value.trim();
+        var html = document.getElementById('results-batches').innerHTML;
+        GalleryCache.save(text, html, window.scrollY, Gallery.generatedCount, Gallery.totalCombos).then(function() {
+          console.log('[CACHE] Saved to IndexedDB (' + (html.length / 1024).toFixed(0) + 'KB)');
+          window.location.href = href;
+        }).catch(function(err) {
+          console.warn('[CACHE] IndexedDB save failed:', err.message);
+          window.location.href = href;
+        });
       }
     });
 
@@ -160,25 +198,30 @@
     if (textParam) {
       document.getElementById('stamp-input').value = textParam;
 
-      // Check for cached gallery (instant restore from product page back-navigation)
-      var cached = null;
-      try { cached = JSON.parse(sessionStorage.getItem('stx-gallery-cache')); } catch(e) {}
-      console.log('[CACHE] Restore check: cached=' + !!cached + ' cachedText=' + (cached ? cached.text : 'N/A') + ' urlText=' + textParam + ' hasCombos=' + (cached && cached.combos ? cached.combos.length : 0));
-      if (cached && cached.text === textParam && cached.combos && cached.combos.length > 0) {
-        // Restore from cached combos — re-renders stamps from saved params
-        Gallery.currentText = textParam;
-        document.body.classList.add('gallery-active');
-        document.getElementById('stamp-results').style.display = 'block';
-        Gallery.restoreFromCombos(cached).then(function() {
-          if (cached.scrollY) {
-            setTimeout(function() { window.scrollTo(0, cached.scrollY); }, 200);
+      // Check IndexedDB for cached gallery (instant restore from product page back-navigation)
+      GalleryCache.load(textParam).then(function(cached) {
+        console.log('[CACHE] IndexedDB restore: found=' + !!cached);
+        if (cached) {
+          Gallery.currentText = textParam;
+          document.body.classList.add('gallery-active');
+          document.getElementById('stamp-results').style.display = 'block';
+          document.getElementById('results-batches').innerHTML = cached.html;
+          Gallery.generatedCount = cached.generatedCount || 0;
+          Gallery.totalCombos = cached.totalCombos || 0;
+          // Re-attach "Show 4 more" button handler
+          var showMoreBtn = document.getElementById('btn-show-more');
+          if (showMoreBtn) {
+            showMoreBtn.addEventListener('click', function() {
+              Gallery.generateBatch(4);
+            });
           }
-        });
-        history.replaceState(null, '', '/?text=' + encodeURIComponent(textParam));
-      } else {
-        // No cache — just populate input, don't auto-stamp
-        // User can click Stamp or hit Enter to generate
-      }
+          if (cached.scrollY) {
+            setTimeout(function() { window.scrollTo(0, cached.scrollY); }, 100);
+          }
+          history.replaceState(null, '', '/?text=' + encodeURIComponent(textParam));
+        }
+        // else: no cache — just populate input, user clicks Stamp when ready
+      });
     } else {
       // No text param — clean homepage, no pregenerated gallery
     }
