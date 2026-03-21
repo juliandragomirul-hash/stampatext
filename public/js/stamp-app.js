@@ -98,27 +98,24 @@
     // Build color palette
     buildColorPalette();
 
-    // Delegated click handler for stamp cards — cache gallery before navigating
+    // Delegated click handler for stamp cards — cache gallery combos before navigating
     document.getElementById('results-batches').addEventListener('click', function(e) {
       var link = e.target.closest('a.stamp-card-preview');
       if (link) {
-        // Cache gallery state before navigating to product page
         try {
-          var container = document.getElementById('results-batches');
           var text = document.getElementById('stamp-input').value.trim();
           var cacheData = JSON.stringify({
             text: text,
-            html: container.innerHTML,
+            combos: Gallery.generatedCombos,
             scrollY: window.scrollY,
             generatedCount: Gallery.generatedCount,
             totalCombos: Gallery.totalCombos
           });
           sessionStorage.setItem('stx-gallery-cache', cacheData);
-          console.log('[CACHE] Saved gallery cache: ' + (cacheData.length / 1024).toFixed(0) + 'KB for text="' + text + '"');
+          console.log('[CACHE] Saved ' + Gallery.generatedCombos.length + ' combos (' + (cacheData.length / 1024).toFixed(1) + 'KB)');
         } catch (err) {
-          console.warn('[CACHE] Failed to save gallery cache:', err.message);
+          console.warn('[CACHE] Failed to save:', err.message);
         }
-        // Let the default link navigation proceed
       }
     });
 
@@ -166,27 +163,17 @@
       // Check for cached gallery (instant restore from product page back-navigation)
       var cached = null;
       try { cached = JSON.parse(sessionStorage.getItem('stx-gallery-cache')); } catch(e) {}
-      console.log('[CACHE] Restore check: cached=' + !!cached + ' cachedText=' + (cached ? cached.text : 'N/A') + ' urlText=' + textParam + ' match=' + (cached && cached.text === textParam));
-      if (cached && cached.text === textParam && cached.html) {
-        // Instant restore — no regeneration!
+      console.log('[CACHE] Restore check: cached=' + !!cached + ' cachedText=' + (cached ? cached.text : 'N/A') + ' urlText=' + textParam + ' hasCombos=' + (cached && cached.combos ? cached.combos.length : 0));
+      if (cached && cached.text === textParam && cached.combos && cached.combos.length > 0) {
+        // Restore from cached combos — re-renders stamps from saved params
         Gallery.currentText = textParam;
         document.body.classList.add('gallery-active');
         document.getElementById('stamp-results').style.display = 'block';
-        document.getElementById('results-batches').innerHTML = cached.html;
-        Gallery.generatedCount = cached.generatedCount || 0;
-        Gallery.totalCombos = cached.totalCombos || 0;
-        // Re-attach "Show 5 more" button handler
-        var showMoreBtn = document.getElementById('btn-show-more');
-        if (showMoreBtn) {
-          showMoreBtn.addEventListener('click', function() {
-            Gallery.generateBatch(4);
-          });
-        }
-        // Restore scroll position
-        if (cached.scrollY) {
-          setTimeout(function() { window.scrollTo(0, cached.scrollY); }, 100);
-        }
-        // Update URL
+        Gallery.restoreFromCombos(cached).then(function() {
+          if (cached.scrollY) {
+            setTimeout(function() { window.scrollTo(0, cached.scrollY); }, 200);
+          }
+        });
         history.replaceState(null, '', '/?text=' + encodeURIComponent(textParam));
       } else {
         // No cache — just populate input, don't auto-stamp

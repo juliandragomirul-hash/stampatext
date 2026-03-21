@@ -1917,6 +1917,7 @@ const Gallery = {
   generatedCount: 0,
   lastCombo: null,
   totalCombos: 0,
+  generatedCombos: [],  // stored for cache restore
 
   _shuffle: function(arr) {
     for (var i = arr.length - 1; i > 0; i--) {
@@ -1934,6 +1935,7 @@ const Gallery = {
     });
     this.generatedCount = 0;
     this.lastCombo = null;
+    this.generatedCombos = [];
     // Total = product of all pool sizes × number of base templates
     this.totalCombos = 1;
     Object.keys(this.COMBO_POOLS).forEach(function(key) {
@@ -1995,79 +1997,92 @@ const Gallery = {
       var combo = this.drawCombo();
       this.lastCombo = combo;
       this.generatedCount++;
-
-      var base = this.baseResults[combo._baseIdx];
-      if (!base) continue;
-
-      try {
-        // Start from base SVG (already autoFit'd with a font)
-        var svg = base.svgString;
-
-        // Apply color
-        svg = SvgRenderer.colorize(svg, combo.color);
-        svg = SvgRenderer.applyThinStroke(svg);
-        svg = SvgRenderer.cropViewBoxToStamp(svg);
-
-        // Apply corners
-        if (combo.corners && combo.corners !== 'straight') {
-          svg = SvgRenderer.applyCornerRadius(svg, combo.corners);
-        } else {
-          svg = svg.replace(/\s*rx=["'][\d.]+["']/gi, '').replace(/\s*ry=["'][\d.]+["']/gi, '');
-        }
-
-        // Apply frame
-        var bi = SvgRenderer.detectBorderType(svg);
-        SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: combo.fill });
-        if (combo.frames === 'double') {
-          svg = SvgRenderer.addDoubleFrame(svg, bi, combo.color, 'double');
-        } else if (combo.frames === 'split') {
-          svg = SvgRenderer.addSplitBorder(svg, bi);
-        }
-
-        // Apply texture
-        if (combo.texture) {
-          try { svg = await SvgRenderer.applyTexture(svg, combo.texture); } catch(e) {}
-        }
-
-        // Apply watermark
-        svg = SvgRenderer.addWatermark(svg);
-
-        // Apply tilt
-        if (combo.tilt !== 0) {
-          svg = SvgRenderer.applyTilt(svg, combo.tilt);
-        }
-
-        // Build product URL with all combo params
-        var productUrl = '/product.html?id=' + encodeURIComponent(base.templateId) +
-          '&text=' + encodeURIComponent(self.currentText) +
-          '&color=' + encodeURIComponent(combo.color.replace('#', '')) +
-          '&font=' + encodeURIComponent(base.fontKey || 'Oswald') +
-          '&frame=' + encodeURIComponent(combo.frames) +
-          '&fill=' + encodeURIComponent(combo.fill) +
-          '&shape=rectangle' +
-          '&tilt=' + combo.tilt +
-          (combo.texture ? '&texture=' + encodeURIComponent(combo.texture) : '') +
-          '&corners=' + encodeURIComponent(combo.corners);
-
-        // Create card
-        var card = document.createElement('div');
-        card.className = 'stamp-card';
-
-        var previewLink = document.createElement('a');
-        previewLink.className = 'stamp-card-preview';
-        previewLink.href = productUrl;
-        var img = SvgRenderer.createSvgImage(svg);
-        previewLink.appendChild(img);
-        card.appendChild(previewLink);
-        grid.appendChild(card);
-      } catch (err) {
-        console.warn('[Gallery] Combo render failed:', err.message);
-      }
+      this.generatedCombos.push(combo);
+      await this._renderComboCard(combo, grid);
     }
 
     // Move "Show more" button to end (after new batch)
     var existingMore = document.getElementById('gallery-load-more');
     if (existingMore) existingMore.remove();
+    this.updateShowMore();
+  },
+
+  async _renderComboCard(combo, grid) {
+    var self = this;
+    var base = this.baseResults[combo._baseIdx];
+    if (!base) return;
+    try {
+      var svg = base.svgString;
+      svg = SvgRenderer.colorize(svg, combo.color);
+      svg = SvgRenderer.applyThinStroke(svg);
+      svg = SvgRenderer.cropViewBoxToStamp(svg);
+      if (combo.corners && combo.corners !== 'straight') {
+        svg = SvgRenderer.applyCornerRadius(svg, combo.corners);
+      } else {
+        svg = svg.replace(/\s*rx=["'][\d.]+["']/gi, '').replace(/\s*ry=["'][\d.]+["']/gi, '');
+      }
+      var bi = SvgRenderer.detectBorderType(svg);
+      SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: combo.fill });
+      if (combo.frames === 'double') {
+        svg = SvgRenderer.addDoubleFrame(svg, bi, combo.color, 'double');
+      } else if (combo.frames === 'split') {
+        svg = SvgRenderer.addSplitBorder(svg, bi);
+      }
+      if (combo.texture) {
+        try { svg = await SvgRenderer.applyTexture(svg, combo.texture); } catch(e) {}
+      }
+      svg = SvgRenderer.addWatermark(svg);
+      if (combo.tilt !== 0) svg = SvgRenderer.applyTilt(svg, combo.tilt);
+      var productUrl = '/product.html?id=' + encodeURIComponent(base.templateId) +
+        '&text=' + encodeURIComponent(self.currentText) +
+        '&color=' + encodeURIComponent(combo.color.replace('#', '')) +
+        '&font=' + encodeURIComponent(base.fontKey || 'Oswald') +
+        '&frame=' + encodeURIComponent(combo.frames) +
+        '&fill=' + encodeURIComponent(combo.fill) +
+        '&shape=rectangle&tilt=' + combo.tilt +
+        (combo.texture ? '&texture=' + encodeURIComponent(combo.texture) : '') +
+        '&corners=' + encodeURIComponent(combo.corners);
+      var card = document.createElement('div');
+      card.className = 'stamp-card';
+      var previewLink = document.createElement('a');
+      previewLink.className = 'stamp-card-preview';
+      previewLink.href = productUrl;
+      previewLink.appendChild(SvgRenderer.createSvgImage(svg));
+      card.appendChild(previewLink);
+      grid.appendChild(card);
+    } catch (err) {
+      console.warn('[Gallery] Combo render failed:', err.message);
+    }
+  },
+
+  async restoreFromCombos(cachedData) {
+    // Load templates if needed
+    if (this.baseResults.length === 0) {
+      var loadPill = document.getElementById('loading-pill');
+      if (!loadPill) {
+        loadPill = document.createElement('div');
+        loadPill.id = 'loading-pill';
+        loadPill.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;color:#fff;padding:12px 28px;border-radius:24px;font-size:15px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+        document.body.appendChild(loadPill);
+      }
+      loadPill.textContent = 'Restoring gallery...';
+      loadPill.style.display = '';
+      await this.processAll(this.currentText);
+      loadPill.style.display = 'none';
+    }
+    this.generatedCount = cachedData.generatedCount || 0;
+    this.totalCombos = cachedData.totalCombos || 0;
+    this.generatedCombos = cachedData.combos || [];
+
+    var container = document.getElementById('results-batches');
+    container.innerHTML = '';
+    // Render in batches of 3 (grid rows)
+    var grid = document.createElement('div');
+    grid.className = 'stamp-results-grid';
+    container.appendChild(grid);
+    for (var i = 0; i < this.generatedCombos.length; i++) {
+      await this._renderComboCard(this.generatedCombos[i], grid);
+    }
     this.updateShowMore();
   },
 
