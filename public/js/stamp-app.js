@@ -165,6 +165,7 @@
       if (cached && cached.text === textParam && cached.html) {
         // Instant restore — no regeneration!
         Gallery.currentText = textParam;
+        document.body.classList.add('gallery-active');
         document.getElementById('stamp-results').style.display = 'block';
         document.getElementById('results-batches').innerHTML = cached.html;
         Gallery.generatedCount = cached.generatedCount || 0;
@@ -256,6 +257,8 @@
     loadPill.textContent = 'Loading models...';
     loadPill.style.display = '';
 
+    // Switch to gallery mode: compact input bar, hide hero text
+    document.body.classList.add('gallery-active');
     // Show results area (no inline loading text — pill handles it)
     document.getElementById('stamp-results').style.display = 'block';
     var filterBar = document.getElementById('stamp-filter-bar');

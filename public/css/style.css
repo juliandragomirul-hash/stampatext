@@ -704,6 +704,20 @@ a:hover {
   margin-bottom: 0;
 }
 
+/* Gallery active: compact input bar, no hero text */
+body.gallery-active .stamp-hero {
+  flex: 0;
+  padding: 0.5rem 2rem;
+  justify-content: flex-start;
+}
+body.gallery-active .stamp-hero-title,
+body.gallery-active .stamp-hero-subtitle {
+  display: none;
+}
+body.gallery-active .stamp-hero-input-wrapper {
+  max-width: 520px;
+}
+
 .stamp-hero-input-wrapper {
   display: flex;
   gap: 0.75rem;
