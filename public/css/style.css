@@ -716,6 +716,13 @@ a:hover {
   transition: border-color 0.2s;
 }
 
+.stamp-hero-input::placeholder {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #999;
+  letter-spacing: 0.05em;
+}
+
 .stamp-hero-input:focus {
   border-color: #dc2626;
 }
