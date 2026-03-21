@@ -519,6 +519,9 @@
       currentFrame = params.get('frame') || 'single';
       currentFill = params.get('fill') || 'empty';
       currentShape = params.get('shape') || 'rectangle';
+      currentCornerStyle = params.get('corners') || 'straight';
+      var styleParam = params.get('style');
+      if (styleParam) currentBorderStyle = styleParam;
       var currentForceLines = parseInt(params.get('rows'), 10) || 0;
 
       if (!templateId) {
