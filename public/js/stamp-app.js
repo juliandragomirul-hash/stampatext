@@ -184,7 +184,8 @@
         // Update URL
         history.replaceState(null, '', '/?text=' + encodeURIComponent(textParam));
       } else {
-        handleStamp();
+        // No cache — just populate input, don't auto-stamp
+        // User can click Stamp or hit Enter to generate
       }
     } else {
       // No text param — clean homepage, no pregenerated gallery
