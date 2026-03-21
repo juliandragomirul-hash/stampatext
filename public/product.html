@@ -607,55 +607,18 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style icons: crop 100×20px from top edge center of real rendered stamps
+          // Pre-baked border style icons: cropped from real rendered stamps
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
-            var savedRaw = rawCleanedSvg;
-            var savedZones = storedZones;
-            var savedBorderType = templateBorderType;
-            var borderItems = borderList.querySelectorAll('.filter-bar-dropdown-item');
-            // Generate icons sequentially (each mutates rawCleanedSvg)
-            for (var bi = 0; bi < borderItems.length; bi++) {
-              var item = borderItems[bi];
+            borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
               var bt = item.dataset.value;
-              var entry = allTemplatesByBorder[bt];
-              if (!entry) continue;
-              try {
-                rawCleanedSvg = entry.svg;
-                storedZones = entry.zones;
-                templateBorderType = bt;
-                var iconSvg = await rebuildWithFont(currentFont, 'single');
-                iconSvg = SvgRenderer.colorize(iconSvg, '#cc0000');
-                iconSvg = SvgRenderer.applyThinStroke(iconSvg);
-                iconSvg = SvgRenderer.cropViewBoxToStamp(iconSvg);
-                // Remove text
-                iconSvg = iconSvg.replace(/<text[\s\S]*?<\/text>/gi, '');
-                // Crop viewBox to top edge center strip
-                var vbM = iconSvg.match(/viewBox=["']([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)["']/);
-                if (vbM) {
-                  var vx = parseFloat(vbM[1]), vy = parseFloat(vbM[2]);
-                  var vw = parseFloat(vbM[3]), vh = parseFloat(vbM[4]);
-                  var cropW = vw * 0.6;
-                  var cropH = vh * 0.12;
-                  var cropX = vx + (vw - cropW) / 2;
-                  var cropY = vy - cropH * 0.15;
-                  iconSvg = iconSvg.replace(/viewBox=["'][^"']+["']/, 'viewBox="' + cropX.toFixed(1) + ' ' + cropY.toFixed(1) + ' ' + cropW.toFixed(1) + ' ' + cropH.toFixed(1) + '"');
-                }
-                item.textContent = '';
-                item.style.cssText += 'padding:2px 4px;';
-                var sample = document.createElement('div');
-                sample.style.cssText = 'width:100px;height:20px;overflow:hidden;';
-                sample.innerHTML = iconSvg.replace(/<svg/, '<svg width="100" height="20" preserveAspectRatio="none" style="background:transparent"');
-                item.appendChild(sample);
-              } catch (e) {
-                console.warn('Style icon failed for ' + bt + ':', e.message);
-              }
-            }
-            // Restore original template
-            rawCleanedSvg = savedRaw;
-            storedZones = savedZones;
-            templateBorderType = savedBorderType;
-            // Copy active icon to trigger
+              item.textContent = '';
+              item.style.cssText += 'padding:2px 4px;';
+              var sample = document.createElement('div');
+              sample.style.cssText = 'width:100px;height:30px;overflow:hidden;';
+              sample.innerHTML = '<img src="/img/style-icons/' + bt + '.png" width="100" height="30" alt="' + bt + '" style="display:block;"/>';
+              item.appendChild(sample);
+            });
             var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');
             if (activeBorderItem) {
               var abThumb = activeBorderItem.querySelector('div');
