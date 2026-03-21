@@ -36,7 +36,7 @@
         typingTimer = setTimeout(typeNext, 3000 / text.length);
       } else {
         // Pause 10s then restart
-        cycleTimer = setTimeout(startTyping, 10000);
+        cycleTimer = setTimeout(startTyping, 5000);
       }
     }
 
