@@ -527,13 +527,9 @@
         return;
       }
 
-      // Back link: history.back() for instant restore, href as fallback for new-tab
+      // Back link: navigate to gallery with text param (sessionStorage cache will restore)
       var backLink = document.getElementById('product-back');
       backLink.href = '/?text=' + encodeURIComponent(userText);
-      backLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        history.back();
-      });
 
       // ---- Fetch template ----
       var { data: tpl, error } = await sb
