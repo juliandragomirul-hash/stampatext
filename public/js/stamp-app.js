@@ -47,7 +47,7 @@
       function animDot() {
         if (isFocused || input.value || Date.now() > dotEnd) {
           input.placeholder = baseText + '...';
-          cycleTimer = setTimeout(startTyping, 3000);
+          startTyping();
           return;
         }
         dotCount = (dotCount % 3) + 1;
