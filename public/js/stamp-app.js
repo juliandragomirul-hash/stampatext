@@ -21,40 +21,21 @@
   (function() {
     var input = document.getElementById('stamp-input');
     if (!input) return;
-    var baseText = 'TYPE YOUR TEXT';
+    var text = 'TYPE YOUR TEXT...';
     var charIndex = 0;
     var typingTimer = null;
     var cycleTimer = null;
-    var dotPhaseTimer = null;
     var isFocused = false;
 
     function typeNext() {
       if (isFocused || input.value) return;
       charIndex++;
-      input.placeholder = baseText.substring(0, charIndex);
-      if (charIndex < baseText.length) {
-        typingTimer = setTimeout(typeNext, 3000 / baseText.length);
+      input.placeholder = text.substring(0, charIndex);
+      if (charIndex < text.length) {
+        typingTimer = setTimeout(typeNext, 3000 / text.length);
       } else {
-        // Phase 2: animate "..." for 3 seconds
-        startDotPhase();
+        cycleTimer = setTimeout(startTyping, 1000);
       }
-    }
-
-    function startDotPhase() {
-      var dotCount = 0;
-      var dotInterval = 300; // each dot cycle ~300ms
-      var dotEnd = Date.now() + 3000;
-      function animDot() {
-        if (isFocused || input.value || Date.now() > dotEnd) {
-          input.placeholder = baseText + '...';
-          startTyping();
-          return;
-        }
-        dotCount = (dotCount % 3) + 1;
-        input.placeholder = baseText + '.'.repeat(dotCount);
-        dotPhaseTimer = setTimeout(animDot, dotInterval);
-      }
-      animDot();
     }
 
     function startTyping() {
@@ -67,7 +48,6 @@
       isFocused = true;
       clearTimeout(typingTimer);
       clearTimeout(cycleTimer);
-      clearTimeout(dotPhaseTimer);
       if (!input.value) input.placeholder = '';
     });
 
