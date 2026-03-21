@@ -2057,7 +2057,9 @@ const Gallery = {
       }
     }
 
-    // Update "Show more" button + remaining count
+    // Move "Show more" button to end (after new batch)
+    var existingMore = document.getElementById('gallery-load-more');
+    if (existingMore) existingMore.remove();
     this.updateShowMore();
   },
 
