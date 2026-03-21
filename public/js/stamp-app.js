@@ -183,8 +183,6 @@
         }
         // Update URL
         history.replaceState(null, '', '/?text=' + encodeURIComponent(textParam));
-      } else if (window.__galleryVariantParams) {
-        restoreFromParams(textParam, window.__galleryVariantParams);
       } else {
         handleStamp();
       }
@@ -257,6 +255,9 @@
     loadPill.textContent = 'Loading models...';
     loadPill.style.display = '';
 
+    // Clear old gallery restore data (prevents old-style gallery on hard refresh)
+    localStorage.removeItem('stx-gallery-params');
+    localStorage.removeItem('stx-gallery-text');
     // Switch to gallery mode: compact input bar, hide hero text
     document.body.classList.add('gallery-active');
     // Show results area (no inline loading text — pill handles it)

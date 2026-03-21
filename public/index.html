@@ -372,21 +372,9 @@
       var textParam = p.get('text');
       if (!textParam) return;
       document.getElementById('stamp-input').value = textParam;
-
-      // Priority 1: sessionStorage cache (new gallery, instant restore)
-      try {
-        var cached = JSON.parse(sessionStorage.getItem('stx-gallery-cache'));
-        if (cached && cached.text === textParam && cached.html) return; // stamp-app.js will handle
-      } catch (e) {}
-
-      // Priority 2: localStorage variant params (old gallery restore — fallback)
-      var savedText = localStorage.getItem('stx-gallery-text');
-      var savedParams = localStorage.getItem('stx-gallery-params');
-      if (savedParams && savedText === textParam) {
-        try {
-          window.__galleryVariantParams = JSON.parse(savedParams);
-        } catch (e) {}
-      }
+      // Clear stale old gallery data
+      localStorage.removeItem('stx-gallery-params');
+      localStorage.removeItem('stx-gallery-text');
     })();
   </script>
   <script>document.write('<scr'+'ipt src="/js/stamp-app.js?t='+Date.now()+'"></scr'+'ipt>')</script>
