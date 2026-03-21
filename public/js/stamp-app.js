@@ -34,7 +34,7 @@
       if (charIndex < text.length) {
         typingTimer = setTimeout(typeNext, 3000 / text.length);
       } else {
-        cycleTimer = setTimeout(startTyping, 1000);
+        cycleTimer = setTimeout(startTyping, 3000);
       }
     }
 
