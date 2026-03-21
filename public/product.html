@@ -607,21 +607,38 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
-          // Generate border style icons: hand-crafted thick zoomed-in pattern samples
-          var W = 107, H = 12, c = '#cc0000';
-          var borderIcons = {
-            simple: '<line x1="0" y1="6" x2="'+W+'" y2="6" stroke="'+c+'" stroke-width="4"/>',
-            stitch_line: '<line x1="0" y1="6" x2="'+W+'" y2="6" stroke="'+c+'" stroke-width="4" stroke-dasharray="16 7"/>',
-            stitch_square: (function(){var s='';for(var i=0;i<10;i++)s+='<rect x="'+(i*11+1)+'" y="2" width="8" height="8" fill="'+c+'"/>';return s;})(),
-            stitch_circle: (function(){var s='';for(var i=0;i<12;i++)s+='<circle cx="'+(i*9+4.5)+'" cy="6" r="3.5" fill="'+c+'"/>';return s;})(),
-            sawtooth: '<path d="M0,11 '+(function(){var s='';for(var i=0;i<16;i++)s+='L'+(i*6.7+3.35)+',1 L'+((i+1)*6.7)+',11 ';return s;})()+'" fill="'+c+'" stroke="'+c+'" stroke-width="0.5"/>',
-            perforated: '<rect x="0" y="1" width="'+W+'" height="10" rx="1" fill="'+c+'"/>'+(function(){var s='';for(var i=0;i<9;i++)s+='<circle cx="'+(i*12+6)+'" cy="6" r="3" fill="#fff"/>';return s;})(),
-            perforated_spaced: '<rect x="0" y="1" width="'+W+'" height="10" rx="1" fill="'+c+'"/>'+(function(){var s='';for(var i=0;i<5;i++)s+='<circle cx="'+(i*22+11)+'" cy="6" r="3" fill="#fff"/>';return s;})(),
-            wavy: '<path d="M0,6 '+(function(){var s='';for(var i=0;i<7;i++)s+='Q'+(i*15.3+7.65)+','+(i%2===0?-1:13)+' '+((i+1)*15.3)+',6 ';return s;})()+'" fill="none" stroke="'+c+'" stroke-width="3"/>',
-            zigzag: '<path d="M0,10 '+(function(){var s='';for(var i=0;i<6;i++)s+='L'+(i*18+9)+',2 L'+((i+1)*18)+',10 ';return s;})()+'" fill="none" stroke="'+c+'" stroke-width="2.5" stroke-linejoin="miter"/>',
-            torn_edge: '<rect x="0" y="1" width="'+W+'" height="10" rx="1" fill="'+c+'" filter="url(#torn-ic)"/><defs><filter id="torn-ic" x="-10%" y="-50%" width="120%" height="200%"><feTurbulence baseFrequency="0.04" numOctaves="4" seed="2"/><feDisplacementMap in="SourceGraphic" scale="5"/></filter></defs>',
-            chalk: '<rect x="0" y="0" width="'+W+'" height="12" rx="1" fill="'+c+'" filter="url(#chalk-ic)"/><defs><filter id="chalk-ic" x="-5%" y="-30%" width="110%" height="160%"><feTurbulence baseFrequency="0.08" numOctaves="5" seed="3"/><feDisplacementMap in="SourceGraphic" scale="4"/></filter></defs>'
-          };
+          // Generate border style icons using real pipeline generators with shape='lined'
+          var IW = 107, IH = 16, ic = '#cc0000';
+          // Fake rect dimensions for generator calls (tuned for icon size)
+          var gx = 0, gy = 8, gw = 800, gh = 100, gsw = 30;
+          var borderIcons = {};
+          // Plain: simple line
+          borderIcons.simple = '<line x1="0" y1="8" x2="800" y2="8" stroke="'+ic+'" stroke-width="'+gsw+'"/>';
+          // Stitch line: use dasharray on path (same as real pipeline)
+          var slDash = Math.round(gsw * 3.5), slGap = Math.round(gsw * 2);
+          borderIcons.stitch_line = '<path d="M0,8 H800" fill="none" stroke="'+ic+'" stroke-width="'+gsw+'" stroke-dasharray="'+slDash+' '+slGap+'" stroke-linecap="butt"/>';
+          // Stitch square: real generator
+          borderIcons.stitch_square = SvgRenderer._generateStitchShapes(gx, gy, gw, gh, 'square', gsw * 0.7, gsw * 1.8, ic, 'lined', 'straight', 0);
+          // Stitch dot: real generator
+          borderIcons.stitch_circle = SvgRenderer._generateStitchShapes(gx, gy, gw, gh, 'circle', gsw * 0.6, gsw * 1.6, ic, 'lined', 'straight', 0);
+          // Sawtooth: real generator (circle=diamond shapes along top)
+          borderIcons.sawtooth = SvgRenderer._generateBorderShapes(gx, gy, gw, gh, 'circle', gsw * 0.5, 2.0, 'lined', 'straight');
+          // Perforated: real generator (circle holes)
+          borderIcons.perforated = '<rect x="0" y="'+(-gsw*0.5)+'" width="800" height="'+(gsw*2)+'" fill="'+ic+'"/>' +
+            SvgRenderer._generateBorderShapes(gx, gy, gw, gh, 'circle', gsw * 0.5, 2.5, 'lined', 'straight').replace(/fill="[^"]*"/g, 'fill="#FFFFFF"');
+          // Spaced perforated: same but wider spacing
+          borderIcons.perforated_spaced = '<rect x="0" y="'+(-gsw*0.5)+'" width="800" height="'+(gsw*2)+'" fill="'+ic+'"/>' +
+            SvgRenderer._generateBorderShapes(gx, gy, gw, gh, 'circle', gsw * 0.5, 5.0, 'lined', 'straight').replace(/fill="[^"]*"/g, 'fill="#FFFFFF"');
+          // Wavy: real generator
+          borderIcons.wavy = SvgRenderer._generateWavyBorder(gx, gy, gw, gh, ic, gsw, 'gentle', false, 'lined');
+          // Zigzag: real generator
+          borderIcons.zigzag = SvgRenderer._generateZigzagBorder(gx, gy, gw, gh, ic, gsw, false, 'lined');
+          // Torn edge: line with displacement filter
+          borderIcons.torn_edge = '<defs><filter id="torn-ic" x="-5%" y="-50%" width="110%" height="200%"><feTurbulence baseFrequency="0.03" numOctaves="4" seed="2"/><feDisplacementMap in="SourceGraphic" scale="8"/></filter></defs>' +
+            '<line x1="0" y1="8" x2="800" y2="8" stroke="'+ic+'" stroke-width="'+gsw+'" filter="url(#torn-ic)"/>';
+          // Chalk: line with chalk-like filter
+          borderIcons.chalk = '<defs><filter id="chalk-ic" x="-5%" y="-50%" width="110%" height="200%"><feTurbulence baseFrequency="0.06" numOctaves="5" seed="3"/><feDisplacementMap in="SourceGraphic" scale="6"/><feComponentTransfer><feFuncA type="discrete" tableValues="0 1 1 0.9 1 0 1 0.8 1 0"/></feComponentTransfer></filter></defs>' +
+            '<line x1="0" y1="8" x2="800" y2="8" stroke="'+ic+'" stroke-width="'+gsw+'" filter="url(#chalk-ic)"/>';
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
             borderList.querySelectorAll('.filter-bar-dropdown-item').forEach(function(item) {
@@ -631,8 +648,8 @@
               item.textContent = '';
               item.style.cssText += 'padding:3px 6px;';
               var sample = document.createElement('div');
-              sample.style.cssText = 'width:'+W+'px;height:'+H+'px;overflow:hidden;';
-              sample.innerHTML = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">'+icon+'</svg>';
+              sample.style.cssText = 'width:'+IW+'px;height:'+IH+'px;overflow:hidden;';
+              sample.innerHTML = '<svg viewBox="-10 -20 820 56" width="'+IW+'" height="'+IH+'" preserveAspectRatio="none">'+icon+'</svg>';
               item.appendChild(sample);
             });
             var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');
