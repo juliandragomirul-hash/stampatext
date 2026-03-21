@@ -2540,8 +2540,9 @@ const SvgRenderer = {
       } else {
         frameInset = sw / 2 + innerSw * 1.5;
       }
-      // Stitch shapes extend outward — inner rect just needs minimal offset from rect edge
-      if (borderFlags.stitch) frameInset = innerSw / 2 + 2;
+      // Stitch shapes extend outward — inner rect needs offset from rect edge
+      // Filled stitch needs more inset for the visible inner plain border
+      if (borderFlags.stitch) frameInset = isFull ? (sw / 2 + innerSw / 2 + 4) : (innerSw / 2 + 2);
       if (borderFlags.border) {
         if (isFull) {
           frameInset = sw * 0.3;
