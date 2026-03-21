@@ -1972,6 +1972,14 @@ const Gallery = {
   },
 
   async generateBatch(count) {
+    // If baseResults empty (e.g. after cache restore), load templates first
+    if (this.baseResults.length === 0 && this.currentText) {
+      var loadPill = document.getElementById('loading-pill');
+      if (loadPill) { loadPill.textContent = 'Loading models...'; loadPill.style.display = ''; }
+      await this.processAll(this.currentText);
+      this.resetBags();
+      if (loadPill) loadPill.style.display = 'none';
+    }
     var container = document.getElementById('results-batches');
     var self = this;
     var remaining = this.totalCombos - this.generatedCount;

@@ -98,30 +98,24 @@
     // Build color palette
     buildColorPalette();
 
-    // Delegated click handler for stamp cards
+    // Delegated click handler for stamp cards — cache gallery before navigating
     document.getElementById('results-batches').addEventListener('click', function(e) {
-      // Showcase mode: show inline input pill near click
-      if (Gallery.isShowcase) {
-        var card = e.target.closest('.stamp-card-preview, .stamp-card-actions');
-        if (card) {
-          e.preventDefault();
-          var pill = document.getElementById('stamp-input-pill');
-          if (pill) {
-            // Position pill near the click
-            var rect = card.getBoundingClientRect();
-            pill.style.left = (rect.left + rect.width / 2) + 'px';
-            pill.style.top = (rect.bottom + window.scrollY + 8) + 'px';
-            pill.style.display = 'flex';
-            var pillInput = document.getElementById('pill-input');
-            if (pillInput) {
-              pillInput.value = '';
-              setTimeout(function() { pillInput.focus(); }, 50);
-            }
-          }
-          return;
-        }
+      var link = e.target.closest('a.stamp-card-preview');
+      if (link) {
+        // Cache gallery state before navigating to product page
+        try {
+          var container = document.getElementById('results-batches');
+          var text = document.getElementById('stamp-input').value.trim();
+          sessionStorage.setItem('stx-gallery-cache', JSON.stringify({
+            text: text,
+            html: container.innerHTML,
+            scrollY: window.scrollY,
+            generatedCount: Gallery.generatedCount,
+            totalCombos: Gallery.totalCombos
+          }));
+        } catch (e) { /* sessionStorage full or unavailable */ }
+        // Let the default link navigation proceed
       }
-      // Normal mode: no zoom (cards are links now)
     });
 
     // Pill stamp button handler
@@ -165,8 +159,30 @@
     if (textParam) {
       document.getElementById('stamp-input').value = textParam;
 
-      if (window.__galleryVariantParams) {
-        // Deterministic restore from saved variant params
+      // Check for cached gallery (instant restore from product page back-navigation)
+      var cached = null;
+      try { cached = JSON.parse(sessionStorage.getItem('stx-gallery-cache')); } catch(e) {}
+      if (cached && cached.text === textParam && cached.html) {
+        // Instant restore — no regeneration!
+        Gallery.currentText = textParam;
+        document.getElementById('stamp-results').style.display = 'block';
+        document.getElementById('results-batches').innerHTML = cached.html;
+        Gallery.generatedCount = cached.generatedCount || 0;
+        Gallery.totalCombos = cached.totalCombos || 0;
+        // Re-attach "Show 5 more" button handler
+        var showMoreBtn = document.getElementById('btn-show-more');
+        if (showMoreBtn) {
+          showMoreBtn.addEventListener('click', function() {
+            Gallery.generateBatch(5);
+          });
+        }
+        // Restore scroll position
+        if (cached.scrollY) {
+          setTimeout(function() { window.scrollTo(0, cached.scrollY); }, 100);
+        }
+        // Update URL
+        history.replaceState(null, '', '/?text=' + encodeURIComponent(textParam));
+      } else if (window.__galleryVariantParams) {
         restoreFromParams(textParam, window.__galleryVariantParams);
       } else {
         handleStamp();
