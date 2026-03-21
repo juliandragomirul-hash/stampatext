@@ -173,7 +173,7 @@
         var showMoreBtn = document.getElementById('btn-show-more');
         if (showMoreBtn) {
           showMoreBtn.addEventListener('click', function() {
-            Gallery.generateBatch(5);
+            Gallery.generateBatch(4);
           });
         }
         // Restore scroll position

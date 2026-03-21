@@ -2081,7 +2081,7 @@ const Gallery = {
       document.getElementById('results-batches').appendChild(moreDiv);
     }
     if (remaining > 0) {
-      moreDiv.innerHTML = '<button class="btn btn-primary" id="btn-show-more" style="padding:10px 30px;font-size:1rem;">Show 5 more</button>' +
+      moreDiv.innerHTML = '<button class="btn btn-primary" id="btn-show-more" style="padding:10px 30px;font-size:1rem;">Show 4 more</button>' +
         '<div style="color:#888;font-size:0.85rem;margin-top:0.5rem;">Available remaining: ' + remaining.toLocaleString() + '</div>';
       var self = this;
       document.getElementById('btn-show-more').addEventListener('click', function() {
