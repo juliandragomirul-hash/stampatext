@@ -1080,7 +1080,7 @@ body.gallery-active .stamp-hero-input-wrapper {
 
 .stamp-results-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.5rem 0.4rem;
   margin-bottom: 0.5rem;
   padding-top: 0.5rem;
