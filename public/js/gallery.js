@@ -208,6 +208,7 @@ const Gallery = {
     this.filteredResults = [];
     this.displayedCount = 0;
     this.isFirstShowMore = true;
+    this.templatesByBorder = {}; // raw SVGs indexed by border type
 
     // Ensure font config is loaded before rendering
     if (!SvgRenderer._fontConfig) await SvgRenderer.loadFontConfig();
@@ -270,6 +271,13 @@ const Gallery = {
       try {
         var cleanedSvg = SvgRenderer.cleanSvgString(paired[i].svg);
         cleanedSvg = SvgRenderer.uniquifySvgIds(cleanedSvg);
+
+        // Store raw SVG indexed by border type (for product-quality gallery rendering)
+        var bt = tpl.border_type || 'simple';
+        if (!self.templatesByBorder[bt]) {
+          var editZones = (tpl.text_zones || []).filter(function(z) { return z.is_editable; }).sort(function(a,b) { return a.sort_order - b.sort_order; });
+          self.templatesByBorder[bt] = { svg: cleanedSvg, tpl: tpl, zones: editZones };
+        }
 
         var fontWeights = {
           'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700',
@@ -1906,11 +1914,20 @@ const Gallery = {
   // Param pools for randomization
   COMBO_POOLS: {
     color: ['#000000','#8B0000','#CC0000','#FF0000','#2D572C','#32CD32','#003366','#1E90FF','#4B0082','#FF6600','#DAA520','#FF1493'],
+    font: ['Oswald','CourierPrime','Montserrat','Yomogi','BlackOpsOne','Nunito','Exo2','Bitter','Comfortaa','FuzzyBubbles','BebasNeue'],
+    style: ['simple','stitch_line','stitch_square','stitch_circle','sawtooth','perforated','perforated_spaced','wavy','zigzag','torn_edge','chalk'],
     corners: ['straight','soft_round','medium_round','strong_round','mixed_top_straight','mixed_top_round','mixed_diag_down','mixed_diag_up'],
     frames: ['single','double','split'],
     fill: ['empty'],
     texture: ['','grungy','scratched','noise'],
     tilt: [0, -10]
+  },
+
+  FONT_WEIGHTS: {
+    'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700',
+    'Yomogi': '400', 'BlackOpsOne': '400', 'Nunito': '900',
+    'Exo2': '700', 'Bitter': '500', 'Comfortaa': '700',
+    'FuzzyBubbles': '700', 'BebasNeue': '400'
   },
 
   comboBags: {},
@@ -1993,13 +2010,25 @@ const Gallery = {
     grid.className = 'stamp-results-grid';
     container.appendChild(grid);
 
+    // Progressive loading pill
+    var loadPill = document.getElementById('loading-pill');
+    if (!loadPill) {
+      loadPill = document.createElement('div');
+      loadPill.id = 'loading-pill';
+      loadPill.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;color:#fff;padding:12px 28px;border-radius:24px;font-size:15px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+      document.body.appendChild(loadPill);
+    }
+
     for (var i = 0; i < actualCount; i++) {
+      loadPill.textContent = 'Generating stamp ' + (i + 1) + ' of ' + actualCount + '...';
+      loadPill.style.display = '';
       var combo = this.drawCombo();
       this.lastCombo = combo;
       this.generatedCount++;
       this.generatedCombos.push(combo);
       await this._renderComboCard(combo, grid);
     }
+    loadPill.style.display = 'none';
 
     // Move "Show more" button to end (after new batch)
     var existingMore = document.getElementById('gallery-load-more');
@@ -2009,39 +2038,82 @@ const Gallery = {
 
   async _renderComboCard(combo, grid) {
     var self = this;
-    var base = this.baseResults[combo._baseIdx];
-    if (!base) return;
+    // Use the template matching this combo's border style
+    var borderStyle = combo.style || 'simple';
+    var entry = this.templatesByBorder[borderStyle];
+    if (!entry) {
+      // Fallback to plain if style not found
+      entry = this.templatesByBorder['simple'];
+      borderStyle = 'simple';
+    }
+    if (!entry) return;
+
+    var fontKey = combo.font || 'Oswald';
+    var fontWeight = this.FONT_WEIGHTS[fontKey] || '500';
+
     try {
-      var svg = base.svgString;
+      // Start from raw template SVG
+      var svg = entry.svg;
+
+      // Swap font
+      svg = svg.replace(/font-family=["']'?[^"']*'?["']/g, "font-family=\"'" + fontKey + "'\"");
+      svg = svg.replace(/font-weight=["'][^"']*["']/g, 'font-weight="' + fontWeight + '"');
+
+      // Replace text
+      var zone = entry.zones && entry.zones[0];
+      var idx = zone ? (zone.svg_element_index || 0) : 0;
+      svg = SvgRenderer.replaceTextInString(svg, idx, self.currentText);
+
+      // Full autoFit (iframe measurement — the key to pixel-perfect rendering)
+      if (zone && zone.bounding_width) {
+        var originalScaleX = zone.transform_matrix
+          ? parseFloat((zone.transform_matrix.match(/matrix\(\s*([\d.]+)/) || [])[1]) || 1
+          : 1;
+        svg = await SvgRenderer.autoFitTextInString(
+          svg, idx, zone.bounding_width, zone.font_size || 128,
+          originalScaleX, combo.frames || 'single',
+          combo.fill || 'empty', combo.corners || 'straight',
+          borderStyle, 'rectangle'
+        );
+      }
+
+      // Full pipeline (same as product page renderPreview)
       svg = SvgRenderer.colorize(svg, combo.color);
       svg = SvgRenderer.applyThinStroke(svg);
       svg = SvgRenderer.cropViewBoxToStamp(svg);
+
       if (combo.corners && combo.corners !== 'straight') {
         svg = SvgRenderer.applyCornerRadius(svg, combo.corners);
       } else {
         svg = svg.replace(/\s*rx=["'][\d.]+["']/gi, '').replace(/\s*ry=["'][\d.]+["']/gi, '');
       }
+
       var bi = SvgRenderer.detectBorderType(svg);
-      SvgRenderer.supplementBorderInfo(bi, { border_type: base.borderType, fill_type: combo.fill });
+      SvgRenderer.supplementBorderInfo(bi, { border_type: borderStyle, fill_type: combo.fill });
       if (combo.frames === 'double') {
         svg = SvgRenderer.addDoubleFrame(svg, bi, combo.color, 'double');
       } else if (combo.frames === 'split') {
         svg = SvgRenderer.addSplitBorder(svg, bi);
       }
+
       if (combo.texture) {
         try { svg = await SvgRenderer.applyTexture(svg, combo.texture); } catch(e) {}
       }
       svg = SvgRenderer.addWatermark(svg);
       if (combo.tilt !== 0) svg = SvgRenderer.applyTilt(svg, combo.tilt);
-      var productUrl = '/product.html?id=' + encodeURIComponent(base.templateId) +
+
+      // Build product URL with ALL combo params
+      var productUrl = '/product.html?id=' + encodeURIComponent(entry.tpl.id) +
         '&text=' + encodeURIComponent(self.currentText) +
         '&color=' + encodeURIComponent(combo.color.replace('#', '')) +
-        '&font=' + encodeURIComponent(base.fontKey || 'Oswald') +
+        '&font=' + encodeURIComponent(fontKey) +
         '&frame=' + encodeURIComponent(combo.frames) +
         '&fill=' + encodeURIComponent(combo.fill) +
         '&shape=rectangle&tilt=' + combo.tilt +
         (combo.texture ? '&texture=' + encodeURIComponent(combo.texture) : '') +
-        '&corners=' + encodeURIComponent(combo.corners);
+        '&corners=' + encodeURIComponent(combo.corners) +
+        '&style=' + encodeURIComponent(borderStyle);
+
       var card = document.createElement('div');
       card.className = 'stamp-card';
       var previewLink = document.createElement('a');
