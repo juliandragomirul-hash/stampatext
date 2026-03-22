@@ -845,6 +845,8 @@ const SvgRenderer = {
     var shapes = '';
     var spacing = radius * (spacingMult || 2.5);
     var trace = SvgRenderer._generateTrace(x, y, w, h, cornerType || 'straight');
+    // innerEdge: shapes centered on rect edge extend inward by radius
+    var innerEdge = radius;
 
     if (shape === 'lined') {
       // Lined: top + bottom only
@@ -855,7 +857,7 @@ const SvgRenderer = {
         shapes += this._borderShape(shapeType, cx, y, radius);
         shapes += this._borderShape(shapeType, cx, y + h, radius);
       }
-      return shapes;
+      return { svg: shapes, innerEdge: innerEdge };
     }
 
     if (trace.hasRounding) {
@@ -882,7 +884,7 @@ const SvgRenderer = {
       }
     }
 
-    return shapes;
+    return { svg: shapes, innerEdge: innerEdge };
   },
 
   _borderShape: function(type, cx, cy, r) {
@@ -921,8 +923,8 @@ const SvgRenderer = {
       var dBot = 'M ' + F(x) + ',' + F(y + h);
       for (var i = 0; i < numH; i++) { var fl = (i % 2 === 0) ? 1 : -1; var sx = x + i * segW;
         dBot += ' C '+F(sx+segW*0.3)+','+F(y+h+fl*depth)+' '+F(sx+segW*0.7)+','+F(y+h+fl*depth)+' '+F(sx+segW)+','+F(y+h); }
-      return '<path d="' + dTop + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>' +
-        '<path d="' + dBot + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>';
+      return { svg: '<path d="' + dTop + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<path d="' + dBot + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>', innerEdge: depth + strokeW / 2 };
     }
 
     var numV = Math.max(3, Math.round(h / segW));
@@ -946,7 +948,8 @@ const SvgRenderer = {
     d += ' Z';
 
     var fillAttr = filled ? color : 'none';
-    return '<path d="' + d + '" fill="' + fillAttr + '" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round"/>';
+    var innerEdge = depth + strokeW / 2;
+    return { svg: '<path d="' + d + '" fill="' + fillAttr + '" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="round"/>', innerEdge: innerEdge };
   },
 
   // True zigzag border: like wavy but with straight V-shaped segments.
@@ -981,8 +984,8 @@ const SvgRenderer = {
       botPts.push(F(x + w) + ',' + F(y + h));
       var topD = 'M' + topPts[0]; for (var i = 1; i < topPts.length; i++) topD += ' L' + topPts[i];
       var botD = 'M' + botPts[0]; for (var i = 1; i < botPts.length; i++) botD += ' L' + botPts[i];
-      return '<path d="' + topD + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter" stroke-linecap="square"/>' +
-        '<path d="' + botD + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter" stroke-linecap="square"/>';
+      return { svg: '<path d="' + topD + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter" stroke-linecap="square"/>' +
+        '<path d="' + botD + '" fill="none" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter" stroke-linecap="square"/>', innerEdge: depth + strokeW / 2 };
     }
 
     var numV = Math.max(3, Math.round(h / segW));
@@ -1024,7 +1027,8 @@ const SvgRenderer = {
     pathD += ' Z';
 
     var fillAttr = filled ? color : 'none';
-    return '<path d="' + pathD + '" fill="' + fillAttr + '" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter"/>';
+    var innerEdge = depth + strokeW / 2;
+    return { svg: '<path d="' + pathD + '" fill="' + fillAttr + '" stroke="' + color + '" stroke-width="' + strokeW + '" stroke-linejoin="miter"/>', innerEdge: innerEdge };
   },
 
   // Programmatic brush border for lined stamps: dashed lines + turbulence filter.
@@ -1067,6 +1071,9 @@ const SvgRenderer = {
   _generateStitchShapes: function(x, y, w, h, shapeType, size, spacing, color, shape, cornerType, rxOffset) {
     var shapes = '';
     var half = size / 2;
+    // Stitch shapes sit on expanded rect (outward from original rect).
+    // innerEdge = 0 means decoration doesn't intrude past original rect edge.
+    var innerEdge = 0;
     var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
     var isLined = (shape === 'lined');
@@ -1097,7 +1104,7 @@ const SvgRenderer = {
       var hStep = w / numH;
       for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
       for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
-      return shapes;
+      return { svg: shapes, innerEdge: innerEdge };
     }
 
     if (!trace.hasRounding) {
@@ -1155,7 +1162,7 @@ const SvgRenderer = {
       if (dArcs) {
         shapes += '<path d="' + dArcs.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + cornerDashLen.toFixed(1) + ' ' + cornerSpacing.toFixed(1) + '" stroke-linecap="butt"/>';
       }
-      return shapes;
+      return { svg: shapes, innerEdge: innerEdge };
     }
 
     // Stitch dot/square: walk the trace perimeter
@@ -1163,7 +1170,7 @@ const SvgRenderer = {
     for (var i = 0; i < points.length; i++) {
       addShape(points[i].x, points[i].y, points[i].angle, points[i].rotDeg);
     }
-    return shapes;
+    return { svg: shapes, innerEdge: innerEdge };
   },
 
   getDominantColor(svgString) {
@@ -3517,12 +3524,15 @@ const SvgRenderer = {
         }
         // Diamonds: spacing = 2r for tangent side corners; circles keep 2.5r gap
         var bSpacingMult = bParts[2] ? parseFloat(bParts[2]) : (bShape === 'diamond' ? 2 : 2.5);
-        var shapesHtml = SvgRenderer._generateBorderShapes(
+        var shapesResult = SvgRenderer._generateBorderShapes(
           borderShapeData.x, borderShapeData.y,
           borderShapeData.w, borderShapeData.h,
           bShape, bRadius, bSpacingMult, stampShape, cornerType
         );
+        var shapesHtml = shapesResult.svg;
+        var borderInnerEdge = shapesResult.innerEdge;
         result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
+        result = result.replace(/<svg /, '<svg data-border-inner-edge="' + borderInnerEdge.toFixed(1) + '" ');
       }
 
       // ---- STITCH BORDER (line/square/circle shapes) ----
@@ -3533,12 +3543,15 @@ const SvgRenderer = {
         var sSpacing = Math.max(10, Math.min(50, Math.round(((sType === 'circle') ? 20 : (sType === 'line') ? 50 : 20) * decorWeightRatio)));
         // Offset shapes outward so they're clearly outside the fill
         var sOffset = sSize * 0.75;
-        var stitchHtml = SvgRenderer._generateStitchShapes(
+        var stitchResult = SvgRenderer._generateStitchShapes(
           stitchData.x - sOffset, stitchData.y - sOffset,
           stitchData.w + sOffset * 2, stitchData.h + sOffset * 2,
           sType, sSize, sSpacing, stitchData.color, stampShape, cornerType, sOffset
         );
+        var stitchHtml = stitchResult.svg;
+        var borderInnerEdge = stitchResult.innerEdge;
         result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
+        result = result.replace(/<svg /, '<svg data-border-inner-edge="' + borderInnerEdge.toFixed(1) + '" ');
         // Tag SVG so cropViewBoxToStamp can add stitch margin
         result = result.replace(/<svg /, '<svg data-stitch-gen="' + sType + '" ');
       }
@@ -3549,19 +3562,24 @@ const SvgRenderer = {
         if (wavyData.variant === 'zigzag') {
           // True zigzag: 30-60 stroke range (same as wavy)
           var scaledZzSw = Math.max(30, Math.min(60, Math.round(40 * decorWeightRatio)));
-          wavyHtml = SvgRenderer._generateZigzagBorder(
+          var wavyResult = SvgRenderer._generateZigzagBorder(
             wavyData.x, wavyData.y, wavyData.w, wavyData.h,
             wavyData.color, scaledZzSw, wavyData.filled, stampShape
           );
+          wavyHtml = wavyResult.svg;
+          var borderInnerEdge = wavyResult.innerEdge;
         } else {
           // Wavy curves: 30-60 range
           var scaledWavySw = Math.max(30, Math.min(60, Math.round(46 * decorWeightRatio)));
-          wavyHtml = SvgRenderer._generateWavyBorder(
+          var wavyResult = SvgRenderer._generateWavyBorder(
             wavyData.x, wavyData.y, wavyData.w, wavyData.h,
             wavyData.color, scaledWavySw, wavyData.variant, wavyData.filled, stampShape
           );
+          wavyHtml = wavyResult.svg;
+          var borderInnerEdge = wavyResult.innerEdge;
         }
         result = result.replace(/<text/, wavyHtml + '<text');
+        result = result.replace(/<svg /, '<svg data-border-inner-edge="' + borderInnerEdge.toFixed(1) + '" ');
       }
       // Tag SVG so cropViewBoxToStamp can add wavy margin
       if (wavyGenTag) {
@@ -5319,24 +5337,23 @@ const SvgRenderer = {
         if (wswM) wavySw = parseFloat(wswM[1]);
       }
     }
-    // Unified inner frame formula V2: anchor to innermost pixel of outer border
-    // Use effective osw: for styles that reduce rect stroke (stitch), use origStrokeWidth
+    // Multi-pass inner frame: use measured innerEdge from border generators
+    // Use effective osw for innerSw: stitch/wavy reduce rect stroke, use origStrokeWidth
     var effectiveOsw = osw;
     if ((bi.stitch || bi.wavy) && bi.origStrokeWidth && bi.origStrokeWidth > osw) {
       effectiveOsw = bi.origStrokeWidth;
     }
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
-    // Border intrusion: from outer rect CENTER to innermost pixel of decoration
-    var borderIntrusion;
-    if (bi.stitch)      borderIntrusion = osw * 0.5 + osw * 0.12;  // stroke half + stitch overhang
-    else if (bi.border) borderIntrusion = osw * 0.5 + osw * 0.25;  // stroke half + tooth/hole depth
-    else if (bi.wavy)   borderIntrusion = wavySw * 0.7;             // wavy/zigzag inward amplitude
-    else if (bi.brush)  borderIntrusion = osw * 0.85;
-    else if (bi.filter) borderIntrusion = osw * 0.55;               // torn/chalk displacement
-    else                borderIntrusion = osw * 0.5;                // plain: half stroke width
+    // Read measured innerEdge from Pass 2 (stored as data attribute by border generators)
+    var edgeAttr = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
+    var measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : osw * 0.5;
+    // For plain (no decoration): innerEdge = half stroke width
+    if (!bi.stitch && !bi.border && !bi.wavy && !bi.brush && !bi.filter && !edgeAttr) {
+      measuredInnerEdge = osw * 0.5;
+    }
     // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
     var whiteGap = innerSw;
-    var inset = borderIntrusion + whiteGap + innerSw * 0.5;
+    var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
 
