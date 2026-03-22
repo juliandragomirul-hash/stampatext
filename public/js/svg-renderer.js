@@ -3586,6 +3586,10 @@ const SvgRenderer = {
         result = result.replace(/<svg /, '<svg data-wavy-gen="' + wavyGenTag + '" ');
       }
 
+      // Store proportional stroke for consistent innerSw in addDoubleFrame
+      var clampedPropSw = Math.max(swMin, Math.min(swMax, proportionalSw));
+      result = result.replace(/<svg /, '<svg data-prop-sw="' + clampedPropSw.toFixed(1) + '" ');
+
       // ---- BORDER FILTER (ripped paper etc.) ----
       if (borderFilterData) {
         var fParts = borderFilterData.split('-');
@@ -5338,11 +5342,9 @@ const SvgRenderer = {
       }
     }
     // Multi-pass inner frame: use measured innerEdge from border generators
-    // Use effective osw for innerSw: stitch/wavy reduce rect stroke, use origStrokeWidth
-    var effectiveOsw = osw;
-    if ((bi.stitch || bi.wavy) && bi.origStrokeWidth && bi.origStrokeWidth > osw) {
-      effectiveOsw = bi.origStrokeWidth;
-    }
+    // Use proportional stroke (stored by autoFit) for consistent innerSw across all styles
+    var propSwAttr = svgStr.match(/data-prop-sw="([\d.]+)"/);
+    var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
     // Read measured innerEdge from Pass 2 (stored as data attribute by border generators)
     var edgeAttr = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
