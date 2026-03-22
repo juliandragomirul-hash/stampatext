@@ -5632,7 +5632,7 @@ const SvgRenderer = {
           var c = corners[ci];
           if (c.rx <= 0) continue;
           var numSmall = uniformNumSmall;  // same count for all corners
-          for (var si = 0; si <= numSmall; si++) {
+          for (var si = 1; si < numSmall; si++) {  // skip endpoints to avoid overlap with big circles
             var t = si / numSmall;
             var angle = (c.startAngle + t * (c.endAngle - c.startAngle)) * Math.PI / 180;
             var px = c.cx + c.rx * Math.cos(angle);
