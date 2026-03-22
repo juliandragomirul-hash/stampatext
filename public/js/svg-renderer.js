@@ -5209,10 +5209,11 @@ const SvgRenderer = {
       var loStroke = stML ? stML[1] : '#000000';
       var innerSw = Math.max(6, Math.round(losw * 0.36));
       var borderIntrusion = losw * 0.5;
-      if (bi.stitch) borderIntrusion = losw * 0.5;
-      else if (bi.border) borderIntrusion = losw * 0.65;
-      else if (bi.filter) borderIntrusion = losw * 0.5;
-      var inset = borderIntrusion + losw * 0.25 + innerSw * 0.5;
+      if (bi.stitch) borderIntrusion = losw * 0.5 + losw * 0.12;
+      else if (bi.border) borderIntrusion = losw * 0.5 + losw * 0.25;
+      else if (bi.filter) borderIntrusion = losw * 0.55;
+      var whiteGap = innerSw;
+      var inset = borderIntrusion + whiteGap + innerSw * 0.5;
       var innerColor = appliedColor || loStroke;
       var iPathD = 'M' + (lox + inset).toFixed(2) + ',' + (loy + inset).toFixed(2) +
         ' H' + (lx2 - inset).toFixed(2) +
@@ -5318,19 +5319,19 @@ const SvgRenderer = {
         if (wswM) wavySw = parseFloat(wswM[1]);
       }
     }
-    // Unified inner frame formula: consistent stroke + gap for ALL styles
+    // Unified inner frame formula V2: anchor to innermost pixel of outer border
     var innerSw = Math.max(6, Math.round(osw * 0.36));
-    // Border intrusion: how far each style's decoration extends inward from outer rect center
+    // Border intrusion: from outer rect CENTER to innermost pixel of decoration
     var borderIntrusion;
-    if (bi.stitch)      borderIntrusion = osw * 0.5;
-    else if (bi.border) borderIntrusion = osw * 0.65;   // sawtooth/perforated teeth depth
-    else if (bi.wavy)   borderIntrusion = wavySw * 0.6;  // wavy/zigzag amplitude
-    else if (bi.brush)  borderIntrusion = osw * 0.8;
-    else if (bi.filter) borderIntrusion = osw * 0.5;     // torn/chalk displacement
-    else                borderIntrusion = osw * 0.5;     // plain: half stroke width
-    // Consistent gap between outer border edge and inner rect
-    var gap = osw * 0.25;
-    var inset = borderIntrusion + gap + innerSw * 0.5;
+    if (bi.stitch)      borderIntrusion = osw * 0.5 + osw * 0.12;  // stroke half + stitch overhang
+    else if (bi.border) borderIntrusion = osw * 0.5 + osw * 0.25;  // stroke half + tooth/hole depth
+    else if (bi.wavy)   borderIntrusion = wavySw * 0.7;             // wavy/zigzag inward amplitude
+    else if (bi.brush)  borderIntrusion = osw * 0.85;
+    else if (bi.filter) borderIntrusion = osw * 0.55;               // torn/chalk displacement
+    else                borderIntrusion = osw * 0.5;                // plain: half stroke width
+    // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
+    var whiteGap = innerSw;
+    var inset = borderIntrusion + whiteGap + innerSw * 0.5;
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
 
