@@ -5348,10 +5348,17 @@ const SvgRenderer = {
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
     // Read measured innerEdge from Pass 2 (stored as data attribute by border generators)
     var edgeAttr = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
-    var measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : osw * 0.5;
-    // For plain (no decoration): innerEdge = half stroke width
-    if (!bi.stitch && !bi.border && !bi.wavy && !bi.brush && !bi.filter && !edgeAttr) {
-      measuredInnerEdge = osw * 0.5;
+    var measuredInnerEdge;
+    if (edgeAttr) {
+      measuredInnerEdge = parseFloat(edgeAttr[1]);
+    } else {
+      // Fallback: estimate innerEdge per style when data attribute missing
+      if (bi.stitch)      measuredInnerEdge = 0;              // stitch sits outside rect
+      else if (bi.border) measuredInnerEdge = effectiveOsw * 0.75;  // sawtooth/perforated teeth
+      else if (bi.wavy)   measuredInnerEdge = wavySw * 0.7;   // wavy amplitude
+      else if (bi.brush)  measuredInnerEdge = effectiveOsw * 0.85;
+      else if (bi.filter) measuredInnerEdge = effectiveOsw * 0.55;
+      else                measuredInnerEdge = effectiveOsw * 0.5;   // plain
     }
     // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
     var whiteGap = innerSw;
