@@ -1535,7 +1535,9 @@
     }
 
     function closeModal() {
-      document.getElementById('auth-modal').classList.remove('active');
+      var modal = document.getElementById('auth-modal');
+      modal.classList.remove('active');
+      modal.style.display = 'none';
       document.getElementById('login-error').classList.remove('visible');
       document.getElementById('signup-error').classList.remove('visible');
     }
