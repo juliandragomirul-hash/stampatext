@@ -968,7 +968,12 @@
       document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
 
       // Download popup open/close
-      document.getElementById('btn-download-open').addEventListener('click', function() {
+      document.getElementById('btn-download-open').addEventListener('click', async function() {
+        var sess = await sb.auth.getSession();
+        if (!sess.data.session) {
+          document.getElementById('auth-modal').style.display = 'flex';
+          return;
+        }
         document.getElementById('download-popup').style.display = 'block';
         document.getElementById('download-popup-backdrop').style.display = 'block';
       });
