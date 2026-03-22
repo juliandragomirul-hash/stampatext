@@ -5348,16 +5348,15 @@ const SvgRenderer = {
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
     // Read measured innerEdge from Pass 2 (stored as data attribute by border generators)
     var edgeAttr = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
-    // Per-style innerEdge: tuned values based on osw (actual rect stroke, not proportional)
+    // Inner edge: distance from outer rect center to its inner pixel edge
+    // Group 1 (rect-based: plain, perforated, spaced perf, sawtooth) = osw/2 (identical outer rect)
+    // Group 2 (non-rect: stitch, wavy, brush, filter) = custom per style
     var measuredInnerEdge;
-    if (bi.stitch)      measuredInnerEdge = 0;
-    else if (bi.border && bi.border.indexOf('diamond') === 0) measuredInnerEdge = osw * 0.55;
-    else if (bi.border && bi.border.indexOf('circle-25') === 0) measuredInnerEdge = osw * 0.65;
-    else if (bi.border) measuredInnerEdge = osw * 0.75;
+    if (bi.stitch)      measuredInnerEdge = 0;              // no rect stroke
     else if (bi.wavy)   measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : wavySw * 0.7;
     else if (bi.brush)  measuredInnerEdge = osw * 0.85;
     else if (bi.filter) measuredInnerEdge = osw * 0.55;
-    else                measuredInnerEdge = osw * 0.5;
+    else                measuredInnerEdge = osw * 0.5;      // plain + perforated + spaced perf + sawtooth
     // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
     var whiteGap = innerSw;
     var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
