@@ -5354,7 +5354,7 @@ const SvgRenderer = {
     } else {
       // Fallback: estimate innerEdge per style when data attribute missing
       if (bi.stitch)      measuredInnerEdge = 0;              // stitch sits outside rect
-      else if (bi.border) measuredInnerEdge = effectiveOsw * 0.75;  // sawtooth/perforated teeth
+      else if (bi.border) measuredInnerEdge = effectiveOsw * 0.75;  // sawtooth/perforated/spaced perf
       else if (bi.wavy)   measuredInnerEdge = wavySw * 0.7;   // wavy amplitude
       else if (bi.brush)  measuredInnerEdge = effectiveOsw * 0.85;
       else if (bi.filter) measuredInnerEdge = effectiveOsw * 0.55;
@@ -5363,6 +5363,7 @@ const SvgRenderer = {
     // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
     var whiteGap = innerSw;
     var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
+    console.log('[FRAME-B] style=' + (bi.stitch ? 'stitch' : bi.border ? 'border:' + bi.border : bi.wavy ? 'wavy' : bi.filter ? 'filter' : 'plain') + ' edgeAttr=' + (edgeAttr ? edgeAttr[1] : 'NONE') + ' measuredInnerEdge=' + measuredInnerEdge.toFixed(1) + ' effectiveOsw=' + effectiveOsw.toFixed(1) + ' innerSw=' + innerSw + ' whiteGap=' + whiteGap + ' inset=' + inset.toFixed(1));
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
 
