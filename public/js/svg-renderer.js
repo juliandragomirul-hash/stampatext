@@ -5641,7 +5641,8 @@ const SvgRenderer = {
           }
         }
 
-        // Pass 2: Fill straight edges with exact full-size shapes
+        // Pass 2: Fill straight edges with exact full-size shapes (inset from corner zones)
+        var cornerBite = smallR * 2;  // space taken by last corner circle + gap
         var edges = [
           { x1: ox + splitTrace.rxTL, y1: oy, x2: ox + ow - splitTrace.rxTR, y2: oy },           // top
           { x1: ox + ow, y1: oy + splitTrace.rxTR, x2: ox + ow, y2: oy + oh - splitTrace.rxBR },  // right
@@ -5650,16 +5651,19 @@ const SvgRenderer = {
         ];
         for (var ei = 0; ei < edges.length; ei++) {
           var e = edges[ei];
-          var edgeLen = Math.sqrt((e.x2 - e.x1) * (e.x2 - e.x1) + (e.y2 - e.y1) * (e.y2 - e.y1));
-          if (edgeLen < perfSpacing) continue;
+          var rawLen = Math.sqrt((e.x2 - e.x1) * (e.x2 - e.x1) + (e.y2 - e.y1) * (e.y2 - e.y1));
+          if (rawLen < perfSpacing) continue;
+          var edgeDx = (e.x2 - e.x1) / rawLen, edgeDy = (e.y2 - e.y1) / rawLen;
+          // Inset start/end to avoid overlapping with corner small circles
+          var ix1 = e.x1 + edgeDx * cornerBite, iy1 = e.y1 + edgeDy * cornerBite;
+          var ix2 = e.x2 - edgeDx * cornerBite, iy2 = e.y2 - edgeDy * cornerBite;
+          var edgeLen = rawLen - cornerBite * 2;
+          if (edgeLen < perfRadius * 2) continue;
           var numFull = Math.max(1, Math.round(edgeLen / perfSpacing));
-          var actualSpacing = edgeLen / numFull;
-          var edgeDx = (e.x2 - e.x1) / edgeLen, edgeDy = (e.y2 - e.y1) / edgeLen;
           for (var fi = 0; fi <= numFull; fi++) {
             var t2 = fi / numFull;
-            var fpx = e.x1 + t2 * (e.x2 - e.x1);
-            var fpy = e.y1 + t2 * (e.y2 - e.y1);
-            // rotDeg for diamonds: edge direction angle
+            var fpx = ix1 + t2 * (ix2 - ix1);
+            var fpy = iy1 + t2 * (iy2 - iy1);
             var edgeRotDeg = Math.atan2(edgeDy, edgeDx) * 180 / Math.PI;
             perfHtml += SvgRenderer._borderShape(bShape, fpx, fpy, perfRadius, bShape === 'diamond' ? edgeRotDeg : 0);
           }
