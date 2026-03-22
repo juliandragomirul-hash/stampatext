@@ -5420,8 +5420,7 @@ const SvgRenderer = {
    */
   addSplitBorder(svgStr, bi) {
     bi = bi || {};
-    // Skip perforated/sawtooth (diamond shapes)
-    if (bi.border) return svgStr;
+    // Perforated/sawtooth: create split effect on white shapes
     // Skip brushstroke
     if (bi.brush) return svgStr;
     var isCat1Border = bi.wavy || bi.stitch || bi.filter;
@@ -5536,7 +5535,7 @@ const SvgRenderer = {
             ringHtml += '<circle cx="' + ccx + '" cy="' + ccy + '" r="' + (cr * 0.55).toFixed(2) + '" fill="#FFFFFF"/>';
           }
         } else {
-          var stitchRectRe = /<rect\s+x="([\d.\-]+)"\s+y="([\d.\-]+)"\s+width="([\d.]+)"\s+height="([\d.]+)"\s+fill="(?!#FFF|#FFFFFF|white|none)([^"]+)"\s*\/>/gi;
+          var stitchRectRe = /<rect\s+x="([\d.\-]+)"\s+y="([\d.\-]+)"\s+width="([\d.]+)"\s+height="([\d.]+)"\s+fill="(?!#FFF|#FFFFFF|white|none)([^"]+)"([^\/]*)\/?>/gi;
           var srm;
           // Stitch line: uniform inset from shorter dim (even border all sides)
           // Stitch square: proportional inset per axis (22.5%)
@@ -5544,17 +5543,72 @@ const SvgRenderer = {
           while ((srm = stitchRectRe.exec(svgStr)) !== null) {
             var sx = parseFloat(srm[1]), sy = parseFloat(srm[2]);
             var sw = parseFloat(srm[3]), sh = parseFloat(srm[4]);
+            var extraAttrs = srm[6] || '';
             if (sw > 200 || sh > 200) continue;
             var uniformInset = Math.min(sw, sh) * 0.225;
             var insetX = isLine ? uniformInset : sw * 0.225;
             var insetY = isLine ? uniformInset : sh * 0.225;
+            // Preserve transform (rotation) for corner squares
+            var transformM = extraAttrs.match(/transform="([^"]*)"/);
+            var transformAttr = transformM ? ' transform="' + transformM[1] + '"' : '';
             ringHtml += '<rect x="' + (sx + insetX).toFixed(2) + '" y="' + (sy + insetY).toFixed(2) +
               '" width="' + Math.max(1, sw - 2 * insetX).toFixed(2) +
-              '" height="' + Math.max(1, sh - 2 * insetY).toFixed(2) + '" fill="#FFFFFF"/>';
+              '" height="' + Math.max(1, sh - 2 * insetY).toFixed(2) + '" fill="#FFFFFF"' + transformAttr + '/>';
+          }
+        }
+        // Stitch line: also handle dasharray paths
+        if (bi.stitch === 'line') {
+          var dashPathRe = /<path[^>]*stroke-dasharray="[^"]*"[^>]*\/?>/gi;
+          var dpm;
+          while ((dpm = dashPathRe.exec(svgStr)) !== null) {
+            var pathEl = dpm[0];
+            // Skip if already white
+            if (/stroke="#FFF/i.test(pathEl) || /stroke="white/i.test(pathEl)) continue;
+            // Get stroke width and create a thinner white overlay
+            var pswM = pathEl.match(/stroke-width="([\d.]+)"/);
+            var psw = pswM ? parseFloat(pswM[1]) : 20;
+            ringHtml += pathEl
+              .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
+              .replace(/stroke-width="[^"]*"/, 'stroke-width="' + (psw * 0.45).toFixed(1) + '"');
           }
         }
         if (ringHtml) {
           svgStr = svgStr.replace(/<\/svg>/, ringHtml + '</svg>');
+        }
+        innerHtml = '';
+      }
+      // Perforated/sawtooth: overlay colored shapes to create split effect
+      else if (bi.border) {
+        var borderRingHtml = '';
+        // Find white circles (perforated)
+        var whiteCircleRe = /<circle\s+cx="([\d.\-]+)"\s+cy="([\d.\-]+)"\s+r="([\d.]+)"\s+fill="#FFFFFF"\s*\/>/gi;
+        var wcm;
+        while ((wcm = whiteCircleRe.exec(svgStr)) !== null) {
+          var bcx = wcm[1], bcy = wcm[2], br = parseFloat(wcm[3]);
+          // Add a smaller colored circle on top — creates a white ring around colored center
+          var stampColor = svgStr.match(/\bstroke="(#[0-9A-Fa-f]{3,6})"/);
+          var sc = stampColor ? stampColor[1] : '#000000';
+          borderRingHtml += '<circle cx="' + bcx + '" cy="' + bcy + '" r="' + (br * 0.55).toFixed(2) + '" fill="' + sc + '"/>';
+        }
+        // Find white diamond paths (sawtooth) — they use polygon points
+        var whiteDiamondRe = /<polygon\s+points="([^"]+)"\s+fill="#FFFFFF"\s*\/>/gi;
+        var wdm;
+        while ((wdm = whiteDiamondRe.exec(svgStr)) !== null) {
+          // Scale the diamond down by 55% around its center
+          var pts = wdm[1].split(/\s+/);
+          if (pts.length === 4) {
+            var coords = pts.map(function(p) { var xy = p.split(','); return { x: parseFloat(xy[0]), y: parseFloat(xy[1]) }; });
+            var cx2 = (coords[0].x + coords[2].x) / 2, cy2 = (coords[1].y + coords[3].y) / 2;
+            var scaled = coords.map(function(c) {
+              return ((cx2 + (c.x - cx2) * 0.55).toFixed(2) + ',' + (cy2 + (c.y - cy2) * 0.55).toFixed(2));
+            });
+            var stampColor2 = svgStr.match(/\bstroke="(#[0-9A-Fa-f]{3,6})"/);
+            var sc2 = stampColor2 ? stampColor2[1] : '#000000';
+            borderRingHtml += '<polygon points="' + scaled.join(' ') + '" fill="' + sc2 + '"/>';
+          }
+        }
+        if (borderRingHtml) {
+          svgStr = svgStr.replace(/<\/svg>/, borderRingHtml + '</svg>');
         }
         innerHtml = '';
       }
