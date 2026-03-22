@@ -2125,6 +2125,15 @@ const Gallery = {
       var previewLink = document.createElement('a');
       previewLink.className = 'stamp-card-preview';
       previewLink.href = productUrl;
+      // Save full combo to sessionStorage on click (fallback for old URLs missing params)
+      previewLink.addEventListener('click', function() {
+        try {
+          sessionStorage.setItem('stx-product-combo', JSON.stringify({
+            corners: combo.corners, style: borderStyle, fill: combo.fill,
+            texture: combo.texture, tilt: combo.tilt
+          }));
+        } catch(e) {}
+      });
       previewLink.appendChild(SvgRenderer.createSvgImage(svg));
       card.appendChild(previewLink);
       grid.appendChild(card);

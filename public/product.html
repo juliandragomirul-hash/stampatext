@@ -578,9 +578,21 @@
       var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
       var cleanedSvg = SvgRenderer.cleanSvgString(rawSvg);
 
-      // Set current border/corner style from loaded template (URL params take priority)
-      if (!params.get('style')) currentBorderStyle = templateBorderType || 'simple';
-      if (!params.get('corners')) currentCornerStyle = templateCornerType || 'straight';
+      // Set current border/corner style from loaded template (URL params take priority, sessionStorage as fallback)
+      var comboFallback = null;
+      try { comboFallback = JSON.parse(sessionStorage.getItem('stx-product-combo')); } catch(e) {}
+      if (!params.get('style')) {
+        currentBorderStyle = (comboFallback && comboFallback.style) || templateBorderType || 'simple';
+      }
+      if (!params.get('corners')) {
+        currentCornerStyle = (comboFallback && comboFallback.corners) || templateCornerType || 'straight';
+      }
+      if (!params.get('texture') && comboFallback && comboFallback.texture) {
+        currentTexture = comboFallback.texture;
+      }
+      if (!params.get('tilt') && comboFallback && comboFallback.tilt) {
+        currentTilt = comboFallback.tilt;
+      }
 
       // Store this template's SVG indexed by border type
       allTemplatesByBorder[currentBorderStyle] = {
