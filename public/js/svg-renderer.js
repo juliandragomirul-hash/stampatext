@@ -5352,7 +5352,7 @@ const SvgRenderer = {
     // Group 1 (rect-based: plain, perforated, spaced perf, sawtooth) = osw/2 (identical outer rect)
     // Group 2 (non-rect: stitch, wavy, brush, filter) = custom per style
     var measuredInnerEdge;
-    if (bi.stitch)      measuredInnerEdge = 0;              // no rect stroke
+    if (bi.stitch)      measuredInnerEdge = -8;             // no rect stroke, pull inner rect slightly outward
     else if (bi.wavy)   measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : wavySw * 0.7;
     else if (bi.brush)  measuredInnerEdge = osw * 0.85;
     else if (bi.filter) measuredInnerEdge = osw * 0.55;
