@@ -5605,10 +5605,15 @@ const SvgRenderer = {
         var cornerAttrM = svgStr.match(/data-corner-type="([^"]*)"/);
         var splitCornerType = cornerAttrM ? cornerAttrM[1] : 'straight';
         var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, splitCornerType);
-        // Walk the trace, placing perforation shapes with same size/spacing as Frames=A
+        // Walk the trace, placing perforation shapes — skip overlapping shapes at corners
         var perfPoints = SvgRenderer._walkTrace(splitTrace, perfSpacing);
+        var minDist = perfRadius * 2.2;  // minimum distance between shapes (no overlap)
+        var lastPx = -9999, lastPy = -9999;
         for (var pi = 0; pi < perfPoints.length; pi++) {
+          var dx = perfPoints[pi].x - lastPx, dy = perfPoints[pi].y - lastPy;
+          if (Math.sqrt(dx * dx + dy * dy) < minDist) continue;  // skip if too close
           perfHtml += SvgRenderer._borderShape(bShape, perfPoints[pi].x, perfPoints[pi].y, perfRadius, perfPoints[pi].rotDeg);
+          lastPx = perfPoints[pi].x; lastPy = perfPoints[pi].y;
         }
         if (perfHtml) {
           svgStr = svgStr.replace(/<\/svg>/, perfHtml + '</svg>');
