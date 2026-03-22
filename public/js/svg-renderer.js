@@ -5601,10 +5601,18 @@ const SvgRenderer = {
           perfRadius = Math.min(perfRadius * 1.5, halfSw);
         }
         var perfSpacing = perfRadius * bSpacingMult;
-        // Get corner type and generate trace
-        var cornerAttrM = svgStr.match(/data-corner-type="([^"]*)"/);
-        var splitCornerType = cornerAttrM ? cornerAttrM[1] : 'straight';
-        var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, splitCornerType);
+        // Detect corner type from outer rect's rx or mixed-corner path
+        var perfCornerType = 'straight';
+        if (mixedType) {
+          perfCornerType = mixedType;
+        } else if (orx >= 100) {
+          perfCornerType = 'strong_round';
+        } else if (orx >= 60) {
+          perfCornerType = 'medium_round';
+        } else if (orx > 0) {
+          perfCornerType = 'soft_round';
+        }
+        var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, perfCornerType);
         // Walk the trace with fine steps, then place shapes at even intervals
         var fineStep = perfRadius * 0.5;  // dense sampling for smooth curve following
         var finePoints = SvgRenderer._walkTrace(splitTrace, fineStep);
