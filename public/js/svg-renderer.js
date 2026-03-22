@@ -5579,38 +5579,23 @@ const SvgRenderer = {
         }
         innerHtml = '';
       }
-      // Perforated/sawtooth: overlay colored shapes to create split effect
+      // Perforated/sawtooth: mid-stroke perforation (white dots through center of stroke)
       else if (bi.border) {
-        var borderRingHtml = '';
-        // Find white circles (perforated)
-        var whiteCircleRe = /<circle\s+cx="([\d.\-]+)"\s+cy="([\d.\-]+)"\s+r="([\d.]+)"\s+fill="#FFFFFF"\s*\/>/gi;
-        var wcm;
-        while ((wcm = whiteCircleRe.exec(svgStr)) !== null) {
-          var bcx = wcm[1], bcy = wcm[2], br = parseFloat(wcm[3]);
-          // Add a smaller colored circle on top — creates a white ring around colored center
-          var stampColor = svgStr.match(/\bstroke="(#[0-9A-Fa-f]{3,6})"/);
-          var sc = stampColor ? stampColor[1] : '#000000';
-          borderRingHtml += '<circle cx="' + bcx + '" cy="' + bcy + '" r="' + (br * 0.55).toFixed(2) + '" fill="' + sc + '"/>';
+        var perfHtml = '';
+        // Get corner type from SVG attributes
+        var cornerAttrM = svgStr.match(/data-corner-type="([^"]*)"/);
+        var splitCornerType = cornerAttrM ? cornerAttrM[1] : 'straight';
+        // Generate trace at the outer rect edge (stroke center)
+        var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, splitCornerType);
+        // Walk the trace, placing small white perforation circles
+        var perfRadius = Math.max(3, osw2 * 0.2);
+        var perfSpacing = perfRadius * 3;
+        var perfPoints = SvgRenderer._walkTrace(splitTrace, perfSpacing);
+        for (var pi = 0; pi < perfPoints.length; pi++) {
+          perfHtml += '<circle cx="' + perfPoints[pi].x.toFixed(2) + '" cy="' + perfPoints[pi].y.toFixed(2) + '" r="' + perfRadius.toFixed(1) + '" fill="#FFFFFF"/>';
         }
-        // Find white diamond paths (sawtooth) — they use polygon points
-        var whiteDiamondRe = /<polygon\s+points="([^"]+)"\s+fill="#FFFFFF"\s*\/>/gi;
-        var wdm;
-        while ((wdm = whiteDiamondRe.exec(svgStr)) !== null) {
-          // Scale the diamond down by 55% around its center
-          var pts = wdm[1].split(/\s+/);
-          if (pts.length === 4) {
-            var coords = pts.map(function(p) { var xy = p.split(','); return { x: parseFloat(xy[0]), y: parseFloat(xy[1]) }; });
-            var cx2 = (coords[0].x + coords[2].x) / 2, cy2 = (coords[1].y + coords[3].y) / 2;
-            var scaled = coords.map(function(c) {
-              return ((cx2 + (c.x - cx2) * 0.55).toFixed(2) + ',' + (cy2 + (c.y - cy2) * 0.55).toFixed(2));
-            });
-            var stampColor2 = svgStr.match(/\bstroke="(#[0-9A-Fa-f]{3,6})"/);
-            var sc2 = stampColor2 ? stampColor2[1] : '#000000';
-            borderRingHtml += '<polygon points="' + scaled.join(' ') + '" fill="' + sc2 + '"/>';
-          }
-        }
-        if (borderRingHtml) {
-          svgStr = svgStr.replace(/<\/svg>/, borderRingHtml + '</svg>');
+        if (perfHtml) {
+          svgStr = svgStr.replace(/<\/svg>/, perfHtml + '</svg>');
         }
         innerHtml = '';
       }
