@@ -5579,20 +5579,30 @@ const SvgRenderer = {
         }
         innerHtml = '';
       }
-      // Perforated/sawtooth: mid-stroke perforation (white dots through center of stroke)
+      // Perforated/sawtooth: remove edge shapes, add mid-stroke perforation
       else if (bi.border) {
+        // Remove original white edge circles (perforated)
+        svgStr = svgStr.replace(/<circle\s+cx="[\d.\-]+"\s+cy="[\d.\-]+"\s+r="[\d.]+"\s+fill="#FFFFFF"\s*\/>/gi, '');
+        // Remove original white edge diamonds (sawtooth)
+        svgStr = svgStr.replace(/<polygon\s+points="[^"]+"\s+fill="#FFFFFF"[^\/]*\/>/gi, '');
         var perfHtml = '';
         // Get corner type from SVG attributes
         var cornerAttrM = svgStr.match(/data-corner-type="([^"]*)"/);
         var splitCornerType = cornerAttrM ? cornerAttrM[1] : 'straight';
+        // Determine perforation shape from border type
+        var isDiamond = bi.border.indexOf('diamond') === 0;
         // Generate trace at the outer rect edge (stroke center)
         var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, splitCornerType);
-        // Walk the trace, placing small white perforation circles
-        var perfRadius = Math.max(3, osw2 * 0.2);
-        var perfSpacing = perfRadius * 3;
+        // Walk the trace, placing perforation shapes through center of stroke
+        var perfRadius = Math.max(3, osw2 * 0.25);
+        var perfSpacing = isDiamond ? perfRadius * 2.5 : perfRadius * 3;
         var perfPoints = SvgRenderer._walkTrace(splitTrace, perfSpacing);
         for (var pi = 0; pi < perfPoints.length; pi++) {
-          perfHtml += '<circle cx="' + perfPoints[pi].x.toFixed(2) + '" cy="' + perfPoints[pi].y.toFixed(2) + '" r="' + perfRadius.toFixed(1) + '" fill="#FFFFFF"/>';
+          if (isDiamond) {
+            perfHtml += SvgRenderer._borderShape('diamond', perfPoints[pi].x, perfPoints[pi].y, perfRadius, perfPoints[pi].rotDeg);
+          } else {
+            perfHtml += '<circle cx="' + perfPoints[pi].x.toFixed(2) + '" cy="' + perfPoints[pi].y.toFixed(2) + '" r="' + perfRadius.toFixed(1) + '" fill="#FFFFFF"/>';
+          }
         }
         if (perfHtml) {
           svgStr = svgStr.replace(/<\/svg>/, perfHtml + '</svg>');
