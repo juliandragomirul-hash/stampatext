@@ -5359,8 +5359,8 @@ const SvgRenderer = {
     else if (bi.filter) measuredInnerEdge = osw * 0.55;
     else if (bi.border) measuredInnerEdge = effectiveOsw * 0.35;  // perforated/sawtooth: ornaments overlap, reduce gap
     else                measuredInnerEdge = effectiveOsw * 0.5;   // plain: reference
-    // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
-    var whiteGap = innerSw;
+    // White gap: outlined = innerSw (visual rhythm), filled = minimal (no white band needed)
+    var whiteGap = isFull ? 2 : innerSw;
     var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
     console.log('[FRAME-B] style=' + (bi.stitch ? 'stitch' : bi.border ? 'border:' + bi.border : bi.wavy ? 'wavy' : bi.filter ? 'filter' : 'plain') + ' edgeAttr=' + (edgeAttr ? edgeAttr[1] : 'NONE') + ' measuredInnerEdge=' + measuredInnerEdge.toFixed(1) + ' effectiveOsw=' + effectiveOsw.toFixed(1) + ' innerSw=' + innerSw + ' whiteGap=' + whiteGap + ' inset=' + inset.toFixed(1));
     var ix = ox + inset, iy = oy + inset;
