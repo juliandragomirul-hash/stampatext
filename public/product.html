@@ -1298,7 +1298,8 @@
           // Post-autoFit SVG has proportional stroke applied — raw SVG has original
           // stroke-width (50) which produces oversized inner rects in addDoubleFrame.
           var frameBi = detectBorderType(svg);
-          SvgRenderer.supplementBorderInfo(frameBi, { border_type: templateBorderType, fill_type: currentFill });
+          var effectiveBorderType = (currentBorderStyle && currentBorderStyle !== 'simple') ? currentBorderStyle : templateBorderType;
+          SvgRenderer.supplementBorderInfo(frameBi, { border_type: effectiveBorderType, fill_type: currentFill });
           if (currentFrame === 'double') {
             svg = SvgRenderer.addDoubleFrame(svg, frameBi, currentColor, 'double');
           } else if (currentFrame === 'split') {
