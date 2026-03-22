@@ -861,10 +861,10 @@ const SvgRenderer = {
     }
 
     if (trace.hasRounding) {
-      // Rounded: walk the trace perimeter, place shapes at each point
+      // Rounded: walk the trace perimeter, place shapes at each point (with rotation for diamonds)
       var points = SvgRenderer._walkTrace(trace, spacing);
       for (var i = 0; i < points.length; i++) {
-        shapes += this._borderShape(shapeType, points[i].x, points[i].y, radius);
+        shapes += this._borderShape(shapeType, points[i].x, points[i].y, radius, points[i].rotDeg);
       }
     } else {
       // Straight: original full-edge iteration with corners
@@ -887,7 +887,7 @@ const SvgRenderer = {
     return { svg: shapes, innerEdge: innerEdge };
   },
 
-  _borderShape: function(type, cx, cy, r) {
+  _borderShape: function(type, cx, cy, r, rotDeg) {
     if (type === 'circle') {
       return '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + r + '" fill="#FFFFFF"/>';
     }
@@ -896,7 +896,9 @@ const SvgRenderer = {
     var bot = (cy + r).toFixed(2);
     var lft = (cx - r).toFixed(2);
     var rgt = (cx + r).toFixed(2);
-    return '<polygon points="' + cx.toFixed(2) + ',' + top + ' ' + rgt + ',' + cy.toFixed(2) + ' ' + cx.toFixed(2) + ',' + bot + ' ' + lft + ',' + cy.toFixed(2) + '" fill="#FFFFFF"/>';
+    var poly = '<polygon points="' + cx.toFixed(2) + ',' + top + ' ' + rgt + ',' + cy.toFixed(2) + ' ' + cx.toFixed(2) + ',' + bot + ' ' + lft + ',' + cy.toFixed(2) + '" fill="#FFFFFF"';
+    if (rotDeg) poly += ' transform="rotate(' + rotDeg.toFixed(1) + ',' + cx.toFixed(2) + ',' + cy.toFixed(2) + ')"';
+    return poly + '/>';
   },
 
   /**
