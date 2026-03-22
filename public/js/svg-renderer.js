@@ -5207,11 +5207,12 @@ const SvgRenderer = {
       var losw = swML ? parseFloat(swML[1]) : 20;
       var stML = la.match(/\bstroke=["']([^"']+)["']/);
       var loStroke = stML ? stML[1] : '#000000';
-      var innerSw = Math.max(4, Math.round(losw * 0.24));
-      var inset = losw / 2 + innerSw * 1.5;
-      if (bi.stitch) inset = innerSw / 2 + 2;
-      if (bi.border) inset = losw * 0.65;
-      if (bi.filter && bi.fillType !== 'full') inset = Math.max(inset, losw * 0.95);
+      var innerSw = Math.max(6, Math.round(losw * 0.36));
+      var borderIntrusion = losw * 0.5;
+      if (bi.stitch) borderIntrusion = losw * 0.5;
+      else if (bi.border) borderIntrusion = losw * 0.65;
+      else if (bi.filter) borderIntrusion = losw * 0.5;
+      var inset = borderIntrusion + losw * 0.25 + innerSw * 0.5;
       var innerColor = appliedColor || loStroke;
       var iPathD = 'M' + (lox + inset).toFixed(2) + ',' + (loy + inset).toFixed(2) +
         ' H' + (lx2 - inset).toFixed(2) +
@@ -5317,25 +5318,19 @@ const SvgRenderer = {
         if (wswM) wavySw = parseFloat(wswM[1]);
       }
     }
-    // Filled stitch: allow inner frame for "3-frame" look (stitch outer + plain inner + fill)
-    var innerSw = Math.max(4, Math.round(osw * 0.36));
-    if (bi.brush) innerSw = Math.max(6, Math.round(osw * 0.5));
-    if (bi.stitch && !isFull) innerSw = Math.max(6, Math.round(osw * 0.3));
-    var inset;
-    if (!bi.stitch && isFull) {
-      inset = osw / 2 + innerSw / 2;
-    } else {
-      inset = osw / 2 + innerSw * 1.5;
-    }
-    // Stitch: outlined needs minimal offset, filled needs more for visible inner frame
-    if (bi.stitch && !isFull) inset = innerSw / 2 + 2;
-    if (bi.stitch && isFull) inset = osw / 2 + innerSw;
-    if (bi.border) inset = isFull ? osw * 0.3 : osw * 0.65;
-    if (bi.brush) inset = Math.max(inset, osw * 0.95);
-    if (bi.filter && !isFull) inset = Math.max(inset, osw * 0.95);
-    // Filled filter (torn edge): stroke and fill are same color, inner rect can eat into stroke
-    if (bi.filter && isFull) inset = innerSw / 2 + 4;
-    if (bi.wavy) inset = Math.max(inset, wavySw * 1.15 + innerSw / 2);
+    // Unified inner frame formula: consistent stroke + gap for ALL styles
+    var innerSw = Math.max(6, Math.round(osw * 0.36));
+    // Border intrusion: how far each style's decoration extends inward from outer rect center
+    var borderIntrusion;
+    if (bi.stitch)      borderIntrusion = osw * 0.5;
+    else if (bi.border) borderIntrusion = osw * 0.65;   // sawtooth/perforated teeth depth
+    else if (bi.wavy)   borderIntrusion = wavySw * 0.6;  // wavy/zigzag amplitude
+    else if (bi.brush)  borderIntrusion = osw * 0.8;
+    else if (bi.filter) borderIntrusion = osw * 0.5;     // torn/chalk displacement
+    else                borderIntrusion = osw * 0.5;     // plain: half stroke width
+    // Consistent gap between outer border edge and inner rect
+    var gap = osw * 0.25;
+    var inset = borderIntrusion + gap + innerSw * 0.5;
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
 
