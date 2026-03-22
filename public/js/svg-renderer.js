@@ -5613,25 +5613,52 @@ const SvgRenderer = {
           perfCornerType = 'soft_round';
         }
         var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, perfCornerType);
-        // Walk the trace with fine steps, then place shapes at even intervals
-        var fineStep = perfRadius * 0.5;  // dense sampling for smooth curve following
-        var finePoints = SvgRenderer._walkTrace(splitTrace, fineStep);
-        // Place shapes at even intervals — smaller shapes on corners for smooth distribution
-        var accumDist = perfSpacing;  // start ready to place first shape
-        var prevX = finePoints.length > 0 ? finePoints[0].x : 0;
-        var prevY = finePoints.length > 0 ? finePoints[0].y : 0;
-        for (var pi = 0; pi < finePoints.length; pi++) {
-          var dx = finePoints[pi].x - prevX, dy = finePoints[pi].y - prevY;
-          accumDist += Math.sqrt(dx * dx + dy * dy);
-          prevX = finePoints[pi].x; prevY = finePoints[pi].y;
-          // Detect corner: rotDeg not a multiple of 90° (straight edges are 0° or 90°)
-          var rd = finePoints[pi].rotDeg || 0;
-          var isCorner = Math.abs(rd % 90) > 5 && Math.abs(rd % 90) < 85;
-          var r = isCorner ? perfRadius * 0.55 : perfRadius;
-          var targetSpacing = isCorner ? perfSpacing * 0.55 : perfSpacing;
-          if (accumDist >= targetSpacing) {
-            perfHtml += SvgRenderer._borderShape(bShape, finePoints[pi].x, finePoints[pi].y, r, finePoints[pi].rotDeg);
-            accumDist = 0;
+        var F = function(n) { return n.toFixed(2); };
+        var smallR = perfRadius * 0.5;
+        var smallStep = smallR * 2.1;  // adjacent small circles
+
+        // Pass 1: Perforate corners with small dense circles
+        var corners = [
+          { rx: splitTrace.rxTR, cx: ox + ow - splitTrace.rxTR, cy: oy + splitTrace.rxTR, startAngle: -90, endAngle: 0 },
+          { rx: splitTrace.rxBR, cx: ox + ow - splitTrace.rxBR, cy: oy + oh - splitTrace.rxBR, startAngle: 0, endAngle: 90 },
+          { rx: splitTrace.rxBL, cx: ox + splitTrace.rxBL, cy: oy + oh - splitTrace.rxBL, startAngle: 90, endAngle: 180 },
+          { rx: splitTrace.rxTL, cx: ox + splitTrace.rxTL, cy: oy + splitTrace.rxTL, startAngle: 180, endAngle: 270 }
+        ];
+        for (var ci = 0; ci < corners.length; ci++) {
+          var c = corners[ci];
+          if (c.rx <= 0) continue;
+          var arcLen = c.rx * Math.PI / 2;  // quarter circle arc length
+          var numSmall = Math.max(2, Math.round(arcLen / smallStep));
+          for (var si = 0; si <= numSmall; si++) {
+            var t = si / numSmall;
+            var angle = (c.startAngle + t * (c.endAngle - c.startAngle)) * Math.PI / 180;
+            var px = c.cx + c.rx * Math.cos(angle);
+            var py = c.cy + c.rx * Math.sin(angle);
+            perfHtml += '<circle cx="' + F(px) + '" cy="' + F(py) + '" r="' + F(smallR) + '" fill="#FFFFFF"/>';
+          }
+        }
+
+        // Pass 2: Fill straight edges with exact full-size shapes
+        var edges = [
+          { x1: ox + splitTrace.rxTL, y1: oy, x2: ox + ow - splitTrace.rxTR, y2: oy },           // top
+          { x1: ox + ow, y1: oy + splitTrace.rxTR, x2: ox + ow, y2: oy + oh - splitTrace.rxBR },  // right
+          { x1: ox + ow - splitTrace.rxBR, y1: oy + oh, x2: ox + splitTrace.rxBL, y2: oy + oh },   // bottom
+          { x1: ox, y1: oy + oh - splitTrace.rxBL, x2: ox, y2: oy + splitTrace.rxTL }              // left
+        ];
+        for (var ei = 0; ei < edges.length; ei++) {
+          var e = edges[ei];
+          var edgeLen = Math.sqrt((e.x2 - e.x1) * (e.x2 - e.x1) + (e.y2 - e.y1) * (e.y2 - e.y1));
+          if (edgeLen < perfSpacing) continue;
+          var numFull = Math.max(1, Math.round(edgeLen / perfSpacing));
+          var actualSpacing = edgeLen / numFull;
+          var edgeDx = (e.x2 - e.x1) / edgeLen, edgeDy = (e.y2 - e.y1) / edgeLen;
+          for (var fi = 0; fi <= numFull; fi++) {
+            var t2 = fi / numFull;
+            var fpx = e.x1 + t2 * (e.x2 - e.x1);
+            var fpy = e.y1 + t2 * (e.y2 - e.y1);
+            // rotDeg for diamonds: edge direction angle
+            var edgeRotDeg = Math.atan2(edgeDy, edgeDx) * 180 / Math.PI;
+            perfHtml += SvgRenderer._borderShape(bShape, fpx, fpy, perfRadius, bShape === 'diamond' ? edgeRotDeg : 0);
           }
         }
         if (perfHtml) {
