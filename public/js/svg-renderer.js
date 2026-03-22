@@ -5605,15 +5605,21 @@ const SvgRenderer = {
         var cornerAttrM = svgStr.match(/data-corner-type="([^"]*)"/);
         var splitCornerType = cornerAttrM ? cornerAttrM[1] : 'straight';
         var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, splitCornerType);
-        // Walk the trace, placing perforation shapes — skip overlapping shapes at corners
-        var perfPoints = SvgRenderer._walkTrace(splitTrace, perfSpacing);
-        var minDist = perfRadius * 2.2;  // minimum distance between shapes (no overlap)
-        var lastPx = -9999, lastPy = -9999;
-        for (var pi = 0; pi < perfPoints.length; pi++) {
-          var dx = perfPoints[pi].x - lastPx, dy = perfPoints[pi].y - lastPy;
-          if (Math.sqrt(dx * dx + dy * dy) < minDist) continue;  // skip if too close
-          perfHtml += SvgRenderer._borderShape(bShape, perfPoints[pi].x, perfPoints[pi].y, perfRadius, perfPoints[pi].rotDeg);
-          lastPx = perfPoints[pi].x; lastPy = perfPoints[pi].y;
+        // Walk the trace with fine steps, then place shapes at even intervals
+        var fineStep = perfRadius * 0.5;  // dense sampling for smooth curve following
+        var finePoints = SvgRenderer._walkTrace(splitTrace, fineStep);
+        // Place shapes at even perfSpacing intervals along the sampled path
+        var accumDist = perfSpacing;  // start ready to place first shape
+        var prevX = finePoints.length > 0 ? finePoints[0].x : 0;
+        var prevY = finePoints.length > 0 ? finePoints[0].y : 0;
+        for (var pi = 0; pi < finePoints.length; pi++) {
+          var dx = finePoints[pi].x - prevX, dy = finePoints[pi].y - prevY;
+          accumDist += Math.sqrt(dx * dx + dy * dy);
+          prevX = finePoints[pi].x; prevY = finePoints[pi].y;
+          if (accumDist >= perfSpacing) {
+            perfHtml += SvgRenderer._borderShape(bShape, finePoints[pi].x, finePoints[pi].y, perfRadius, finePoints[pi].rotDeg);
+            accumDist = 0;
+          }
         }
         if (perfHtml) {
           svgStr = svgStr.replace(/<\/svg>/, perfHtml + '</svg>');
