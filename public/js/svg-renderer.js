@@ -5624,11 +5624,14 @@ const SvgRenderer = {
           { rx: splitTrace.rxBL, cx: ox + splitTrace.rxBL, cy: oy + oh - splitTrace.rxBL, startAngle: 90, endAngle: 180 },
           { rx: splitTrace.rxTL, cx: ox + splitTrace.rxTL, cy: oy + splitTrace.rxTL, startAngle: 180, endAngle: 270 }
         ];
+        // Compute uniform count from the largest corner arc
+        var maxRx = Math.max(splitTrace.rxTL, splitTrace.rxTR, splitTrace.rxBR, splitTrace.rxBL);
+        var maxArcLen = maxRx * Math.PI / 2;
+        var uniformNumSmall = Math.max(2, Math.round(maxArcLen / smallStep));
         for (var ci = 0; ci < corners.length; ci++) {
           var c = corners[ci];
           if (c.rx <= 0) continue;
-          var arcLen = c.rx * Math.PI / 2;  // quarter circle arc length
-          var numSmall = Math.max(2, Math.round(arcLen / smallStep));
+          var numSmall = uniformNumSmall;  // same count for all corners
           for (var si = 0; si <= numSmall; si++) {
             var t = si / numSmall;
             var angle = (c.startAngle + t * (c.endAngle - c.startAngle)) * Math.PI / 180;
