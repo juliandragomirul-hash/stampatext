@@ -5616,7 +5616,7 @@ const SvgRenderer = {
         // Walk the trace with fine steps, then place shapes at even intervals
         var fineStep = perfRadius * 0.5;  // dense sampling for smooth curve following
         var finePoints = SvgRenderer._walkTrace(splitTrace, fineStep);
-        // Place shapes at even perfSpacing intervals along the sampled path
+        // Place shapes at even intervals — smaller shapes on corners for smooth distribution
         var accumDist = perfSpacing;  // start ready to place first shape
         var prevX = finePoints.length > 0 ? finePoints[0].x : 0;
         var prevY = finePoints.length > 0 ? finePoints[0].y : 0;
@@ -5624,8 +5624,13 @@ const SvgRenderer = {
           var dx = finePoints[pi].x - prevX, dy = finePoints[pi].y - prevY;
           accumDist += Math.sqrt(dx * dx + dy * dy);
           prevX = finePoints[pi].x; prevY = finePoints[pi].y;
-          if (accumDist >= perfSpacing) {
-            perfHtml += SvgRenderer._borderShape(bShape, finePoints[pi].x, finePoints[pi].y, perfRadius, finePoints[pi].rotDeg);
+          // Detect corner: rotDeg not a multiple of 90° (straight edges are 0° or 90°)
+          var rd = finePoints[pi].rotDeg || 0;
+          var isCorner = Math.abs(rd % 90) > 5 && Math.abs(rd % 90) < 85;
+          var r = isCorner ? perfRadius * 0.55 : perfRadius;
+          var targetSpacing = isCorner ? perfSpacing * 0.55 : perfSpacing;
+          if (accumDist >= targetSpacing) {
+            perfHtml += SvgRenderer._borderShape(bShape, finePoints[pi].x, finePoints[pi].y, r, finePoints[pi].rotDeg);
             accumDist = 0;
           }
         }
