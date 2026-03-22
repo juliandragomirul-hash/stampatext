@@ -5354,7 +5354,9 @@ const SvgRenderer = {
     } else {
       // Fallback: estimate innerEdge per style when data attribute missing
       if (bi.stitch)      measuredInnerEdge = 0;              // stitch sits outside rect
-      else if (bi.border) measuredInnerEdge = effectiveOsw * 0.75;  // sawtooth/perforated/spaced perf
+      else if (bi.border && bi.border.indexOf('diamond') === 0) measuredInnerEdge = effectiveOsw * 0.55;  // sawtooth: less gap
+      else if (bi.border && bi.border.indexOf('circle-25') === 0) measuredInnerEdge = effectiveOsw * 0.65;  // spaced perf: slightly less gap
+      else if (bi.border) measuredInnerEdge = effectiveOsw * 0.75;  // perforated: reference
       else if (bi.wavy)   measuredInnerEdge = wavySw * 0.7;   // wavy amplitude
       else if (bi.brush)  measuredInnerEdge = effectiveOsw * 0.85;
       else if (bi.filter) measuredInnerEdge = effectiveOsw * 0.55;
