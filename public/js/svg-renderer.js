@@ -5320,7 +5320,12 @@ const SvgRenderer = {
       }
     }
     // Unified inner frame formula V2: anchor to innermost pixel of outer border
-    var innerSw = Math.max(6, Math.round(osw * 0.36));
+    // Use effective osw: for styles that reduce rect stroke (stitch), use origStrokeWidth
+    var effectiveOsw = osw;
+    if ((bi.stitch || bi.wavy) && bi.origStrokeWidth && bi.origStrokeWidth > osw) {
+      effectiveOsw = bi.origStrokeWidth;
+    }
+    var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
     // Border intrusion: from outer rect CENTER to innermost pixel of decoration
     var borderIntrusion;
     if (bi.stitch)      borderIntrusion = osw * 0.5 + osw * 0.12;  // stroke half + stitch overhang
