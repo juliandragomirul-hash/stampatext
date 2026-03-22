@@ -5348,20 +5348,16 @@ const SvgRenderer = {
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
     // Read measured innerEdge from Pass 2 (stored as data attribute by border generators)
     var edgeAttr = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
+    // Per-style innerEdge: tuned values override data attribute for consistency
     var measuredInnerEdge;
-    if (edgeAttr) {
-      measuredInnerEdge = parseFloat(edgeAttr[1]);
-    } else {
-      // Fallback: estimate innerEdge per style when data attribute missing
-      if (bi.stitch)      measuredInnerEdge = 0;              // stitch sits outside rect
-      else if (bi.border && bi.border.indexOf('diamond') === 0) measuredInnerEdge = effectiveOsw * 0.55;  // sawtooth: less gap
-      else if (bi.border && bi.border.indexOf('circle-25') === 0) measuredInnerEdge = effectiveOsw * 0.65;  // spaced perf: slightly less gap
-      else if (bi.border) measuredInnerEdge = effectiveOsw * 0.75;  // perforated: reference
-      else if (bi.wavy)   measuredInnerEdge = wavySw * 0.7;   // wavy amplitude
-      else if (bi.brush)  measuredInnerEdge = effectiveOsw * 0.85;
-      else if (bi.filter) measuredInnerEdge = effectiveOsw * 0.55;
-      else                measuredInnerEdge = effectiveOsw * 0.5;   // plain
-    }
+    if (bi.stitch)      measuredInnerEdge = 0;
+    else if (bi.border && bi.border.indexOf('diamond') === 0) measuredInnerEdge = effectiveOsw * 0.55;
+    else if (bi.border && bi.border.indexOf('circle-25') === 0) measuredInnerEdge = effectiveOsw * 0.65;
+    else if (bi.border) measuredInnerEdge = effectiveOsw * 0.75;
+    else if (bi.wavy)   measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : wavySw * 0.7;
+    else if (bi.brush)  measuredInnerEdge = effectiveOsw * 0.85;
+    else if (bi.filter) measuredInnerEdge = effectiveOsw * 0.55;
+    else                measuredInnerEdge = effectiveOsw * 0.5;
     // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
     var whiteGap = innerSw;
     var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
