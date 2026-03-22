@@ -5579,30 +5579,36 @@ const SvgRenderer = {
         }
         innerHtml = '';
       }
-      // Perforated/sawtooth: remove edge shapes, add mid-stroke perforation
+      // Perforated/sawtooth: remove edge shapes, add mid-stroke perforation with same dimensions
       else if (bi.border) {
-        // Remove original white edge circles (perforated)
-        svgStr = svgStr.replace(/<circle\s+cx="[\d.\-]+"\s+cy="[\d.\-]+"\s+r="[\d.]+"\s+fill="#FFFFFF"\s*\/>/gi, '');
-        // Remove original white edge diamonds (sawtooth)
-        svgStr = svgStr.replace(/<polygon\s+points="[^"]+"\s+fill="#FFFFFF"[^\/]*\/>/gi, '');
+        // Remove ALL white circles (perforated edge shapes)
+        svgStr = svgStr.replace(/<circle[^>]*fill="#FFFFFF"[^>]*\/>/gi, '');
+        // Remove ALL white polygons (sawtooth edge diamonds) — may have transform attrs
+        svgStr = svgStr.replace(/<polygon[^>]*fill="#FFFFFF"[^>]*\/>/gi, '');
         var perfHtml = '';
-        // Get corner type from SVG attributes
+        // Parse border data to get SAME shape dimensions as Frames=A
+        var bParts = bi.border.split('-');
+        var bShape = bParts[0];  // 'circle' or 'diamond'
+        var baseRadius = parseFloat(bParts[1]) || 15;
+        var bSpacingMult = bParts[2] ? parseFloat(bParts[2]) : (bShape === 'diamond' ? 2 : 2.5);
+        // Scale radius with decorWeightRatio (approximate from proportional stroke)
+        var propSwAttr2 = svgStr.match(/data-prop-sw="([\d.]+)"/);
+        var propSw = propSwAttr2 ? parseFloat(propSwAttr2[1]) : 50;
+        var decorRatio = Math.max(0.5, Math.min(1.3, propSw / 50));
+        var perfRadius = Math.max(5, Math.round(baseRadius * decorRatio));
+        if (bShape === 'diamond') {
+          var halfSw = osw2 / 2;
+          perfRadius = Math.min(perfRadius * 1.5, halfSw);
+        }
+        var perfSpacing = perfRadius * bSpacingMult;
+        // Get corner type and generate trace
         var cornerAttrM = svgStr.match(/data-corner-type="([^"]*)"/);
         var splitCornerType = cornerAttrM ? cornerAttrM[1] : 'straight';
-        // Determine perforation shape from border type
-        var isDiamond = bi.border.indexOf('diamond') === 0;
-        // Generate trace at the outer rect edge (stroke center)
         var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, splitCornerType);
-        // Walk the trace, placing perforation shapes through center of stroke
-        var perfRadius = Math.max(3, osw2 * 0.25);
-        var perfSpacing = isDiamond ? perfRadius * 2.5 : perfRadius * 3;
+        // Walk the trace, placing perforation shapes with same size/spacing as Frames=A
         var perfPoints = SvgRenderer._walkTrace(splitTrace, perfSpacing);
         for (var pi = 0; pi < perfPoints.length; pi++) {
-          if (isDiamond) {
-            perfHtml += SvgRenderer._borderShape('diamond', perfPoints[pi].x, perfPoints[pi].y, perfRadius, perfPoints[pi].rotDeg);
-          } else {
-            perfHtml += '<circle cx="' + perfPoints[pi].x.toFixed(2) + '" cy="' + perfPoints[pi].y.toFixed(2) + '" r="' + perfRadius.toFixed(1) + '" fill="#FFFFFF"/>';
-          }
+          perfHtml += SvgRenderer._borderShape(bShape, perfPoints[pi].x, perfPoints[pi].y, perfRadius, perfPoints[pi].rotDeg);
         }
         if (perfHtml) {
           svgStr = svgStr.replace(/<\/svg>/, perfHtml + '</svg>');
