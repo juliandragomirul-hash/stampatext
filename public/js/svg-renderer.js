@@ -5353,7 +5353,8 @@ const SvgRenderer = {
     // Group 2 (non-rect: stitch, wavy, brush, filter) = custom per style
     var measuredInnerEdge;
     if (bi.stitch)      measuredInnerEdge = -8;             // no rect stroke, pull inner rect slightly outward
-    else if (bi.wavy)   measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : wavySw * 0.7;
+    else if (bi.wavy && bi.wavy !== 'zigzag') measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) * 0.7 : wavySw * 0.5;  // wavy: decrease gap more
+    else if (bi.wavy)   measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) * 0.85 : wavySw * 0.6;  // zigzag: decrease gap a bit
     else if (bi.brush)  measuredInnerEdge = osw * 0.85;
     else if (bi.filter) measuredInnerEdge = osw * 0.55;
     else if (bi.border) measuredInnerEdge = effectiveOsw * 0.35;  // perforated/sawtooth: ornaments overlap, reduce gap
