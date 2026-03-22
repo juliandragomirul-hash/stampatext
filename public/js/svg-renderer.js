@@ -5356,7 +5356,8 @@ const SvgRenderer = {
     else if (bi.wavy)   measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : wavySw * 0.7;
     else if (bi.brush)  measuredInnerEdge = osw * 0.85;
     else if (bi.filter) measuredInnerEdge = osw * 0.55;
-    else                measuredInnerEdge = effectiveOsw * 0.5;   // ALL rect-based: plain + perforated + sawtooth (ornaments overlap into gap)
+    else if (bi.border) measuredInnerEdge = effectiveOsw * 0.35;  // perforated/sawtooth: ornaments overlap, reduce gap
+    else                measuredInnerEdge = effectiveOsw * 0.5;   // plain: reference
     // White gap = innerSw (visual rhythm: border → gap → stroke, gap = stroke width)
     var whiteGap = innerSw;
     var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
