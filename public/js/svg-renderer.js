@@ -3637,9 +3637,24 @@ const SvgRenderer = {
               plHtml += '<circle cx="' + plF(pc.cx + pc.rx * Math.cos(pAngle)) + '" cy="' + plF(pc.cy + pc.rx * Math.sin(pAngle)) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
             }
           } else {
-            // Straight: place small circle at the corner point + 1 on each arm
+            // Straight: L-shaped small perforations at each corner
             var cp = plCornerPts[pci];
+            // Arm directions: TR(h=-1,v=+1), BR(h=-1,v=-1), BL(h=+1,v=-1), TL(h=+1,v=+1)
+            var hDirs = [-1, -1, 1, 1];
+            var vDirs = [1, -1, -1, 1];
+            var hd = hDirs[pci], vd = vDirs[pci];
+            var armStep = plSmallR * 2.1;
+            var arms = 2;
+            // Corner point
             plHtml += '<circle cx="' + plF(cp.x) + '" cy="' + plF(cp.y) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
+            // Horizontal arm
+            for (var ai = 1; ai <= arms; ai++) {
+              plHtml += '<circle cx="' + plF(cp.x + hd * ai * armStep) + '" cy="' + plF(cp.y) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
+            }
+            // Vertical arm
+            for (var ai = 1; ai <= arms; ai++) {
+              plHtml += '<circle cx="' + plF(cp.x) + '" cy="' + plF(cp.y + vd * ai * armStep) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
+            }
           }
         }
         // Pass 2: Full-size shapes on straight edges
