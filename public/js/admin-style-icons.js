@@ -173,6 +173,19 @@ var StyleIcons = {
       var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
       var cleanSvg = SvgRenderer.cleanSvgString ? SvgRenderer.cleanSvgString(rawSvg) : rawSvg;
 
+      // For styles using a fallback template, inject the correct data-* attribute on the outer rect
+      var STYLE_DATA_ATTRS = {
+        'zigzag': 'data-wavy="zigzag"',
+        'chalk': 'data-filter="chalk-12"'
+      };
+      if (STYLE_DATA_ATTRS[style.key]) {
+        // Find the main non-white rect and add the data attribute
+        cleanSvg = cleanSvg.replace(
+          /(<rect[^>]*fill=["']none["'][^>]*)(\/?>)/i,
+          '$1 ' + STYLE_DATA_ATTRS[style.key] + ' $2'
+        );
+      }
+
       // Replace text
       var zone = tpl.text_zones && tpl.text_zones[0];
       var idx = zone ? (zone.svg_element_index || 0) : 0;
