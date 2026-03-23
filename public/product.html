@@ -77,6 +77,9 @@
           <div class="filter-bar-dropdown-item" data-value="zigzag">Zigzag</div>
           <div class="filter-bar-dropdown-item" data-value="torn_edge">Torn Edge</div>
           <div class="filter-bar-dropdown-item" data-value="chalk">Chalk</div>
+          <div class="filter-bar-dropdown-item" data-value="perf_line">Perf. Line</div>
+          <div class="filter-bar-dropdown-item" data-value="perf_line_spaced">Perf. Line Spaced</div>
+          <div class="filter-bar-dropdown-item" data-value="saw_line">Saw Line</div>
         </div>
       </div>
 
@@ -618,6 +621,13 @@
               } catch (e) { /* skip failed fetches */ }
             }
           }
+          // Alias perf_line styles to the simple (plain) template — they add perforation via supplementBorderInfo
+          var plainEntry = allTemplatesByBorder['simple'];
+          if (plainEntry) {
+            if (!allTemplatesByBorder['perf_line']) allTemplatesByBorder['perf_line'] = plainEntry;
+            if (!allTemplatesByBorder['perf_line_spaced']) allTemplatesByBorder['perf_line_spaced'] = plainEntry;
+            if (!allTemplatesByBorder['saw_line']) allTemplatesByBorder['saw_line'] = plainEntry;
+          }
           // Pre-baked border style icons: cropped from real rendered stamps
           var borderList = document.getElementById('product-border-list');
           if (borderList) {
@@ -911,7 +921,7 @@
         if (thumbDiv) {
           triggerEl.innerHTML = thumbDiv.innerHTML;
         } else {
-          var borderDisplayLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk'};
+          var borderDisplayLabels = {simple:'Plain',stitch_line:'Stitch Line',stitch_square:'Stitch Square',stitch_circle:'Stitch Dot',sawtooth:'Sawtooth',perforated:'Perforated',perforated_spaced:'Spaced Perf.',wavy:'Wavy',zigzag:'Zigzag',torn_edge:'Torn Edge',chalk:'Chalk',perf_line:'Perf. Line',perf_line_spaced:'Perf. Line Spaced',saw_line:'Saw Line'};
           triggerEl.textContent = borderDisplayLabels[newBorder] || newBorder;
         }
         // Switch to new template
@@ -919,6 +929,19 @@
         rawCleanedSvg = entry.svg;
         storedZones = entry.zones;
         templateBorderType = newBorder;
+        // Hide Frames=C for perforated/sawtooth (they use perf_line styles instead)
+        var noSplitStyles = ['perforated', 'perforated_spaced', 'sawtooth'];
+        var frameItems = document.querySelectorAll('#product-frame-list .filter-bar-dropdown-item');
+        frameItems.forEach(function(fi) {
+          if (fi.dataset.value === 'split') {
+            fi.style.display = noSplitStyles.indexOf(newBorder) >= 0 ? 'none' : '';
+          }
+        });
+        // If currently on C and switching to a no-split style, auto-switch to A
+        if (noSplitStyles.indexOf(newBorder) >= 0 && currentFrame === 'split') {
+          currentFrame = 'single';
+          setDropdownActive('product-frame-list', 'single', 'product-frame-value');
+        }
         // Re-render with new template
         rebuildWithFont(currentFont).then(function(svg) {
           baseSvg = svg;

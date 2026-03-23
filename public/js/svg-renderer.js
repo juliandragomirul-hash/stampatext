@@ -3592,6 +3592,67 @@ const SvgRenderer = {
       var clampedPropSw = Math.max(swMin, Math.min(swMax, proportionalSw));
       result = result.replace(/<svg /, '<svg data-prop-sw="' + clampedPropSw.toFixed(1) + '" ');
 
+      // ---- PERFORATION LINE STYLES (mid-stroke perforation on plain rect) ----
+      if (borderFlags.perfLine) {
+        var plParts = borderFlags.perfLine.split('-');
+        var plShape = plParts[0];
+        var plBaseRadius = parseFloat(plParts[1]) || 15;
+        var plSpacingMult = parseFloat(plParts[2]) || 2.5;
+        var plRadius = Math.max(5, Math.round(plBaseRadius * decorWeightRatio));
+        if (plShape === 'diamond') plRadius = Math.min(plRadius * 1.5, outerRectSw / 2);
+        var plSpacing = plRadius * plSpacingMult;
+        var plSmallR = plRadius * 0.5;
+        var plSmallStep = plSmallR * 2.1;
+        var plCornerType = cornerType || 'straight';
+        var plTrace = SvgRenderer._generateTrace(newRectX, newRectY, newRectWidth, newRectHeight, plCornerType);
+        var plF = function(n) { return n.toFixed(2); };
+        var plHtml = '';
+        // Pass 1: Small dense circles on corners
+        var plCorners = [
+          { rx: plTrace.rxTR, cx: newRectX + newRectWidth - plTrace.rxTR, cy: newRectY + plTrace.rxTR, sa: -90, ea: 0 },
+          { rx: plTrace.rxBR, cx: newRectX + newRectWidth - plTrace.rxBR, cy: newRectY + newRectHeight - plTrace.rxBR, sa: 0, ea: 90 },
+          { rx: plTrace.rxBL, cx: newRectX + plTrace.rxBL, cy: newRectY + newRectHeight - plTrace.rxBL, sa: 90, ea: 180 },
+          { rx: plTrace.rxTL, cx: newRectX + plTrace.rxTL, cy: newRectY + plTrace.rxTL, sa: 180, ea: 270 }
+        ];
+        var plMaxRx = Math.max(plTrace.rxTL, plTrace.rxTR, plTrace.rxBR, plTrace.rxBL);
+        var plNumSmall = Math.max(2, Math.round(plMaxRx * Math.PI / 2 / plSmallStep));
+        for (var pci = 0; pci < plCorners.length; pci++) {
+          var pc = plCorners[pci];
+          if (pc.rx <= 0) continue;
+          for (var psi = 1; psi < plNumSmall; psi++) {
+            var pt = psi / plNumSmall;
+            var pAngle = (pc.sa + pt * (pc.ea - pc.sa)) * Math.PI / 180;
+            plHtml += '<circle cx="' + plF(pc.cx + pc.rx * Math.cos(pAngle)) + '" cy="' + plF(pc.cy + pc.rx * Math.sin(pAngle)) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
+          }
+        }
+        // Pass 2: Full-size shapes on straight edges
+        var plBite = plSmallR * 2;
+        var plEdges = [
+          { x1: newRectX + plTrace.rxTL, y1: newRectY, x2: newRectX + newRectWidth - plTrace.rxTR, y2: newRectY },
+          { x1: newRectX + newRectWidth, y1: newRectY + plTrace.rxTR, x2: newRectX + newRectWidth, y2: newRectY + newRectHeight - plTrace.rxBR },
+          { x1: newRectX + newRectWidth - plTrace.rxBR, y1: newRectY + newRectHeight, x2: newRectX + plTrace.rxBL, y2: newRectY + newRectHeight },
+          { x1: newRectX, y1: newRectY + newRectHeight - plTrace.rxBL, x2: newRectX, y2: newRectY + plTrace.rxTL }
+        ];
+        for (var pei = 0; pei < plEdges.length; pei++) {
+          var pe = plEdges[pei];
+          var plRawLen = Math.sqrt((pe.x2 - pe.x1) * (pe.x2 - pe.x1) + (pe.y2 - pe.y1) * (pe.y2 - pe.y1));
+          if (plRawLen < plSpacing) continue;
+          var plDx = (pe.x2 - pe.x1) / plRawLen, plDy = (pe.y2 - pe.y1) / plRawLen;
+          var pix1 = pe.x1 + plDx * plBite, piy1 = pe.y1 + plDy * plBite;
+          var pix2 = pe.x2 - plDx * plBite, piy2 = pe.y2 - plDy * plBite;
+          var plEdgeLen = plRawLen - plBite * 2;
+          if (plEdgeLen < plRadius * 2) continue;
+          var plNum = Math.max(1, Math.round(plEdgeLen / plSpacing));
+          for (var pfi = 0; pfi <= plNum; pfi++) {
+            var plt = pfi / plNum;
+            var plRotDeg = plShape === 'diamond' ? Math.atan2(plDy, plDx) * 180 / Math.PI : 0;
+            plHtml += SvgRenderer._borderShape(plShape, pix1 + plt * (pix2 - pix1), piy1 + plt * (piy2 - piy1), plRadius, plRotDeg);
+          }
+        }
+        if (plHtml) result = result.replace(/<\/svg>/, plHtml + '</svg>');
+        result = result.replace(/<svg /, '<svg data-perf-line="1" ');
+      }
+
       // ---- BORDER FILTER (ripped paper etc.) ----
       if (borderFilterData) {
         var fParts = borderFilterData.split('-');
@@ -4956,6 +5017,10 @@ const SvgRenderer = {
     if (!bi.wavy && tpl.border_type === 'wavy') bi.wavy = 'gentle';
     // New true zigzag (wavy-style closed path with straight angles)
     if (!bi.wavy && tpl.border_type === 'zigzag') bi.wavy = 'zigzag';
+    // Perforation line styles (mid-stroke perforation — circles/diamonds through plain stroke)
+    if (tpl.border_type === 'perf_line') bi.perfLine = 'circle-20-2.5';
+    if (tpl.border_type === 'perf_line_spaced') bi.perfLine = 'circle-25-4';
+    if (tpl.border_type === 'saw_line') bi.perfLine = 'diamond-20-2';
     bi.fillType = tpl.fill_type || null;
     return bi;
   },
@@ -5579,98 +5644,8 @@ const SvgRenderer = {
         }
         innerHtml = '';
       }
-      // Perforated/sawtooth: remove edge shapes, add mid-stroke perforation with same dimensions
+      // Perforated/sawtooth: skip split (hidden in UI, use perf_line styles instead)
       else if (bi.border) {
-        // Remove ALL white circles (perforated edge shapes)
-        svgStr = svgStr.replace(/<circle[^>]*fill="#FFFFFF"[^>]*\/>/gi, '');
-        // Remove ALL white polygons (sawtooth edge diamonds) — may have transform attrs
-        svgStr = svgStr.replace(/<polygon[^>]*fill="#FFFFFF"[^>]*\/>/gi, '');
-        var perfHtml = '';
-        // Parse border data to get SAME shape dimensions as Frames=A
-        var bParts = bi.border.split('-');
-        var bShape = bParts[0];  // 'circle' or 'diamond'
-        var baseRadius = parseFloat(bParts[1]) || 15;
-        var bSpacingMult = bParts[2] ? parseFloat(bParts[2]) : (bShape === 'diamond' ? 2 : 2.5);
-        // Scale radius with decorWeightRatio (approximate from proportional stroke)
-        var propSwAttr2 = svgStr.match(/data-prop-sw="([\d.]+)"/);
-        var propSw = propSwAttr2 ? parseFloat(propSwAttr2[1]) : 50;
-        var decorRatio = Math.max(0.5, Math.min(1.3, propSw / 50));
-        var perfRadius = Math.max(5, Math.round(baseRadius * decorRatio));
-        if (bShape === 'diamond') {
-          var halfSw = osw2 / 2;
-          perfRadius = Math.min(perfRadius * 1.5, halfSw);
-        }
-        var perfSpacing = perfRadius * bSpacingMult;
-        // Detect corner type from outer rect's rx or mixed-corner path
-        var perfCornerType = 'straight';
-        if (mixedType) {
-          perfCornerType = mixedType;
-        } else if (orx >= 100) {
-          perfCornerType = 'strong_round';
-        } else if (orx >= 60) {
-          perfCornerType = 'medium_round';
-        } else if (orx > 0) {
-          perfCornerType = 'soft_round';
-        }
-        var splitTrace = SvgRenderer._generateTrace(ox, oy, ow, oh, perfCornerType);
-        var F = function(n) { return n.toFixed(2); };
-        var smallR = perfRadius * 0.5;
-        var smallStep = smallR * 2.1;  // adjacent small circles
-
-        // Pass 1: Perforate corners with small dense circles
-        var corners = [
-          { rx: splitTrace.rxTR, cx: ox + ow - splitTrace.rxTR, cy: oy + splitTrace.rxTR, startAngle: -90, endAngle: 0 },
-          { rx: splitTrace.rxBR, cx: ox + ow - splitTrace.rxBR, cy: oy + oh - splitTrace.rxBR, startAngle: 0, endAngle: 90 },
-          { rx: splitTrace.rxBL, cx: ox + splitTrace.rxBL, cy: oy + oh - splitTrace.rxBL, startAngle: 90, endAngle: 180 },
-          { rx: splitTrace.rxTL, cx: ox + splitTrace.rxTL, cy: oy + splitTrace.rxTL, startAngle: 180, endAngle: 270 }
-        ];
-        // Compute uniform count from the largest corner arc
-        var maxRx = Math.max(splitTrace.rxTL, splitTrace.rxTR, splitTrace.rxBR, splitTrace.rxBL);
-        var maxArcLen = maxRx * Math.PI / 2;
-        var uniformNumSmall = Math.max(2, Math.round(maxArcLen / smallStep));
-        for (var ci = 0; ci < corners.length; ci++) {
-          var c = corners[ci];
-          if (c.rx <= 0) continue;
-          var numSmall = uniformNumSmall;  // same count for all corners
-          for (var si = 1; si < numSmall; si++) {  // skip endpoints to avoid overlap with big circles
-            var t = si / numSmall;
-            var angle = (c.startAngle + t * (c.endAngle - c.startAngle)) * Math.PI / 180;
-            var px = c.cx + c.rx * Math.cos(angle);
-            var py = c.cy + c.rx * Math.sin(angle);
-            perfHtml += '<circle cx="' + F(px) + '" cy="' + F(py) + '" r="' + F(smallR) + '" fill="#FFFFFF"/>';
-          }
-        }
-
-        // Pass 2: Fill straight edges with exact full-size shapes (inset from corner zones)
-        var cornerBite = smallR * 2;  // space taken by last corner circle + gap
-        var edges = [
-          { x1: ox + splitTrace.rxTL, y1: oy, x2: ox + ow - splitTrace.rxTR, y2: oy },           // top
-          { x1: ox + ow, y1: oy + splitTrace.rxTR, x2: ox + ow, y2: oy + oh - splitTrace.rxBR },  // right
-          { x1: ox + ow - splitTrace.rxBR, y1: oy + oh, x2: ox + splitTrace.rxBL, y2: oy + oh },   // bottom
-          { x1: ox, y1: oy + oh - splitTrace.rxBL, x2: ox, y2: oy + splitTrace.rxTL }              // left
-        ];
-        for (var ei = 0; ei < edges.length; ei++) {
-          var e = edges[ei];
-          var rawLen = Math.sqrt((e.x2 - e.x1) * (e.x2 - e.x1) + (e.y2 - e.y1) * (e.y2 - e.y1));
-          if (rawLen < perfSpacing) continue;
-          var edgeDx = (e.x2 - e.x1) / rawLen, edgeDy = (e.y2 - e.y1) / rawLen;
-          // Inset start/end to avoid overlapping with corner small circles
-          var ix1 = e.x1 + edgeDx * cornerBite, iy1 = e.y1 + edgeDy * cornerBite;
-          var ix2 = e.x2 - edgeDx * cornerBite, iy2 = e.y2 - edgeDy * cornerBite;
-          var edgeLen = rawLen - cornerBite * 2;
-          if (edgeLen < perfRadius * 2) continue;
-          var numFull = Math.max(1, Math.round(edgeLen / perfSpacing));
-          for (var fi = 0; fi <= numFull; fi++) {
-            var t2 = fi / numFull;
-            var fpx = ix1 + t2 * (ix2 - ix1);
-            var fpy = iy1 + t2 * (iy2 - iy1);
-            var edgeRotDeg = Math.atan2(edgeDy, edgeDx) * 180 / Math.PI;
-            perfHtml += SvgRenderer._borderShape(bShape, fpx, fpy, perfRadius, bShape === 'diamond' ? edgeRotDeg : 0);
-          }
-        }
-        if (perfHtml) {
-          svgStr = svgStr.replace(/<\/svg>/, perfHtml + '</svg>');
-        }
         innerHtml = '';
       }
       // All other types: clone shape with white thin stroke

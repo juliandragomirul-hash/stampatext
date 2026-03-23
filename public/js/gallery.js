@@ -1921,7 +1921,7 @@ const Gallery = {
   COMBO_POOLS: {
     color: ['#000000','#8B0000','#CC0000','#FF0000','#2D572C','#32CD32','#003366','#1E90FF','#4B0082','#FF6600','#DAA520','#FF1493'],
     font: ['Oswald','CourierPrime','Montserrat','Yomogi','BlackOpsOne','Nunito','Exo2','Bitter','Comfortaa','FuzzyBubbles','BebasNeue'],
-    style: ['simple','stitch_line','stitch_square','stitch_circle','sawtooth','perforated','perforated_spaced','wavy','zigzag','torn_edge','chalk'],
+    style: ['simple','stitch_line','stitch_square','stitch_circle','sawtooth','perforated','perforated_spaced','wavy','zigzag','torn_edge','chalk','perf_line','perf_line_spaced','saw_line'],
     corners: ['straight','soft_round','medium_round','strong_round','mixed_top_straight','mixed_top_round','mixed_diag_down','mixed_diag_up'],
     frames: ['single','double','split'],
     fill: ['empty'],
@@ -2048,9 +2048,8 @@ const Gallery = {
     var borderStyle = combo.style || 'simple';
     var entry = this.templatesByBorder[borderStyle];
     if (!entry) {
-      // Fallback to plain if style not found
+      // Perf_line styles use the plain template — keep borderStyle for supplementBorderInfo
       entry = this.templatesByBorder['simple'];
-      borderStyle = 'simple';
     }
     if (!entry) return;
 
