@@ -37,11 +37,17 @@ var StyleIcons = {
     var grid = document.getElementById('style-icons-grid');
     grid.innerHTML = '';
 
+    // Load stamps sequentially to avoid iframe throttling
     for (var i = 0; i < this.STYLES.length; i++) {
       var style = this.STYLES[i];
       var tpl = tplMap[style.key] || tplMap['simple'];
       var card = this._buildCard(style, tpl, storageBaseUrl);
       grid.appendChild(card);
+      // Wait for this stamp to finish loading before starting the next
+      var stampContainer = document.getElementById('stamp-img-' + style.key);
+      if (stampContainer) {
+        await this._loadStamp(style, tpl, storageBaseUrl, stampContainer, this.config[style.key] || { zoom: 1, panX: 0, panY: 0 });
+      }
     }
   },
 
@@ -100,8 +106,7 @@ var StyleIcons = {
       '<button class="btn" style="padding:2px 8px;" id="zoom-in-' + style.key + '">+</button>';
     card.appendChild(controls);
 
-    // Load the stamp SVG
-    this._loadStamp(style, tpl, storageBaseUrl, stampImg, cfg);
+    // Stamp loading is handled sequentially by init() — not here
 
     // Wire up events after DOM insertion
     setTimeout(function() {
@@ -181,7 +186,8 @@ var StyleIcons = {
       container.innerHTML = svg.replace(/<svg/, '<svg style="display:block;"');
       this._applyTransform(container, cfg);
     } catch (e) {
-      container.innerHTML = '<span style="color:red;font-size:0.7rem;">Error: ' + e.message + '</span>';
+      console.error('[StyleIcons] Error loading ' + style.key + ':', e.message, e.stack);
+      container.innerHTML = '<span style="color:red;font-size:0.7rem;">Error loading ' + style.key + ': ' + e.message + '</span>';
     }
   },
 
