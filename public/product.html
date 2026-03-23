@@ -636,10 +636,10 @@
               item.textContent = '';
               item.style.cssText += 'padding:2px 4px;';
               var sample = document.createElement('div');
-              sample.style.cssText = 'width:100px;height:17px;overflow:hidden;';
+              sample.style.cssText = 'width:100px;height:30px;overflow:hidden;';
               var iconImg = document.createElement('img');
               iconImg.src = '/img/style-icons/' + bt + '.png';
-              iconImg.width = 100; iconImg.height = 17;
+              iconImg.width = 100; iconImg.height = 30;
               iconImg.style.display = 'block';
               iconImg.alt = bt;
               iconImg.onerror = function() { this.style.display = 'none'; this.parentNode.textContent = ({perf_line:'Perf. Line',perf_line_spaced:'Perf. Spaced',saw_line:'Saw Line'})[bt] || bt; };
