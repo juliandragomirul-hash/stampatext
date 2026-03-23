@@ -637,7 +637,13 @@
               item.style.cssText += 'padding:2px 4px;';
               var sample = document.createElement('div');
               sample.style.cssText = 'width:100px;height:17px;overflow:hidden;';
-              sample.innerHTML = '<img src="/img/style-icons/' + bt + '.png" width="100" height="17" alt="' + bt + '" style="display:block;"/>';
+              var iconImg = document.createElement('img');
+              iconImg.src = '/img/style-icons/' + bt + '.png';
+              iconImg.width = 100; iconImg.height = 17;
+              iconImg.style.display = 'block';
+              iconImg.alt = bt;
+              iconImg.onerror = function() { this.style.display = 'none'; this.parentNode.textContent = ({perf_line:'Perf. Line',perf_line_spaced:'Perf. Spaced',saw_line:'Saw Line'})[bt] || bt; };
+              sample.appendChild(iconImg);
               item.appendChild(sample);
             });
             var activeBorderItem = borderList.querySelector('.filter-bar-dropdown-item.active');

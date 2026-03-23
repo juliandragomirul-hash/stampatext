@@ -2694,6 +2694,10 @@ const SvgRenderer = {
     if (!borderFlags.stitch && borderType && borderType.indexOf('stitch_') === 0) {
       borderFlags.stitch = true;
     }
+    // Perforation line styles (mid-stroke circles/diamonds on plain stroke)
+    if (borderType === 'perf_line') borderFlags.perfLine = 'circle-20-2.5';
+    if (borderType === 'perf_line_spaced') borderFlags.perfLine = 'circle-25-4';
+    if (borderType === 'saw_line') borderFlags.perfLine = 'diamond-20-2';
     frameMode = frameMode || 'single';
 
     // Per-font adjustments from config (loaded from /data/font-config.json)
