@@ -1134,7 +1134,7 @@ const SvgRenderer = {
       var vStep = h / numV;
       for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
       for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
-      return shapes;
+      return { svg: shapes, innerEdge: innerEdge };
     }
 
     // ---- Rounded corners: use trace ----
