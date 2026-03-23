@@ -3619,14 +3619,27 @@ const SvgRenderer = {
           { rx: plTrace.rxTL, cx: newRectX + plTrace.rxTL, cy: newRectY + plTrace.rxTL, sa: 180, ea: 270 }
         ];
         var plMaxRx = Math.max(plTrace.rxTL, plTrace.rxTR, plTrace.rxBR, plTrace.rxBL);
-        var plNumSmall = Math.max(2, Math.round(plMaxRx * Math.PI / 2 / plSmallStep));
+        var plNumSmall = plMaxRx > 0 ? Math.max(2, Math.round(plMaxRx * Math.PI / 2 / plSmallStep)) : 3;
+        // Corner points for straight corners (actual corner x,y)
+        var plCornerPts = [
+          { x: newRectX + newRectWidth, y: newRectY },       // TR
+          { x: newRectX + newRectWidth, y: newRectY + newRectHeight }, // BR
+          { x: newRectX, y: newRectY + newRectHeight },       // BL
+          { x: newRectX, y: newRectY }                         // TL
+        ];
         for (var pci = 0; pci < plCorners.length; pci++) {
           var pc = plCorners[pci];
-          if (pc.rx <= 0) continue;
-          for (var psi = 1; psi < plNumSmall; psi++) {
-            var pt = psi / plNumSmall;
-            var pAngle = (pc.sa + pt * (pc.ea - pc.sa)) * Math.PI / 180;
-            plHtml += '<circle cx="' + plF(pc.cx + pc.rx * Math.cos(pAngle)) + '" cy="' + plF(pc.cy + pc.rx * Math.sin(pAngle)) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
+          if (pc.rx > 0) {
+            // Rounded: arc perforations
+            for (var psi = 1; psi < plNumSmall; psi++) {
+              var pt = psi / plNumSmall;
+              var pAngle = (pc.sa + pt * (pc.ea - pc.sa)) * Math.PI / 180;
+              plHtml += '<circle cx="' + plF(pc.cx + pc.rx * Math.cos(pAngle)) + '" cy="' + plF(pc.cy + pc.rx * Math.sin(pAngle)) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
+            }
+          } else {
+            // Straight: place small circle at the corner point + 1 on each arm
+            var cp = plCornerPts[pci];
+            plHtml += '<circle cx="' + plF(cp.x) + '" cy="' + plF(cp.y) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
           }
         }
         // Pass 2: Full-size shapes on straight edges
