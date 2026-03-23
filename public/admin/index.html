@@ -38,6 +38,7 @@
         <li><a class="admin-nav-item" href="#textures">Textures</a></li>
         <li><a class="admin-nav-item" href="#fonts">Font Tuning</a></li>
         <li><a class="admin-nav-item" href="#squares">Square Tuning</a></li>
+        <li><a class="admin-nav-item" href="#style-icons">Style Icons</a></li>
         <li><a class="admin-nav-item" href="#users">Users</a></li>
       </ul>
     </nav>
@@ -262,6 +263,13 @@
         <div id="square-tuning-grid" class="font-tuning-grid"></div>
       </div>
 
+      <!-- Style Icons Section -->
+      <div id="section-style-icons" style="display:none;">
+        <h1 class="page-title">Style Icon Cropping</h1>
+        <p class="page-subtitle">Zoom and drag each stamp to frame the border pattern in the 100x30px viewport</p>
+        <div id="style-icons-grid" style="display:flex;flex-direction:column;gap:2rem;"></div>
+      </div>
+
     </main>
   </div>
 
@@ -278,6 +286,7 @@
   <script src="/js/admin-templates.js"></script>
   <script src="/js/admin-font-tuning.js"></script>
   <script src="/js/admin-square-tuning.js"></script>
+  <script src="/js/admin-style-icons.js"></script>
   <script>
     function toggleMenu() {
       document.getElementById('user-menu').classList.toggle('active');

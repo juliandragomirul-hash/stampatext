@@ -1,0 +1,240 @@
+/**
+ * Admin Style Icons — Pan & zoom to crop 100×30px icons for the Style dropdown.
+ */
+var StyleIcons = {
+  _initialized: false,
+  config: {},  // { styleName: { zoom: 1, panX: 0, panY: 0 } }
+  STYLES: [
+    { key: 'simple', label: 'Plain' },
+    { key: 'stitch_line', label: 'Stitch Line' },
+    { key: 'stitch_square', label: 'Stitch Square' },
+    { key: 'stitch_circle', label: 'Stitch Dot' },
+    { key: 'sawtooth', label: 'Sawtooth' },
+    { key: 'perforated', label: 'Perforated' },
+    { key: 'perforated_spaced', label: 'Spaced Perf.' },
+    { key: 'wavy', label: 'Wavy' },
+    { key: 'zigzag', label: 'Zigzag' },
+    { key: 'torn_edge', label: 'Torn Edge' },
+    { key: 'chalk', label: 'Chalk' },
+    { key: 'perf_line', label: 'Perf. Line' },
+    { key: 'perf_line_spaced', label: 'Perf. Line Spaced' },
+    { key: 'saw_line', label: 'Saw Line' }
+  ],
+
+  async init() {
+    // Load saved config
+    try {
+      var resp = await fetch('/api/admin/style-icon-config');
+      if (resp.ok) this.config = await resp.json();
+    } catch (e) { this.config = {}; }
+
+    // Load templates
+    var { data: tpls } = await sb.from('templates').select('id, border_type, svg_path, text_zones(*)').eq('is_active', true).eq('fill_type', 'empty').eq('frame_type', 'single');
+    var tplMap = {};
+    tpls.forEach(function(t) { tplMap[t.border_type || 'simple'] = t; });
+
+    var storageBaseUrl = sb.storage.from('templates').getPublicUrl('').data.publicUrl;
+    var grid = document.getElementById('style-icons-grid');
+    grid.innerHTML = '';
+
+    for (var i = 0; i < this.STYLES.length; i++) {
+      var style = this.STYLES[i];
+      var tpl = tplMap[style.key] || tplMap['simple'];
+      var card = this._buildCard(style, tpl, storageBaseUrl);
+      grid.appendChild(card);
+    }
+  },
+
+  _buildCard(style, tpl, storageBaseUrl) {
+    var self = this;
+    var cfg = this.config[style.key] || { zoom: 1, panX: 0, panY: 0 };
+
+    var card = document.createElement('div');
+    card.style.cssText = 'background:#f9f9f9;border:1px solid #e0e0e0;border-radius:8px;padding:1rem;';
+
+    // Header: style label + current icon + save button
+    var header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;';
+    header.innerHTML = '<strong style="min-width:140px;">' + style.label + '</strong>' +
+      '<img src="/img/style-icons/' + style.key + '.png?t=' + Date.now() + '" width="100" height="30" style="border:1px solid #ccc;background:#fff;" id="icon-preview-' + style.key + '">' +
+      '<button class="btn btn-primary" style="padding:4px 12px;font-size:0.8rem;" id="icon-save-' + style.key + '">Save</button>' +
+      '<span id="icon-status-' + style.key + '" style="color:#22c55e;font-size:0.8rem;display:none;">Saved!</span>';
+    card.appendChild(header);
+
+    // Viewport container: fixed 100×30 window with stamp behind
+    var viewportWrap = document.createElement('div');
+    viewportWrap.style.cssText = 'position:relative;width:300px;height:120px;border:1px solid #999;overflow:hidden;cursor:grab;background:#fff;';
+
+    // The viewport indicator (100×30 fixed rect in center)
+    var viewport = document.createElement('div');
+    viewport.style.cssText = 'position:absolute;left:100px;top:45px;width:100px;height:30px;border:2px dashed #ff0000;pointer-events:none;z-index:10;box-sizing:border-box;';
+    viewportWrap.appendChild(viewport);
+
+    // Semi-transparent overlay outside the viewport
+    var overlayTop = document.createElement('div');
+    overlayTop.style.cssText = 'position:absolute;left:0;top:0;width:300px;height:45px;background:rgba(0,0,0,0.3);pointer-events:none;z-index:9;';
+    viewportWrap.appendChild(overlayTop);
+    var overlayBot = document.createElement('div');
+    overlayBot.style.cssText = 'position:absolute;left:0;top:75px;width:300px;height:45px;background:rgba(0,0,0,0.3);pointer-events:none;z-index:9;';
+    viewportWrap.appendChild(overlayBot);
+    var overlayLeft = document.createElement('div');
+    overlayLeft.style.cssText = 'position:absolute;left:0;top:45px;width:100px;height:30px;background:rgba(0,0,0,0.3);pointer-events:none;z-index:9;';
+    viewportWrap.appendChild(overlayLeft);
+    var overlayRight = document.createElement('div');
+    overlayRight.style.cssText = 'position:absolute;left:200px;top:45px;width:100px;height:30px;background:rgba(0,0,0,0.3);pointer-events:none;z-index:9;';
+    viewportWrap.appendChild(overlayRight);
+
+    // Stamp image (movable/zoomable)
+    var stampImg = document.createElement('div');
+    stampImg.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;';
+    stampImg.id = 'stamp-img-' + style.key;
+    viewportWrap.appendChild(stampImg);
+
+    card.appendChild(viewportWrap);
+
+    // Zoom controls
+    var controls = document.createElement('div');
+    controls.style.cssText = 'display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;';
+    controls.innerHTML = '<button class="btn" style="padding:2px 8px;" id="zoom-out-' + style.key + '">-</button>' +
+      '<span id="zoom-label-' + style.key + '" style="font-size:0.8rem;min-width:50px;text-align:center;">' + (cfg.zoom * 100).toFixed(0) + '%</span>' +
+      '<button class="btn" style="padding:2px 8px;" id="zoom-in-' + style.key + '">+</button>';
+    card.appendChild(controls);
+
+    // Load the stamp SVG
+    this._loadStamp(style, tpl, storageBaseUrl, stampImg, cfg);
+
+    // Wire up events after DOM insertion
+    setTimeout(function() {
+      // Drag
+      var isDragging = false, startX = 0, startY = 0, origPanX = 0, origPanY = 0;
+      viewportWrap.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;
+        isDragging = true;
+        startX = e.clientX; startY = e.clientY;
+        origPanX = cfg.panX; origPanY = cfg.panY;
+        viewportWrap.style.cursor = 'grabbing';
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        cfg.panX = origPanX + (e.clientX - startX);
+        cfg.panY = origPanY + (e.clientY - startY);
+        self._applyTransform(stampImg, cfg);
+      });
+      document.addEventListener('mouseup', function() {
+        if (isDragging) { isDragging = false; viewportWrap.style.cursor = 'grab'; }
+      });
+
+      // Zoom (mouse wheel)
+      viewportWrap.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        var delta = e.deltaY > 0 ? -0.1 : 0.1;
+        cfg.zoom = Math.max(0.2, Math.min(5, cfg.zoom + delta));
+        self._applyTransform(stampImg, cfg);
+        document.getElementById('zoom-label-' + style.key).textContent = (cfg.zoom * 100).toFixed(0) + '%';
+      });
+
+      // Zoom buttons
+      document.getElementById('zoom-in-' + style.key).addEventListener('click', function() {
+        cfg.zoom = Math.min(5, cfg.zoom + 0.1);
+        self._applyTransform(stampImg, cfg);
+        document.getElementById('zoom-label-' + style.key).textContent = (cfg.zoom * 100).toFixed(0) + '%';
+      });
+      document.getElementById('zoom-out-' + style.key).addEventListener('click', function() {
+        cfg.zoom = Math.max(0.2, cfg.zoom - 0.1);
+        self._applyTransform(stampImg, cfg);
+        document.getElementById('zoom-label-' + style.key).textContent = (cfg.zoom * 100).toFixed(0) + '%';
+      });
+
+      // Save
+      document.getElementById('icon-save-' + style.key).addEventListener('click', function() {
+        self._saveIcon(style.key, viewportWrap, cfg);
+      });
+    }, 100);
+
+    return card;
+  },
+
+  async _loadStamp(style, tpl, storageBaseUrl, container, cfg) {
+    try {
+      var svgUrl = storageBaseUrl.replace(/\/$/, '') + '/' + tpl.svg_path;
+      var rawSvg = await SvgRenderer.fetchSvg(svgUrl);
+      var cleanSvg = SvgRenderer.cleanSvgString ? SvgRenderer.cleanSvgString(rawSvg) : rawSvg;
+
+      // Replace text
+      var zone = tpl.text_zones && tpl.text_zones[0];
+      var idx = zone ? (zone.svg_element_index || 0) : 0;
+      var svg = SvgRenderer.replaceTextInString(cleanSvg, idx, 'CONGRATULATIONS');
+
+      // AutoFit
+      if (zone && zone.bounding_width) {
+        var scaleX = zone.transform_matrix ? parseFloat((zone.transform_matrix.match(/matrix\(\s*([\d.]+)/) || [])[1]) || 1 : 1;
+        svg = await SvgRenderer.autoFitTextInString(svg, idx, zone.bounding_width, zone.font_size || 128, scaleX, 'single', 'empty', 'straight', style.key, 'rectangle');
+      }
+
+      // Colorize + stroke
+      svg = SvgRenderer.colorize(svg, '#CC0000');
+      svg = SvgRenderer.applyThinStroke(svg);
+      svg = SvgRenderer.cropViewBoxToStamp(svg);
+
+      // Render at 1:1
+      container.innerHTML = svg.replace(/<svg/, '<svg style="display:block;"');
+      this._applyTransform(container, cfg);
+    } catch (e) {
+      container.innerHTML = '<span style="color:red;font-size:0.7rem;">Error: ' + e.message + '</span>';
+    }
+  },
+
+  _applyTransform(el, cfg) {
+    el.style.transform = 'translate(' + cfg.panX + 'px,' + cfg.panY + 'px) scale(' + cfg.zoom + ')';
+  },
+
+  async _saveIcon(styleKey, viewportWrap, cfg) {
+    try {
+      // Capture the 100×30 viewport area using canvas
+      var canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 30;
+      var ctx = canvas.getContext('2d');
+
+      // The viewport is at (100, 45) within the 300×120 container
+      // Draw the container content offset by the viewport position
+      var stampEl = document.getElementById('stamp-img-' + styleKey);
+      var svgEl = stampEl.querySelector('svg');
+      if (!svgEl) { alert('No SVG to capture'); return; }
+
+      // Serialize SVG to image
+      var svgStr = new XMLSerializer().serializeToString(svgEl);
+      var blob = new Blob([svgStr], { type: 'image/svg+xml' });
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      await new Promise(function(resolve, reject) { img.onload = resolve; img.onerror = reject; img.src = url; });
+
+      // Draw with the current pan/zoom, offset by viewport position
+      ctx.drawImage(img, cfg.panX - 100, cfg.panY - 45, img.width * cfg.zoom, img.height * cfg.zoom);
+      URL.revokeObjectURL(url);
+
+      // Convert to base64 PNG
+      var pngBase64 = canvas.toDataURL('image/png').split(',')[1];
+
+      // Upload as JSON
+      var resp = await fetch('/api/admin/style-icons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ style: styleKey, pngBase64: pngBase64, zoom: cfg.zoom, panX: cfg.panX, panY: cfg.panY })
+      });
+      if (!resp.ok) throw new Error('Save failed: ' + resp.status);
+
+      // Update preview
+      document.getElementById('icon-preview-' + styleKey).src = '/img/style-icons/' + styleKey + '.png?t=' + Date.now();
+      var status = document.getElementById('icon-status-' + styleKey);
+      status.style.display = 'inline';
+      setTimeout(function() { status.style.display = 'none'; }, 2000);
+
+      // Save config
+      this.config[styleKey] = { zoom: cfg.zoom, panX: cfg.panX, panY: cfg.panY };
+    } catch (e) {
+      alert('Save error: ' + e.message);
+    }
+  }
+};

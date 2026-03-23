@@ -69,6 +69,15 @@
     if (usersSection) {
       usersSection.style.display = name === 'users' ? 'block' : 'none';
     }
+    // Style Icons section
+    var styleIconsSection = document.getElementById('section-style-icons');
+    if (styleIconsSection) {
+      styleIconsSection.style.display = name === 'style-icons' ? 'block' : 'none';
+      if (name === 'style-icons' && typeof StyleIcons !== 'undefined' && !StyleIcons._initialized) {
+        StyleIcons._initialized = true;
+        StyleIcons.init();
+      }
+    }
   }
 
   // ---- Custom color palette ----

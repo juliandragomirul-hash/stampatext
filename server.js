@@ -321,6 +321,36 @@ app.put('/api/admin/square-config', (req, res) => {
   }
 });
 
+// Style Icon Cropping API
+const STYLE_ICON_CONFIG_PATH = path.join(__dirname, 'public', 'data', 'style-icon-config.json');
+
+app.get('/api/admin/style-icon-config', (req, res) => {
+  try {
+    if (!fs.existsSync(STYLE_ICON_CONFIG_PATH)) return res.json({});
+    res.json(JSON.parse(fs.readFileSync(STYLE_ICON_CONFIG_PATH, 'utf8')));
+  } catch (e) { res.json({}); }
+});
+
+app.post('/api/admin/style-icons', express.json({ limit: '1mb' }), (req, res) => {
+  try {
+    var { style, pngBase64, zoom, panX, panY } = req.body;
+    if (!style || !pngBase64) return res.status(400).json({ error: 'Missing style or pngBase64' });
+    // Save PNG
+    var pngBuffer = Buffer.from(pngBase64, 'base64');
+    var iconPath = path.join(__dirname, 'public', 'img', 'style-icons', style + '.png');
+    fs.writeFileSync(iconPath, pngBuffer);
+    // Save config
+    var config = {};
+    try { config = JSON.parse(fs.readFileSync(STYLE_ICON_CONFIG_PATH, 'utf8')); } catch (e) {}
+    config[style] = { zoom: zoom, panX: panX, panY: panY };
+    fs.writeFileSync(STYLE_ICON_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf8');
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Style icon save error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Param compatibility API
 app.get('/api/admin/param-compat', (req, res) => {
   try {
