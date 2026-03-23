@@ -40,7 +40,7 @@ var StyleIcons = {
     // Templates with tiny SVGs (no embedded fonts) need a fat template as base
     // The borderType parameter still triggers the correct border generation
     var SMALL_TPL_STYLES = ['zigzag', 'chalk'];
-    var fatTpl = tplMap['wavy'] || tplMap['simple'];  // wavy has 1.6MB SVG with embedded fonts
+    var fatTpl = tplMap['simple'];  // plain template: 1.6MB with embedded fonts, NO border data attrs
 
     // Load stamps sequentially to avoid iframe throttling
     for (var i = 0; i < this.STYLES.length; i++) {
