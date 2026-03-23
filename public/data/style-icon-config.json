@@ -1,0 +1,67 @@
+{
+  "simple": {
+    "zoom": 0.6000000000000001,
+    "panX": 25,
+    "panY": -71
+  },
+  "stitch_line": {
+    "zoom": 0.6000000000000001,
+    "panX": -96,
+    "panY": 36
+  },
+  "stitch_square": {
+    "zoom": 0.7000000000000001,
+    "panX": -41,
+    "panY": 20
+  },
+  "stitch_circle": {
+    "zoom": 0.6000000000000001,
+    "panX": -11,
+    "panY": 28
+  },
+  "sawtooth": {
+    "zoom": 0.6000000000000001,
+    "panX": 15,
+    "panY": 43
+  },
+  "perforated": {
+    "zoom": 0.7000000000000001,
+    "panX": 8,
+    "panY": 41
+  },
+  "perforated_spaced": {
+    "zoom": 0.5000000000000001,
+    "panX": -15,
+    "panY": 47
+  },
+  "wavy": {
+    "zoom": 0.30000000000000016,
+    "panX": 37,
+    "panY": 47
+  },
+  "zigzag": {
+    "zoom": 0.7000000000000001,
+    "panX": -87,
+    "panY": -192
+  },
+  "torn_edge": {
+    "zoom": 0.6000000000000001,
+    "panX": -22,
+    "panY": 44
+  },
+  "perf_line": {
+    "zoom": 0.7000000000000001,
+    "panX": -38,
+    "panY": 40
+  },
+  "perf_line_spaced": {
+    "zoom": 0.7000000000000001,
+    "panX": -36,
+    "panY": 39
+  },
+  "saw_line": {
+    "zoom": 0.7000000000000001,
+    "panX": -42,
+    "panY": 39
+  }
+}
