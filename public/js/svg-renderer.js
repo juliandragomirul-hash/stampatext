@@ -3658,7 +3658,7 @@ const SvgRenderer = {
           }
         }
         // Pass 2: Full-size shapes on straight edges
-        var plBite = plSmallR * 2;
+        var plBite = plSmallR * 5;  // account for L-arm length (2 arms × 2.1 spacing + margin)
         var plEdges = [
           { x1: newRectX + plTrace.rxTL, y1: newRectY, x2: newRectX + newRectWidth - plTrace.rxTR, y2: newRectY },
           { x1: newRectX + newRectWidth, y1: newRectY + plTrace.rxTR, x2: newRectX + newRectWidth, y2: newRectY + newRectHeight - plTrace.rxBR },
