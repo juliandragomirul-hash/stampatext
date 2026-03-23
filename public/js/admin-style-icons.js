@@ -37,16 +37,23 @@ var StyleIcons = {
     var grid = document.getElementById('style-icons-grid');
     grid.innerHTML = '';
 
+    // Templates with tiny SVGs (no embedded fonts) need a fat template as base
+    // The borderType parameter still triggers the correct border generation
+    var SMALL_TPL_STYLES = ['zigzag', 'chalk'];
+    var fatTpl = tplMap['wavy'] || tplMap['simple'];  // wavy has 1.6MB SVG with embedded fonts
+
     // Load stamps sequentially to avoid iframe throttling
     for (var i = 0; i < this.STYLES.length; i++) {
       var style = this.STYLES[i];
       var tpl = tplMap[style.key] || tplMap['simple'];
-      var card = this._buildCard(style, tpl, storageBaseUrl);
+      // Use fat template for styles with tiny SVGs
+      var svgTpl = SMALL_TPL_STYLES.indexOf(style.key) >= 0 ? fatTpl : tpl;
+      var card = this._buildCard(style, svgTpl, storageBaseUrl);
       grid.appendChild(card);
       // Wait for this stamp to finish loading before starting the next
       var stampContainer = document.getElementById('stamp-img-' + style.key);
       if (stampContainer) {
-        await this._loadStamp(style, tpl, storageBaseUrl, stampContainer, this.config[style.key] || { zoom: 1, panX: 0, panY: 0 });
+        await this._loadStamp(style, svgTpl, storageBaseUrl, stampContainer, this.config[style.key] || { zoom: 1, panX: 0, panY: 0 });
       }
     }
   },
