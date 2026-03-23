@@ -200,7 +200,10 @@ var StyleIcons = {
       // Colorize + stroke
       svg = SvgRenderer.colorize(svg, '#CC0000');
       svg = SvgRenderer.applyThinStroke(svg);
-      svg = SvgRenderer.cropViewBoxToStamp(svg);
+      // Skip cropViewBox for wavy/zigzag — their paths may extend beyond the rect
+      if (style.key !== 'zigzag') {
+        svg = SvgRenderer.cropViewBoxToStamp(svg);
+      }
 
       // Render at 1:1
       console.log('[StyleIcons] ' + style.key + ': SVG length=' + svg.length + ' hasWavy=' + /data-wavy/.test(svg) + ' hasFilter=' + /data-filter/.test(svg) + ' hasPaths=' + (svg.match(/<path/gi) || []).length);
