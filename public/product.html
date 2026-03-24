@@ -1131,7 +1131,12 @@
             setTimeout(function() { updateSaveButton(); }, 2000);
           }
         } catch (e) {
-          document.getElementById('auth-modal').style.display = 'flex';
+          console.error('Save error:', e);
+          if (e.message && e.message.indexOf('auth') >= 0) {
+            document.getElementById('auth-modal').style.display = 'flex';
+          } else {
+            alert('Save failed: ' + (e.message || 'Unknown error'));
+          }
         }
       });
 
