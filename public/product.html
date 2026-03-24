@@ -680,11 +680,11 @@
                   }
                   thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
                   item.textContent = '';
-                  item.style.cssText += 'padding:3px 6px;';
+                  item.style.cssText += 'padding:4px 6px;';
                   var sample = document.createElement('div');
-                  sample.style.cssText = 'width:100%;height:32px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
+                  sample.style.cssText = 'width:100%;height:48px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
                   thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="32" preserveAspectRatio="xMidYMid meet" style="background:transparent"');
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="48" preserveAspectRatio="xMidYMid meet" style="background:transparent"');
                   item.appendChild(sample);
                 } catch (e) {
                   console.warn('Corner thumb failed for ' + ct + ':', e.message);
