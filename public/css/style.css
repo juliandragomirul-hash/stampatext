@@ -1457,7 +1457,7 @@ body.gallery-active .stamp-hero-input-wrapper {
   cursor: pointer;
   user-select: none;
   min-width: 130px;
-  height: 36px;
+  height: 46px;
   box-sizing: border-box;
 }
 
@@ -1520,7 +1520,7 @@ body.gallery-active .stamp-hero-input-wrapper {
   background: #fff;
   cursor: pointer;
   user-select: none;
-  height: 42px;
+  height: 46px;
   box-sizing: border-box;
 }
 

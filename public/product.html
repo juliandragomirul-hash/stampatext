@@ -856,6 +856,7 @@
         e.stopPropagation();
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
+        if (item.classList.contains('active')) { this.style.display = 'none'; return; }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentFrame = item.dataset.value;
@@ -868,6 +869,7 @@
         e.stopPropagation();
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
+        if (item.classList.contains('active')) { this.style.display = 'none'; return; }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentFill = item.dataset.value;
@@ -880,6 +882,7 @@
         e.stopPropagation();
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
+        if (item.classList.contains('active')) { this.style.display = 'none'; return; }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentTexture = item.dataset.value;
@@ -892,6 +895,7 @@
         e.stopPropagation();
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
+        if (item.classList.contains('active')) { this.style.display = 'none'; return; }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentTilt = parseInt(item.dataset.value, 10) || 0;
@@ -912,7 +916,7 @@
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
         var newBorder = item.dataset.value;
-        if (newBorder === currentBorderStyle) return;
+        if (newBorder === currentBorderStyle) { this.style.display = 'none'; return; }
         // Check if template is preloaded
         if (!allTemplatesByBorder[newBorder]) {
           console.warn('Template for border style "' + newBorder + '" not yet loaded');
@@ -967,6 +971,11 @@
         e.stopPropagation();
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
+        // Click active item again = close list
+        if (item.classList.contains('active')) {
+          this.style.display = 'none';
+          return;
+        }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentCornerStyle = item.dataset.value;
@@ -996,6 +1005,7 @@
         e.stopPropagation();
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
+        if (item.classList.contains('active')) { this.style.display = 'none'; return; }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentForceLines = parseInt(item.dataset.value, 10) || 0;
