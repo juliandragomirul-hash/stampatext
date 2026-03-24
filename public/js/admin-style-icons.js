@@ -233,8 +233,9 @@ var StyleIcons = {
       var svgEl = stampEl.querySelector('svg');
       if (!svgEl) { alert('No SVG to capture'); return; }
 
-      // Serialize SVG to image
+      // Serialize SVG to image, removing white background rects for transparency
       var svgStr = new XMLSerializer().serializeToString(svgEl);
+      svgStr = svgStr.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|#[Ff]{6}|white|#FFFFFF)["'][^>]*\/?\s*>/gi, '');
       var blob = new Blob([svgStr], { type: 'image/svg+xml' });
       var url = URL.createObjectURL(blob);
       var img = new Image();
