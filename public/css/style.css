@@ -1579,13 +1579,114 @@ body.gallery-active .stamp-hero-input-wrapper {
   background: #f8f8f8;
   border: 1px solid #e5e5e5;
   border-radius: 8px;
+  position: relative;
+}
+.customize-close-btn {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: #999;
+  z-index: 2;
+}
+.customize-close-btn:hover { color: #333; }
+.customize-toggle-btn {
+  padding: 10px 24px;
+  font-size: 0.95rem;
+  border-radius: 6px;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+@media (max-width: 768px) {
+  .customize-toggle-btn {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
 }
 
-.product-layout {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 1.5rem;
-  align-items: start;
+/* Content block: 2-column layout */
+.product-content-block {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+.product-stamp-area {
+  flex: 1;
+  min-width: 300px;
+}
+.product-others-area {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.product-box {
+  padding: 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fafafa;
+}
+.product-save-box .save-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Download product rows */
+.download-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.download-product-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.download-product-row:hover {
+  background: #f0f0f0;
+}
+.download-product-row input[type="radio"] {
+  margin: 0;
+}
+.dl-format {
+  flex: 1;
+  font-weight: 500;
+}
+.dl-cost {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+/* Responsive: mobile */
+@media (max-width: 768px) {
+  .product-content-block {
+    flex-direction: column;
+  }
+  .product-stamp-area {
+    min-width: 100%;
+  }
+  .product-others-area {
+    flex: 1 1 100%;
+  }
+  .product-customize-bar.collapsed {
+    display: none !important;
+  }
 }
 
 .product-preview {

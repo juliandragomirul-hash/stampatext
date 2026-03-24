@@ -54,14 +54,16 @@
   <section class="product-details">
     <a href="/" class="product-back" id="product-back">&larr; Back to gallery</a>
 
-    <!-- Customize bar (horizontal, gallery filter bar style) -->
-    <div class="product-customize-bar">
+    <!-- Customize bar (collapsible) -->
+    <button class="customize-toggle-btn" id="customize-toggle-btn" style="display:none;">Customize</button>
+    <div class="product-customize-bar" id="product-customize-bar">
+      <button class="customize-close-btn" id="customize-close-btn">&times;</button>
       <div id="product-template-info" class="product-template-info" style="display:none;"></div>
 
-      <!-- Compatibility group: Style, Frames, Fill, Corners -->
-      <div class="filter-bar-group filter-bar-dropdown-group">
+      <!-- Row 1: Style, Corners, Frames, Rows -->
+      <div class="filter-bar-group filter-bar-dropdown-group" style="order:1;">
         <label class="filter-bar-label">Style</label>
-        <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:135px">
+        <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:70px">
           <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:30px;overflow:hidden;">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -83,32 +85,7 @@
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group">
-        <label class="filter-bar-label">Frames</label>
-        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:45px">
-          <span class="filter-bar-dropdown-value" id="product-frame-value">1</span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-dropdown-list" id="product-frame-list">
-          <div class="filter-bar-dropdown-item active" data-value="single">A</div>
-          <div class="filter-bar-dropdown-item" data-value="double">B</div>
-          <div class="filter-bar-dropdown-item" data-value="split">C</div>
-        </div>
-      </div>
-
-      <div class="filter-bar-group filter-bar-dropdown-group">
-        <label class="filter-bar-label">Fill</label>
-        <div class="filter-bar-dropdown-box" id="product-fill-toggle" style="min-width:35px">
-          <span class="filter-bar-dropdown-value" id="product-fill-value">No</span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-dropdown-list" id="product-fill-list">
-          <div class="filter-bar-dropdown-item active" data-value="empty">No</div>
-          <div class="filter-bar-dropdown-item" data-value="full">Yes</div>
-        </div>
-      </div>
-
-      <div class="filter-bar-group filter-bar-dropdown-group">
+      <div class="filter-bar-group filter-bar-dropdown-group" style="order:2;">
         <label class="filter-bar-label">Corners</label>
         <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:70px;padding:2px 4px;">
           <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:40px;overflow:hidden;display:flex;align-items:center;">Straight</span>
@@ -126,50 +103,20 @@
         </div>
       </div>
 
-      <div style="border-left:1px solid #ddd;height:50px;margin:0 8px;align-self:center;"></div>
-
-      <!-- Universal group: Color, Font, Texture, Tilt, Rows -->
-
-      <div class="filter-bar-group filter-bar-color-group">
-        <label class="filter-bar-label">Color</label>
-        <div class="filter-bar-color-box" id="product-color-toggle" style="height:46px;box-sizing:border-box;">
-          <span class="filter-bar-color-dot" id="product-color-dot"></span>
+      <div class="filter-bar-group filter-bar-dropdown-group" style="order:3;">
+        <label class="filter-bar-label">Frames</label>
+        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:45px">
+          <span class="filter-bar-dropdown-value" id="product-frame-value">A</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
-        <div class="filter-bar-color-grid" id="product-color-grid"></div>
-      </div>
-
-      <div class="filter-bar-group filter-bar-font-group">
-        <label class="filter-bar-label">Font</label>
-        <div class="filter-bar-font-box" id="product-font-toggle">
-          <span class="filter-bar-font-value" id="product-font-value"></span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-font-list" id="product-font-list"></div>
-      </div>
-
-      <div class="filter-bar-group filter-bar-dropdown-group">
-        <label class="filter-bar-label">Texture</label>
-        <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:65px">
-          <span class="filter-bar-dropdown-value" id="product-texture-value">None</span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-dropdown-list" id="product-texture-list"></div>
-      </div>
-
-      <div class="filter-bar-group filter-bar-dropdown-group">
-        <label class="filter-bar-label">Tilt</label>
-        <div class="filter-bar-dropdown-box" id="product-tilt-toggle" style="min-width:35px">
-          <span class="filter-bar-dropdown-value" id="product-tilt-value">No</span>
-          <span class="filter-bar-color-arrow">&#9662;</span>
-        </div>
-        <div class="filter-bar-dropdown-list" id="product-tilt-list">
-          <div class="filter-bar-dropdown-item active" data-value="0">No</div>
-          <div class="filter-bar-dropdown-item" data-value="-10">Yes</div>
+        <div class="filter-bar-dropdown-list" id="product-frame-list">
+          <div class="filter-bar-dropdown-item active" data-value="single">A</div>
+          <div class="filter-bar-dropdown-item" data-value="double">B</div>
+          <div class="filter-bar-dropdown-item" data-value="split">C</div>
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group" id="product-rows-group">
+      <div class="filter-bar-group filter-bar-dropdown-group" id="product-rows-group" style="order:4;">
         <label class="filter-bar-label">Rows</label>
         <div class="filter-bar-dropdown-box" id="product-rows-toggle" style="min-width:40px">
           <span class="filter-bar-dropdown-value" id="product-rows-value">Auto</span>
@@ -182,63 +129,114 @@
         </div>
       </div>
 
+      <!-- Row 2: Color, Fill, Texture, Tilt -->
+      <div class="filter-bar-group filter-bar-color-group" style="order:5;">
+        <label class="filter-bar-label">Color</label>
+        <div class="filter-bar-color-box" id="product-color-toggle" style="height:46px;box-sizing:border-box;">
+          <span class="filter-bar-color-dot" id="product-color-dot"></span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-color-grid" id="product-color-grid"></div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group" style="order:6;">
+        <label class="filter-bar-label">Fill</label>
+        <div class="filter-bar-dropdown-box" id="product-fill-toggle" style="min-width:35px">
+          <span class="filter-bar-dropdown-value" id="product-fill-value">No</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-fill-list">
+          <div class="filter-bar-dropdown-item active" data-value="empty">No</div>
+          <div class="filter-bar-dropdown-item" data-value="full">Yes</div>
+        </div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group" style="order:7;">
+        <label class="filter-bar-label">Texture</label>
+        <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:65px">
+          <span class="filter-bar-dropdown-value" id="product-texture-value">None</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-texture-list"></div>
+      </div>
+
+      <div class="filter-bar-group filter-bar-dropdown-group" style="order:8;">
+        <label class="filter-bar-label">Tilt</label>
+        <div class="filter-bar-dropdown-box" id="product-tilt-toggle" style="min-width:35px">
+          <span class="filter-bar-dropdown-value" id="product-tilt-value">No</span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-tilt-list">
+          <div class="filter-bar-dropdown-item active" data-value="0">No</div>
+          <div class="filter-bar-dropdown-item" data-value="-10">Yes</div>
+        </div>
+      </div>
+
+      <!-- Row 3: Font -->
+      <div class="filter-bar-group filter-bar-font-group" style="order:9;">
+        <label class="filter-bar-label">Font</label>
+        <div class="filter-bar-font-box" id="product-font-toggle">
+          <span class="filter-bar-font-value" id="product-font-value"></span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-font-list" id="product-font-list"></div>
+      </div>
+
       <!-- Shape is set from gallery URL, not togglable on product page -->
       <input type="hidden" id="product-shape-value" value="rectangle">
     </div>
 
-    <div class="product-layout" style="display:flex;align-items:flex-start;gap:24px;">
-      <!-- Left: Stamp preview -->
-      <div class="product-preview" id="product-preview" style="flex:1;min-width:0;">
-        <div class="stamp-loading">Loading preview...</div>
+    <!-- Content block: Stamp + Others -->
+    <div class="product-content-block">
+      <!-- The Stamp -->
+      <div class="product-stamp-area">
+        <div class="product-preview" id="product-preview">
+          <div class="stamp-loading">Loading preview...</div>
+        </div>
       </div>
 
-      <!-- Right: Description + buttons -->
-      <div style="flex:0 0 280px;display:flex;flex-direction:column;justify-content:center;padding-top:20px;">
-        <div id="product-description" style="font-size:0.85rem;color:#555;line-height:1.5;margin-bottom:20px;"></div>
-        <div style="display:flex;gap:10px;">
-          <button class="btn btn-primary" id="btn-download-open" style="padding:10px 24px;font-size:0.95rem;border-radius:6px;">Download</button>
-          <button class="btn" id="btn-save" style="padding:10px 24px;font-size:0.95rem;border-radius:6px;background:#555;color:#fff;border:none;cursor:pointer;">Save</button>
+      <!-- The Others: Description, Save, Download -->
+      <div class="product-others-area">
+        <!-- Description -->
+        <div class="product-box product-description-box">
+          <div id="product-description" style="font-size:0.85rem;color:#555;line-height:1.5;"></div>
         </div>
-      </div>
-    </div>
 
-      <!-- Download popup (hidden by default) -->
-      <div id="download-popup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:24px;z-index:1000;min-width:320px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <span style="font-weight:700;font-size:1.1rem;">Download options</span>
-          <button id="download-popup-close" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#999;">&times;</button>
+        <!-- Save -->
+        <div class="product-box product-save-box" id="product-save-box">
+          <div id="save-unsaved" class="save-state">
+            <span style="font-size:0.85rem;color:#555;">Save the version in your &laquo;Saves&raquo;</span>
+            <button class="btn" id="btn-save" style="margin-top:8px;padding:8px 20px;font-size:0.9rem;border-radius:6px;background:#555;color:#fff;border:none;cursor:pointer;">Save</button>
+          </div>
+          <div id="save-saved" class="save-state" style="display:none;">
+            <span style="color:#16a34a;font-size:1.1rem;">&#10004;</span>
+            <span id="save-timestamp" style="font-size:0.85rem;color:#555;margin-left:6px;">Saved at --:--</span>
+            <button class="btn" disabled style="margin-top:8px;padding:8px 20px;font-size:0.9rem;border-radius:6px;background:#999;color:#fff;border:none;cursor:default;">Save</button>
+          </div>
         </div>
-        <div class="product-download-section" id="product-download-section">
-          <div class="download-formats">
-            <div class="download-format-col">
-              <div class="filter-section-header">
-                <span class="filter-section-title">JPG (WHITE BACKGROUND)</span>
-              </div>
-              <div class="product-radio-group">
-                <label class="product-radio"><input type="radio" name="download-choice" value="jpg-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
-                <label class="product-radio"><input type="radio" name="download-choice" value="jpg-medium" checked><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
-                <label class="product-radio"><input type="radio" name="download-choice" value="jpg-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
-              </div>
-            </div>
-            <div class="download-format-col">
-              <div class="filter-section-header">
-                <span class="filter-section-title">TRANSPARENT PNG</span>
-              </div>
-              <div class="product-radio-group">
-                <label class="product-radio"><input type="radio" name="download-choice" value="png-small"><span>Small 500px</span><span class="download-credit">1 credit</span></label>
-                <label class="product-radio"><input type="radio" name="download-choice" value="png-medium"><span>Medium 1000px</span><span class="download-credit">2 credits</span></label>
-                <label class="product-radio"><input type="radio" name="download-choice" value="png-large"><span>Large 3000px</span><span class="download-credit">3 credits</span></label>
-              </div>
-            </div>
+
+        <!-- Download -->
+        <div class="product-box product-download-box">
+          <div class="download-product-list">
+            <label class="download-product-row" id="dl-row-jpg">
+              <input type="radio" name="download-product" value="jpg-1000" checked>
+              <span class="dl-format">JPEG 1000px</span>
+              <span class="dl-cost" id="dl-cost-jpg">= 1 credit</span>
+            </label>
+            <label class="download-product-row" id="dl-row-png">
+              <input type="radio" name="download-product" value="png-1000">
+              <span class="dl-format">PNG 1000px</span>
+              <span class="dl-cost" id="dl-cost-png">= 2 credits</span>
+            </label>
+            <label class="download-product-row" id="dl-row-svg">
+              <input type="radio" name="download-product" value="svg-full">
+              <span class="dl-format">SVG full</span>
+              <span class="dl-cost" id="dl-cost-svg">= 5 credits</span>
+            </label>
           </div>
-          <div class="download-footer">
-            <button class="btn btn-primary product-download-btn" id="btn-download-confirm">Download</button>
-            <span class="inline-credits" id="inline-credits"></span>
-          </div>
+          <button class="btn btn-primary" id="btn-download-confirm" style="margin-top:10px;padding:10px 24px;font-size:0.95rem;border-radius:6px;width:100%;">Download</button>
         </div>
       </div>
-      <!-- Download popup backdrop -->
-      <div id="download-popup-backdrop" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:999;"></div>
     </div>
 
     <!-- Auth Modal (Login / Sign Up) -->
@@ -476,12 +474,9 @@
       }
 
       var DOWNLOAD_SIZES = {
-        'jpg-small':  { maxSize: 500,  scale: 1, format: 'jpeg', ext: 'jpg', credits: 1 },
-        'jpg-medium': { maxSize: 1000, scale: 1, format: 'jpeg', ext: 'jpg', credits: 2 },
-        'jpg-large':  { maxSize: 1000, scale: 3, format: 'jpeg', ext: 'jpg', credits: 3 },
-        'png-small':  { maxSize: 500,  scale: 1, format: 'png',  ext: 'png', credits: 1 },
-        'png-medium': { maxSize: 1000, scale: 1, format: 'png',  ext: 'png', credits: 2 },
-        'png-large':  { maxSize: 1000, scale: 3, format: 'png',  ext: 'png', credits: 3 }
+        'jpg-1000':  { maxSize: 1000, scale: 1, format: 'jpeg', ext: 'jpg', credits: 1 },
+        'png-1000':  { maxSize: 1000, scale: 1, format: 'png',  ext: 'png', credits: 2 },
+        'svg-full':  { maxSize: 0,    scale: 1, format: 'svg',  ext: 'svg', credits: 5 }
       };
 
       // ---- State ----
@@ -663,13 +658,14 @@
               var label = item.textContent.toUpperCase();
               var p = (async function(item, ct, label) {
                 try {
-                  var thumbSvg = SvgRenderer.replaceTextInString(plainEntry.svg, 0, label);
                   // Use Courier Prime (monospace) for consistent icon sizes
-                  thumbSvg = thumbSvg.replace(/font-family=["'][^"']*["']/gi, 'font-family="\'Courier Prime\'"');
+                  var cpSvg = plainEntry.svg.replace(/font-family=["'][^"']*["']/gi, 'font-family="\'Courier Prime\'"');
+                  var thumbSvg = SvgRenderer.replaceTextInString(cpSvg, 0, label);
                   thumbSvg = await SvgRenderer.autoFitTextInString(
                     thumbSvg, 0,
                     cZone.bounding_width || 500, cZone.font_size || 128,
-                    1, 'single', 'empty', ct, 'simple', 'rectangle'
+                    1, 'single', 'empty', ct, 'simple', 'rectangle',
+                    'CourierPrime'
                   );
                   thumbSvg = SvgRenderer.colorize(thumbSvg, '#cc0000');
                   thumbSvg = SvgRenderer.applyThinStroke(thumbSvg);
@@ -1019,27 +1015,28 @@
         });
       });
 
-      // Download confirm
-      document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
+      // Collapse/expand customization bar
+      var customizeBar = document.getElementById('product-customize-bar');
+      var customizeToggle = document.getElementById('customize-toggle-btn');
+      var customizeClose = document.getElementById('customize-close-btn');
+      function isBarCollapsed() { return customizeBar.classList.contains('collapsed'); }
+      function collapseBar() {
+        customizeBar.classList.add('collapsed');
+        customizeBar.style.display = 'none';
+        customizeToggle.style.display = '';
+      }
+      function expandBar() {
+        customizeBar.classList.remove('collapsed');
+        customizeBar.style.display = '';
+        customizeToggle.style.display = 'none';
+      }
+      customizeToggle.addEventListener('click', expandBar);
+      customizeClose.addEventListener('click', collapseBar);
+      // Auto-collapse on mobile
+      if (window.innerWidth <= 768) { collapseBar(); }
 
-      // Download popup open/close
-      document.getElementById('btn-download-open').addEventListener('click', async function() {
-        var sess = await sb.auth.getSession();
-        if (!sess.data.session) {
-          document.getElementById('auth-modal').style.display = 'flex';
-          return;
-        }
-        document.getElementById('download-popup').style.display = 'block';
-        document.getElementById('download-popup-backdrop').style.display = 'block';
-      });
-      document.getElementById('download-popup-close').addEventListener('click', function() {
-        document.getElementById('download-popup').style.display = 'none';
-        document.getElementById('download-popup-backdrop').style.display = 'none';
-      });
-      document.getElementById('download-popup-backdrop').addEventListener('click', function() {
-        document.getElementById('download-popup').style.display = 'none';
-        this.style.display = 'none';
-      });
+      // Inline download button
+      document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
 
       // ---- Save button logic ----
       var userSaves = [];
@@ -1066,21 +1063,22 @@
       }
 
       function updateSaveButton() {
-        var btn = document.getElementById('btn-save');
+        var unsavedEl = document.getElementById('save-unsaved');
+        var savedEl = document.getElementById('save-saved');
         if (!saveSession) {
-          btn.disabled = false;
-          btn.textContent = 'Save';
-          btn.style.opacity = '1';
+          unsavedEl.style.display = '';
+          savedEl.style.display = 'none';
           return;
         }
-        if (isComboSaved()) {
-          btn.disabled = true;
-          btn.textContent = 'Saved';
-          btn.style.opacity = '0.5';
+        var saved = userSaves.find(function(s) { return s.params === getCurrentComboParams(); });
+        if (saved) {
+          unsavedEl.style.display = 'none';
+          savedEl.style.display = '';
+          var ts = saved.created_at ? new Date(saved.created_at).toLocaleTimeString() : '--:--';
+          document.getElementById('save-timestamp').textContent = 'Saved at ' + ts;
         } else {
-          btn.disabled = false;
-          btn.textContent = 'Save';
-          btn.style.opacity = '1';
+          unsavedEl.style.display = '';
+          savedEl.style.display = 'none';
         }
       }
 
@@ -1459,7 +1457,7 @@
       }
 
       async function handleDownload() {
-        var selected = document.querySelector('input[name="download-choice"]:checked');
+        var selected = document.querySelector('input[name="download-product"]:checked');
         if (!selected) {
           alert('Please select a download size.');
           return;
@@ -1496,9 +1494,17 @@
         btn.textContent = 'Preparing...';
 
         try {
-          var blob = await SvgRenderer.exportImage(
-            currentSvg, config.maxSize, null, config.scale, config.format
-          );
+          var blob;
+          if (config.format === 'svg') {
+            // SVG download: remove watermark, export as SVG file
+            var cleanSvg = currentSvg.replace(/<text[^>]*class="watermark"[^>]*>[\s\S]*?<\/text>/gi, '');
+            cleanSvg = cleanSvg.replace(/<image[^>]*watermark[^>]*\/?\s*>/gi, '');
+            blob = new Blob([cleanSvg], { type: 'image/svg+xml' });
+          } else {
+            blob = await SvgRenderer.exportImage(
+              currentSvg, config.maxSize, null, config.scale, config.format
+            );
+          }
 
           // Deduct credit via API
           var token = session.access_token;
@@ -1533,6 +1539,12 @@
             var inlineCredits = document.getElementById('inline-credits');
             if (inlineCredits) inlineCredits.textContent = updatedProfile.credits + ' credits remaining';
           }
+
+          // Update download row with timestamp
+          var dlChoice = selected.value;
+          var costMap = {'jpg-1000':'dl-cost-jpg','png-1000':'dl-cost-png','svg-full':'dl-cost-svg'};
+          var costEl = document.getElementById(costMap[dlChoice]);
+          if (costEl) costEl.textContent = 'Downloaded at ' + new Date().toLocaleTimeString();
 
           // Success toast
           showToast('Download started! ' + config.credits + ' credit' + (config.credits > 1 ? 's' : '') + ' used.');
