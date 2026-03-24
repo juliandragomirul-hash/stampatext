@@ -640,7 +640,7 @@
               var iconImg = document.createElement('img');
               iconImg.src = '/img/style-icons/' + bt + '.png';
               iconImg.width = 100; iconImg.height = 30;
-              iconImg.style.display = 'block';
+              iconImg.style.cssText = 'display:block;mix-blend-mode:multiply;';
               iconImg.alt = bt;
               iconImg.onerror = function() { this.style.display = 'none'; this.parentNode.textContent = ({perf_line:'Perf. Line',perf_line_spaced:'Perf. Spaced',saw_line:'Saw Line'})[bt] || bt; };
               sample.appendChild(iconImg);
