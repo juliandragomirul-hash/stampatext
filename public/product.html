@@ -64,10 +64,10 @@
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:1;">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:70px">
-          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:30px;overflow:hidden;">Plain</span>
+          <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:21px;overflow:hidden;">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
-        <div class="filter-bar-dropdown-list" id="product-border-list">
+        <div class="filter-bar-dropdown-list" id="product-border-list" style="min-width:auto;padding:2px;">
           <div class="filter-bar-dropdown-item active" data-value="simple">Plain</div>
           <div class="filter-bar-dropdown-item" data-value="stitch_line">Stitch Line</div>
           <div class="filter-bar-dropdown-item" data-value="stitch_square">Stitch Square</div>
@@ -88,10 +88,10 @@
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:2;">
         <label class="filter-bar-label">Corners</label>
         <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:70px;padding:2px 4px;">
-          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:40px;overflow:hidden;display:flex;align-items:center;">Straight</span>
+          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:40px;overflow:hidden;display:flex;align-items:center;font-family:'CourierPrime',monospace;">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
-        <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:4px;padding:6px;">
+        <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:4px;padding:6px;font-family:'CourierPrime',monospace;">
           <div class="filter-bar-dropdown-item active" data-value="straight" data-letter="A">AAA</div>
           <div class="filter-bar-dropdown-item" data-value="soft_round" data-letter="B">BBB</div>
           <div class="filter-bar-dropdown-item" data-value="medium_round" data-letter="C">CCC</div>
@@ -631,11 +631,11 @@
               item.textContent = '';
               item.style.cssText += 'padding:2px 4px;';
               var sample = document.createElement('div');
-              sample.style.cssText = 'width:100px;height:30px;overflow:hidden;';
+              sample.style.cssText = 'width:70px;height:21px;overflow:hidden;';
               var iconImg = document.createElement('img');
               iconImg.src = '/img/style-icons/' + bt + '.png';
-              iconImg.width = 100; iconImg.height = 30;
-              iconImg.style.cssText = 'display:block;mix-blend-mode:multiply;';
+              iconImg.width = 70; iconImg.height = 21;
+              iconImg.style.cssText = 'display:block;';
               iconImg.alt = bt;
               iconImg.onerror = function() { this.style.display = 'none'; this.parentNode.textContent = ({perf_line:'Perf. Line',perf_line_spaced:'Perf. Spaced',saw_line:'Saw Line'})[bt] || bt; };
               sample.appendChild(iconImg);
@@ -659,7 +659,7 @@
               var p = (async function(item, ct, label) {
                 try {
                   // Use Courier Prime (monospace) for consistent icon sizes
-                  var cpSvg = plainEntry.svg.replace(/font-family=["'][^"']*["']/gi, 'font-family="\'Courier Prime\'"');
+                  var cpSvg = plainEntry.svg.replace(/font-family=["'][^"']*["']/gi, 'font-family="\'CourierPrime\'"');
                   var thumbSvg = SvgRenderer.replaceTextInString(cpSvg, 0, label);
                   thumbSvg = await SvgRenderer.autoFitTextInString(
                     thumbSvg, 0,

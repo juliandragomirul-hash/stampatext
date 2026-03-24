@@ -4,6 +4,7 @@
 var StyleIcons = {
   _initialized: false,
   config: {},  // { styleName: { zoom: 1, panX: 0, panY: 0 } }
+  _cfgRefs: {},  // live cfg references per style key (for Save All)
   STYLES: [
     { key: 'simple', label: 'Plain' },
     { key: 'stitch_line', label: 'Stitch Line' },
@@ -42,6 +43,25 @@ var StyleIcons = {
     var SMALL_TPL_STYLES = ['zigzag', 'chalk'];
     var fatTpl = tplMap['simple'];  // plain template: 1.6MB with embedded fonts, NO border data attrs
 
+    // Save All button
+    var saveAllBtn = document.createElement('button');
+    saveAllBtn.textContent = 'Save All';
+    saveAllBtn.style.cssText = 'margin-bottom:1rem;padding:8px 24px;background:#dc2626;color:#fff;border:none;border-radius:4px;font-size:0.9rem;cursor:pointer;';
+    saveAllBtn.addEventListener('click', async function() {
+      saveAllBtn.disabled = true;
+      saveAllBtn.textContent = 'Saving...';
+      for (var j = 0; j < StyleIcons.STYLES.length; j++) {
+        var sk = StyleIcons.STYLES[j].key;
+        var vw = document.getElementById('viewport-wrap-' + sk);
+        var c = StyleIcons._cfgRefs[sk] || StyleIcons.config[sk] || { zoom: 1, panX: 0, panY: 0 };
+        if (vw) await StyleIcons._saveIcon(sk, vw, c);
+      }
+      saveAllBtn.disabled = false;
+      saveAllBtn.textContent = 'Save All — Done!';
+      setTimeout(function() { saveAllBtn.textContent = 'Save All'; }, 2000);
+    });
+    grid.parentNode.insertBefore(saveAllBtn, grid);
+
     // Load stamps sequentially to avoid iframe throttling
     for (var i = 0; i < this.STYLES.length; i++) {
       var style = this.STYLES[i];
@@ -76,7 +96,9 @@ var StyleIcons = {
 
     // Viewport container: fixed 100×30 window with stamp behind
     var viewportWrap = document.createElement('div');
+    viewportWrap.id = 'viewport-wrap-' + style.key;
     viewportWrap.style.cssText = 'position:relative;width:300px;height:120px;border:1px solid #999;overflow:hidden;cursor:grab;background:#fff;';
+    self._cfgRefs[style.key] = cfg;
 
     // The viewport indicator (100×30 fixed rect in center)
     var viewport = document.createElement('div');
@@ -233,9 +255,8 @@ var StyleIcons = {
       var svgEl = stampEl.querySelector('svg');
       if (!svgEl) { alert('No SVG to capture'); return; }
 
-      // Serialize SVG to image, removing white background rects for transparency
+      // Serialize SVG to image (keep all white shapes intact — transparency handled at pixel level)
       var svgStr = new XMLSerializer().serializeToString(svgEl);
-      svgStr = svgStr.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|#[Ff]{6}|white|#FFFFFF)["'][^>]*\/?\s*>/gi, '');
       var blob = new Blob([svgStr], { type: 'image/svg+xml' });
       var url = URL.createObjectURL(blob);
       var img = new Image();
@@ -244,6 +265,16 @@ var StyleIcons = {
       // Draw with the current pan/zoom, offset by viewport position
       ctx.drawImage(img, cfg.panX - 100, cfg.panY - 45, img.width * cfg.zoom, img.height * cfg.zoom);
       URL.revokeObjectURL(url);
+
+      // Make white/near-white pixels transparent (pixel-level, catches all shapes)
+      var imageData = ctx.getImageData(0, 0, 100, 30);
+      var pixels = imageData.data;
+      for (var p = 0; p < pixels.length; p += 4) {
+        if (pixels[p] > 240 && pixels[p+1] > 240 && pixels[p+2] > 240) {
+          pixels[p+3] = 0; // set alpha to 0
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
 
       // Convert to base64 PNG
       var pngBase64 = canvas.toDataURL('image/png').split(',')[1];

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Saved Designs — StampaText</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=57">
   <style>
     .saves-container { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
     .saves-header { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
@@ -21,6 +21,29 @@
   </style>
 </head>
 <body>
+
+  <!-- Header -->
+  <header class="header">
+    <a href="/" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"></a>
+    <div class="header-actions" id="header-actions">
+      <span class="header-credits" id="user-credits" style="display:none;">0 credits</span>
+      <button class="btn btn-secondary btn-small" id="btn-login" onclick="openModal('login')">Login</button>
+      <button class="btn btn-primary btn-small" id="btn-signup" onclick="openModal('signup')">Sign Up</button>
+      <div class="dropdown-wrapper" id="hamburger-wrapper" style="display:none;">
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+        <div class="dropdown-menu" id="user-menu">
+          <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/saves" id="menu-saves">Saves</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
+          <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
   <div class="saves-container">
     <a href="/" class="saves-back">&larr; Back to StampaText</a>
     <div class="saves-header">My Saved Designs</div>
@@ -29,9 +52,154 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Auth Modal -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+
+      <div class="modal-tabs">
+        <button class="modal-tab active" id="tab-login" onclick="switchTab('login')">Login</button>
+        <button class="modal-tab" id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="form-login" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email</label>
+          <input class="form-input" type="email" id="login-email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input class="form-input" type="password" id="login-password" required>
+        </div>
+        <div class="form-error" id="login-error"></div>
+        <button class="btn btn-primary form-submit" type="submit" id="login-submit">Login</button>
+      </form>
+
+      <!-- Sign Up Form -->
+      <form id="form-signup" style="display:none;" onsubmit="handleSignup(event)">
+        <div class="form-group">
+          <label class="form-label" for="signup-email">Email</label>
+          <input class="form-input" type="email" id="signup-email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signup-password">Password</label>
+          <input class="form-input" type="password" id="signup-password" required minlength="6">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signup-confirm">Confirm Password</label>
+          <input class="form-input" type="password" id="signup-confirm" required minlength="6">
+        </div>
+        <div class="form-error" id="signup-error"></div>
+        <button class="btn btn-primary form-submit" type="submit" id="signup-submit">Create Account</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-links">
+        <a href="/about.html">About</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+        <a href="/privacy.html">Privacy Policy</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 StampaText. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
   <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
   <script>
+    function openModal(tab) {
+      document.getElementById('auth-modal').classList.add('active');
+      switchTab(tab || 'login');
+    }
+    function closeModal() {
+      document.getElementById('auth-modal').classList.remove('active');
+      document.getElementById('login-error').classList.remove('visible');
+      document.getElementById('signup-error').classList.remove('visible');
+    }
+    function toggleMenu() {
+      document.getElementById('user-menu').classList.toggle('active');
+    }
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('user-menu');
+      var btn = document.getElementById('hamburger-btn');
+      if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('active');
+      }
+    });
+    function switchTab(tab) {
+      var tabLogin = document.getElementById('tab-login');
+      var tabSignup = document.getElementById('tab-signup');
+      var formLogin = document.getElementById('form-login');
+      var formSignup = document.getElementById('form-signup');
+      if (tab === 'login') {
+        tabLogin.classList.add('active'); tabSignup.classList.remove('active');
+        formLogin.style.display = 'block'; formSignup.style.display = 'none';
+      } else {
+        tabSignup.classList.add('active'); tabLogin.classList.remove('active');
+        formSignup.style.display = 'block'; formLogin.style.display = 'none';
+      }
+    }
+    async function handleLogin(e) {
+      e.preventDefault();
+      var email = document.getElementById('login-email').value;
+      var password = document.getElementById('login-password').value;
+      var errorEl = document.getElementById('login-error');
+      var submitBtn = document.getElementById('login-submit');
+      errorEl.classList.remove('visible');
+      submitBtn.disabled = true; submitBtn.textContent = 'Logging in...';
+      try { await signIn(email, password); closeModal(); window.location.reload(); }
+      catch (err) { errorEl.textContent = err.message; errorEl.classList.add('visible'); submitBtn.disabled = false; submitBtn.textContent = 'Login'; }
+    }
+    async function handleSignup(e) {
+      e.preventDefault();
+      var email = document.getElementById('signup-email').value;
+      var password = document.getElementById('signup-password').value;
+      var confirm = document.getElementById('signup-confirm').value;
+      var errorEl = document.getElementById('signup-error');
+      var submitBtn = document.getElementById('signup-submit');
+      errorEl.classList.remove('visible');
+      if (password !== confirm) { errorEl.textContent = 'Passwords do not match'; errorEl.classList.add('visible'); return; }
+      submitBtn.disabled = true; submitBtn.textContent = 'Creating account...';
+      try { await signUp(email, password); closeModal(); window.location.reload(); }
+      catch (err) { errorEl.textContent = err.message; errorEl.classList.add('visible'); submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
+    }
+
+    // Auth state for header
+    sb.auth.onAuthStateChange(function(event, session) {
+      if (session) {
+        document.getElementById('btn-login').style.display = 'none';
+        document.getElementById('btn-signup').style.display = 'none';
+        var hamburger = document.getElementById('hamburger-wrapper');
+        if (hamburger) hamburger.style.display = '';
+        setTimeout(async function() {
+          try {
+            var profile = await getProfile();
+            if (profile) {
+              var creditsEl = document.getElementById('user-credits');
+              if (creditsEl) { creditsEl.textContent = profile.credits + ' credits'; creditsEl.style.display = 'inline-block'; }
+              var adminLink = document.getElementById('menu-admin');
+              if (adminLink && profile.role === 'admin') adminLink.style.display = '';
+            }
+          } catch (e) {}
+        }, 0);
+      } else {
+        document.getElementById('btn-login').style.display = '';
+        document.getElementById('btn-signup').style.display = '';
+        var hamburger = document.getElementById('hamburger-wrapper');
+        if (hamburger) hamburger.style.display = 'none';
+        var creditsEl = document.getElementById('user-credits');
+        if (creditsEl) creditsEl.style.display = 'none';
+      }
+    });
+
     (async function() {
       // Check auth
       var session = (await sb.auth.getSession()).data.session;
