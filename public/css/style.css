@@ -1563,8 +1563,10 @@ body.gallery-active .stamp-hero-input-wrapper {
 }
 
 .filter-bar-dropdown-item.active {
-  background: #fef2f2;
+  background: transparent;
   color: #dc2626;
+  outline: 1px solid #dc2626;
+  outline-offset: -1px;
 }
 
 .product-customize-bar {
