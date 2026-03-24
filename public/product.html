@@ -111,7 +111,7 @@
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Corners</label>
         <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:50px">
-          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:34px;overflow:hidden;">Straight</span>
+          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:50px;overflow:hidden;">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:3px;padding:4px;">
@@ -682,9 +682,9 @@
                   item.textContent = '';
                   item.style.cssText += 'padding:4px 6px;';
                   var sample = document.createElement('div');
-                  sample.style.cssText = 'width:100%;height:48px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
+                  sample.style.cssText = 'width:100%;height:60px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
                   thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
-                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="48" preserveAspectRatio="xMidYMid meet" style="background:transparent"');
+                  sample.innerHTML = thumbSvg.replace(/<svg/, '<svg width="100%" height="60" preserveAspectRatio="xMidYMid meet" style="background:transparent"');
                   item.appendChild(sample);
                 } catch (e) {
                   console.warn('Corner thumb failed for ' + ct + ':', e.message);
