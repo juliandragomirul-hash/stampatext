@@ -110,11 +110,11 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Corners</label>
-        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:70px;">
-          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:34px;overflow:hidden;display:flex;align-items:center;">Straight</span>
+        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:70px;padding:1px 3px;">
+          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:80px;overflow:hidden;display:flex;align-items:center;">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
-        <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:1px;padding:2px;">
+        <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:0;padding:0;">
           <div class="filter-bar-dropdown-item active" data-value="straight" data-letter="A">AAA</div>
           <div class="filter-bar-dropdown-item" data-value="soft_round" data-letter="B">BBB</div>
           <div class="filter-bar-dropdown-item" data-value="medium_round" data-letter="C">CCC</div>
@@ -680,7 +680,7 @@
                   }
                   thumbSvg = SvgRenderer.cropViewBoxToStamp(thumbSvg);
                   item.textContent = '';
-                  item.style.cssText += 'padding:2px 3px;';
+                  item.style.cssText += 'padding:0;margin:0;';
                   var sample = document.createElement('div');
                   sample.style.cssText = 'width:100%;height:80px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;';
                   thumbSvg = thumbSvg.replace(/<rect[^>]*fill=["'](?:#[Ff]{3,6}|white)["'][^>]*>/gi, '');
@@ -970,13 +970,11 @@
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentCornerStyle = item.dataset.value;
-        // Copy SVG thumbnail from dropdown item into trigger box (scaled to fit)
+        // Copy SVG thumbnail from dropdown item into trigger box (same size as list)
         var cThumbDiv = item.querySelector('div');
         var cTriggerEl = document.getElementById('product-corner-value');
         if (cThumbDiv) {
-          var cSvgHtml = cThumbDiv.innerHTML;
-          cSvgHtml = cSvgHtml.replace(/height="[^"]*"/, 'height="30"');
-          cTriggerEl.innerHTML = cSvgHtml;
+          cTriggerEl.innerHTML = cThumbDiv.innerHTML;
         } else {
           var cornerDisplayLabels = {straight:'A',soft_round:'B',medium_round:'C',strong_round:'D',mixed_top_straight:'E',mixed_top_round:'F',mixed_diag_down:'G',mixed_diag_up:'H'};
           cTriggerEl.textContent = cornerDisplayLabels[currentCornerStyle] || currentCornerStyle;
