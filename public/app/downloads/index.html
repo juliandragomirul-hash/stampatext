@@ -3,25 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Saved Designs — StampaText</title>
+  <title>My Downloads — StampaText</title>
   <link rel="stylesheet" href="/css/style.css?v=57">
   <style>
-    .saves-container { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
-    .saves-header { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
-    .saves-empty { color: #888; font-style: italic; margin: 2rem 0; }
-    .saves-day-group { margin-bottom: 1.5rem; }
-    .saves-day-label { font-size: 0.85rem; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid #eee; }
-    .saves-item { display: flex; align-items: center; gap: 8px; padding: 0.5rem 0; }
-    .saves-item a { color: #333; text-decoration: none; font-size: 0.9rem; line-height: 1.4; flex: 1; }
-    .saves-item a:hover { color: #dc2626; text-decoration: underline; }
-    .saves-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
-    .saves-delete:hover { color: #dc2626; background: #fef2f2; }
-    .saves-back { display: inline-block; margin-bottom: 1rem; color: #666; text-decoration: none; font-size: 0.9rem; }
-    .saves-back:hover { color: #333; }
-    .saves-preview { display: none; position: fixed; z-index: 1000; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 12px; width: 280px; pointer-events: none; }
-    .saves-preview.active { display: block; }
-    .saves-preview svg { width: 100%; height: auto; max-height: 260px; }
-    .saves-preview-loading { color: #999; font-size: 0.8rem; text-align: center; padding: 2rem 0; }
+    .downloads-container { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
+    .downloads-header { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .downloads-summary { font-size: 0.85rem; color: #888; margin-bottom: 1.5rem; }
+    .downloads-empty { color: #888; font-style: italic; margin: 2rem 0; }
+    .downloads-day-group { margin-bottom: 1.5rem; }
+    .downloads-day-label { font-size: 0.85rem; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid #eee; }
+    .downloads-item { display: flex; align-items: center; gap: 10px; padding: 0.6rem 0; border-bottom: 1px solid #f5f5f5; }
+    .downloads-item a { color: #333; text-decoration: none; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .downloads-item a:hover { color: #dc2626; }
+    .downloads-text { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .downloads-badge { display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em; flex-shrink: 0; }
+    .downloads-badge-jpg { background: #fef3c7; color: #92400e; }
+    .downloads-badge-jpeg { background: #fef3c7; color: #92400e; }
+    .downloads-badge-png { background: #dbeafe; color: #1e40af; }
+    .downloads-badge-svg { background: #d1fae5; color: #065f46; }
+    .downloads-meta { font-size: 0.75rem; color: #999; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .downloads-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 1px solid #ddd; }
+    .downloads-credits { font-size: 0.75rem; color: #666; white-space: nowrap; flex-shrink: 0; }
+    .downloads-time { font-size: 0.7rem; color: #bbb; white-space: nowrap; flex-shrink: 0; }
+    .downloads-back { display: inline-block; margin-bottom: 1rem; color: #666; text-decoration: none; font-size: 0.9rem; }
+    .downloads-back:hover { color: #333; }
+    .downloads-preview { display: none; position: fixed; z-index: 1000; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 12px; width: 280px; pointer-events: none; }
+    .downloads-preview.active { display: block; }
+    .downloads-preview svg { width: 100%; height: auto; max-height: 260px; }
+    .downloads-preview-loading { color: #999; font-size: 0.8rem; text-align: center; padding: 2rem 0; }
   </style>
 </head>
 <body>
@@ -49,11 +58,12 @@
     </div>
   </header>
 
-  <div class="saves-container">
-    <a href="/" class="saves-back">&larr; Back to StampaText</a>
-    <div class="saves-header">My Saved Designs</div>
-    <div id="saves-list">
-      <div class="saves-empty">Loading...</div>
+  <div class="downloads-container">
+    <a href="/" class="downloads-back">&larr; Back to StampaText</a>
+    <div class="downloads-header">My Downloads</div>
+    <div class="downloads-summary" id="downloads-summary"></div>
+    <div id="downloads-list">
+      <div class="downloads-empty">Loading...</div>
     </div>
   </div>
 
@@ -102,7 +112,7 @@
   </div>
 
   <!-- Preview tooltip -->
-  <div class="saves-preview" id="saves-preview"></div>
+  <div class="downloads-preview" id="downloads-preview"></div>
 
   <!-- Footer -->
   <footer class="site-footer">
@@ -209,7 +219,16 @@
       }
     });
 
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
     (async function() {
+      var container = document.getElementById('downloads-list');
+      var summaryEl = document.getElementById('downloads-summary');
+      try {
       // Check auth
       var session = (await sb.auth.getSession()).data.session;
       if (!session) {
@@ -217,26 +236,38 @@
         return;
       }
 
-      // Fetch saves
-      var resp = await fetch('/api/saves', {
+      // Fetch downloads
+      var resp = await fetch('/api/downloads', {
         headers: { 'Authorization': 'Bearer ' + session.access_token }
       });
-      var saves = await resp.json();
-      var container = document.getElementById('saves-list');
+      if (!resp.ok) {
+        var errData = await resp.json().catch(function() { return {}; });
+        throw new Error(errData.error || 'Server error ' + resp.status);
+      }
+      var downloads = await resp.json();
 
-      if (!saves || saves.length === 0) {
-        container.innerHTML = '<div class="saves-empty">No saved designs yet. Go to a stamp and click Save!</div>';
+      if (!downloads || downloads.length === 0) {
+        container.innerHTML = '<div class="downloads-empty">No downloads yet. Go to a stamp and click Download!</div>';
+        summaryEl.textContent = '';
         return;
       }
+
+      // Summary
+      var totalCredits = 0;
+      downloads.forEach(function(d) {
+        var inp = d.input_data || {};
+        totalCredits += inp.credits_cost || 1;
+      });
+      summaryEl.textContent = downloads.length + ' download' + (downloads.length !== 1 ? 's' : '') + ', ' + totalCredits + ' credits spent';
 
       // Group by day
       var today = new Date().toISOString().split('T')[0];
       var yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       var groups = {};
-      saves.forEach(function(s) {
-        var day = new Date(s.created_at).toISOString().split('T')[0];
+      downloads.forEach(function(d) {
+        var day = new Date(d.created_at).toISOString().split('T')[0];
         if (!groups[day]) groups[day] = [];
-        groups[day].push(s);
+        groups[day].push(d);
       });
 
       function formatDay(dateStr) {
@@ -246,70 +277,75 @@
         return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       }
 
-      // Build thumbnail map for saves that have stored thumbnails
-      var thumbnailMap = {};
-      saves.forEach(function(s) {
-        if (s.thumbnail) thumbnailMap[s.id] = s.thumbnail;
+      // Build thumbnail map
+      var dlThumbnailMap = {};
+      downloads.forEach(function(d) {
+        var inp = d.input_data || {};
+        if (inp.thumbnail) dlThumbnailMap[d.id] = inp.thumbnail;
       });
 
       // Render
       var html = '';
       var days = Object.keys(groups).sort().reverse();
       days.forEach(function(day) {
-        html += '<div class="saves-day-group">';
-        html += '<div class="saves-day-label">' + formatDay(day) + '</div>';
-        groups[day].forEach(function(s) {
-          var href = '/product.html?' + s.params;
-          var desc = s.description || s.params;
-          var sp = new URLSearchParams(s.params);
-          var tplId = sp.get('id') || '';
-          var text = sp.get('text') || '';
-          var color = sp.get('color') || '';
-          var hasThumbnail = !!s.thumbnail;
-          html += '<div class="saves-item" data-id="' + s.id + '"';
-          html += ' data-tpl-id="' + tplId + '"';
-          html += ' data-text="' + text.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"';
-          html += ' data-color="' + color + '"';
+        html += '<div class="downloads-day-group">';
+        html += '<div class="downloads-day-label">' + formatDay(day) + '</div>';
+        groups[day].forEach(function(d) {
+          var inp = d.input_data || {};
+          var text = inp.text || '(untitled)';
+          var format = (inp.format || inp.ext || '').toLowerCase();
+          if (format === 'jpeg') format = 'jpg';
+          var font = inp.font || '';
+          var color = inp.color || '';
+          var border = inp.border || '';
+          var credits = inp.credits_cost || 1;
+          var hasThumbnail = !!inp.thumbnail;
+          var time = new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          // Build product link
+          var href = '/product.html';
+          if (inp.product_params) {
+            href += '?' + inp.product_params;
+          } else if (d.template_id && inp.text) {
+            href += '?id=' + encodeURIComponent(d.template_id) + '&text=' + encodeURIComponent(inp.text);
+          }
+
+          var metaParts = [];
+          if (font) metaParts.push(escapeHtml(font));
+          if (color) metaParts.push('<span class="downloads-swatch" style="background:#' + escapeHtml(color) + '"></span>');
+          if (border) metaParts.push(escapeHtml(border));
+
+          var svgPath = (d.templates && d.templates.svg_path) || '';
+          html += '<div class="downloads-item"';
+          html += ' data-id="' + d.id + '"';
+          html += ' data-text="' + escapeHtml(text).replace(/"/g, '&quot;') + '"';
+          html += ' data-color="' + escapeHtml(color) + '"';
+          html += ' data-svg-path="' + escapeHtml(svgPath) + '"';
           html += ' data-has-thumbnail="' + (hasThumbnail ? '1' : '') + '"';
           html += '>';
-          html += '<a href="' + href + '">' + desc + '</a>';
-          html += '<button class="saves-delete" title="Delete">&times;</button>';
+          html += '<a href="' + href + '">';
+          html += '<span class="downloads-text">' + escapeHtml(text) + '</span>';
+          if (format) {
+            html += '<span class="downloads-badge downloads-badge-' + format + '">' + format.toUpperCase() + '</span>';
+          }
+          html += '</a>';
+          if (metaParts.length) html += '<span class="downloads-meta">' + metaParts.join(' &middot; ') + '</span>';
+          html += '<span class="downloads-credits">' + credits + ' cr</span>';
+          html += '<span class="downloads-time">' + time + '</span>';
           html += '</div>';
         });
         html += '</div>';
       });
       container.innerHTML = html;
-
-      // Delete handler
-      container.addEventListener('click', async function(e) {
-        var btn = e.target.closest('.saves-delete');
-        if (!btn) return;
-        var item = btn.closest('.saves-item');
-        var id = item.dataset.id;
-        if (!id) return;
-        btn.textContent = '...';
-        var resp = await fetch('/api/saves/' + id, {
-          method: 'DELETE',
-          headers: { 'Authorization': 'Bearer ' + session.access_token }
-        });
-        if (resp.ok) {
-          item.remove();
-          // Check if day group is now empty
-          var dayGroup = container.querySelector('.saves-day-group');
-          if (dayGroup && !dayGroup.querySelector('.saves-item')) {
-            dayGroup.remove();
-          }
-          // Check if all empty
-          if (!container.querySelector('.saves-item')) {
-            container.innerHTML = '<div class="saves-empty">No saved designs yet. Go to a stamp and click Save!</div>';
-          }
-        }
-      });
+      } catch (err) {
+        console.error('Downloads fetch error:', err);
+        container.innerHTML = '<div class="downloads-empty">Failed to load downloads: ' + escapeHtml(err.message) + '</div>';
+      }
     })();
 
     // ---- Hover preview (stored thumbnails only) ----
     (function() {
-      var preview = document.getElementById('saves-preview');
+      var preview = document.getElementById('downloads-preview');
 
       function positionPreview(e) {
         var x = e.clientX + 16;
@@ -321,11 +357,11 @@
         preview.style.top = y + 'px';
       }
 
-      document.getElementById('saves-list').addEventListener('mouseenter', function(e) {
-        var item = e.target.closest('.saves-item');
+      document.getElementById('downloads-list').addEventListener('mouseenter', function(e) {
+        var item = e.target.closest('.downloads-item');
         if (!item || item.dataset.hasThumbnail !== '1') return;
 
-        var svg = thumbnailMap[item.dataset.id];
+        var svg = dlThumbnailMap[item.dataset.id];
         if (!svg) return;
 
         preview.innerHTML = svg;
@@ -335,15 +371,16 @@
         positionPreview(e);
       }, true);
 
-      document.getElementById('saves-list').addEventListener('mouseleave', function(e) {
-        var item = e.target.closest('.saves-item');
+      document.getElementById('downloads-list').addEventListener('mouseleave', function(e) {
+        var item = e.target.closest('.downloads-item');
         if (!item) return;
+        // Check if we're leaving to a child (not actually leaving)
         if (item.contains(e.relatedTarget)) return;
         currentHoverId = null;
         preview.classList.remove('active');
       }, true);
 
-      document.getElementById('saves-list').addEventListener('mousemove', function(e) {
+      document.getElementById('downloads-list').addEventListener('mousemove', function(e) {
         if (preview.classList.contains('active')) positionPreview(e);
       });
     })();

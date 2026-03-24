@@ -40,6 +40,7 @@
         <div class="dropdown-menu" id="user-menu">
           <a class="dropdown-item" href="/">Go stamp</a>
           <a class="dropdown-item" href="/app/saves" id="menu-saves">Saves</a>
+          <a class="dropdown-item" href="/app/downloads" id="menu-downloads">Downloads</a>
           <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
           <a class="dropdown-item" href="/app/profile">My Profile</a>
           <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
@@ -1120,7 +1121,7 @@
               'Content-Type': 'application/json',
               'Authorization': 'Bearer ' + saveSession.access_token
             },
-            body: JSON.stringify({ params: params, description: description })
+            body: JSON.stringify({ params: params, description: description, thumbnail: currentSvg ? currentSvg.replace(/<text[^>]*class="watermark"[^>]*>[\s\S]*?<\/text>/gi, '').replace(/<image[^>]*watermark[^>]*\/?\s*>/gi, '') : '' })
           });
           if (resp.ok) {
             var saved = await resp.json();
@@ -1522,7 +1523,20 @@
             },
             body: JSON.stringify({
               template_id: params.get('id') || null,
-              input_data: { text: params.get('text') || '' },
+              input_data: {
+                text: params.get('text') || '',
+                font: params.get('font') || '',
+                color: params.get('color') || '',
+                border: params.get('border') || '',
+                fill: params.get('fill') || '',
+                corners: params.get('corners') || '',
+                frameType: params.get('frame') || '',
+                shape: params.get('shape') || '',
+                format: config.ext,
+                credits_cost: config.credits,
+                product_params: window.location.search.substring(1),
+                thumbnail: currentSvg ? currentSvg.replace(/<text[^>]*class="watermark"[^>]*>[\s\S]*?<\/text>/gi, '').replace(/<image[^>]*watermark[^>]*\/?\s*>/gi, '') : ''
+              },
               credits_cost: config.credits
             })
           });

@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // Parse JSON bodies for API routes
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 // Static files (no cache for dev)
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -408,11 +408,11 @@ app.post('/api/saves', async (req, res) => {
   try {
     const user = await verifyAuth(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { params, description } = req.body;
+    const { params, description, thumbnail } = req.body;
     if (!params) return res.status(400).json({ error: 'Missing params' });
     const { data, error } = await supabase
       .from('saved_designs')
-      .insert({ user_id: user.id, params, description: description || '' })
+      .insert({ user_id: user.id, params, description: description || '', thumbnail: thumbnail || null })
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
@@ -429,7 +429,7 @@ app.get('/api/saves', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     const { data, error } = await supabase
       .from('saved_designs')
-      .select('id, params, description, created_at')
+      .select('id, params, description, thumbnail, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
@@ -456,6 +456,23 @@ app.delete('/api/saves/:id', async (req, res) => {
   }
 });
 
+// GET /api/downloads — List user's download history
+app.get('/api/downloads', async (req, res) => {
+  try {
+    const user = await verifyAuth(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const { data, error } = await supabase
+      .from('generations')
+      .select('id, template_id, input_data, created_at, templates(svg_path)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch downloads' });
+  }
+});
+
 // ---- HTML routes ----
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'index.html'));
@@ -467,6 +484,10 @@ app.get('/app/profile', (req, res) => {
 
 app.get('/app/saves', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'saves', 'index.html'));
+});
+
+app.get('/app/downloads', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app', 'downloads', 'index.html'));
 });
 
 app.get('/admin', (req, res) => {
