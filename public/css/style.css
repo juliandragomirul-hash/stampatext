@@ -1603,15 +1603,9 @@ body.gallery-active .stamp-hero-input-wrapper {
   cursor: pointer;
   font-weight: 600;
 }
-@media (max-width: 768px) {
-  .customize-toggle-btn {
-    position: fixed;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  }
+.customize-toggle-btn {
+  display: block;
+  margin: 8px auto;
 }
 
 /* Content block: 2-column layout */
