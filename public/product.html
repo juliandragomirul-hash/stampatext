@@ -110,8 +110,8 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Corners</label>
-        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:70px;height:auto;padding:2px 4px;">
-          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;overflow:visible;">Straight</span>
+        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:70px;">
+          <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:34px;overflow:hidden;display:flex;align-items:center;">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:1px;padding:2px;">
@@ -970,11 +970,13 @@
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentCornerStyle = item.dataset.value;
-        // Copy SVG thumbnail from dropdown item into trigger box
+        // Copy SVG thumbnail from dropdown item into trigger box (scaled to fit)
         var cThumbDiv = item.querySelector('div');
         var cTriggerEl = document.getElementById('product-corner-value');
         if (cThumbDiv) {
-          cTriggerEl.innerHTML = cThumbDiv.innerHTML;
+          var cSvgHtml = cThumbDiv.innerHTML;
+          cSvgHtml = cSvgHtml.replace(/height="[^"]*"/, 'height="30"');
+          cTriggerEl.innerHTML = cSvgHtml;
         } else {
           var cornerDisplayLabels = {straight:'A',soft_round:'B',medium_round:'C',strong_round:'D',mixed_top_straight:'E',mixed_top_round:'F',mixed_diag_down:'G',mixed_diag_up:'H'};
           cTriggerEl.textContent = cornerDisplayLabels[currentCornerStyle] || currentCornerStyle;
