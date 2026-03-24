@@ -664,6 +664,8 @@
               var p = (async function(item, ct, label) {
                 try {
                   var thumbSvg = SvgRenderer.replaceTextInString(plainEntry.svg, 0, label);
+                  // Use Courier Prime (monospace) for consistent icon sizes
+                  thumbSvg = thumbSvg.replace(/font-family=["'][^"']*["']/gi, 'font-family="\'Courier Prime\'"');
                   thumbSvg = await SvgRenderer.autoFitTextInString(
                     thumbSvg, 0,
                     cZone.bounding_width || 500, cZone.font_size || 128,
