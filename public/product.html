@@ -110,19 +110,19 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group">
         <label class="filter-bar-label">Corners</label>
-        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:80px">
+        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:50px">
           <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:34px;overflow:hidden;">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
-        <div class="filter-bar-dropdown-list" id="product-corner-list">
-          <div class="filter-bar-dropdown-item active" data-value="straight">Straight</div>
-          <div class="filter-bar-dropdown-item" data-value="soft_round">Round S</div>
-          <div class="filter-bar-dropdown-item" data-value="medium_round">Round M</div>
-          <div class="filter-bar-dropdown-item" data-value="strong_round">Round L</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_top_straight">Top straight</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_top_round">Top round</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_diag_down">Diagonal ↘</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_diag_up">Diagonal ↗</div>
+        <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:3px;padding:4px;">
+          <div class="filter-bar-dropdown-item active" data-value="straight" data-letter="A">A</div>
+          <div class="filter-bar-dropdown-item" data-value="soft_round" data-letter="B">B</div>
+          <div class="filter-bar-dropdown-item" data-value="medium_round" data-letter="C">C</div>
+          <div class="filter-bar-dropdown-item" data-value="strong_round" data-letter="D">D</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_top_straight" data-letter="E">E</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_top_round" data-letter="F">F</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_diag_down" data-letter="G">G</div>
+          <div class="filter-bar-dropdown-item" data-value="mixed_diag_up" data-letter="H">H</div>
         </div>
       </div>
 
@@ -961,7 +961,7 @@
         document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
         document.getElementById('product-color-grid').style.display = 'none';
         var list = document.getElementById('product-corner-list');
-        list.style.display = list.style.display === 'block' ? 'none' : 'block';
+        list.style.display = list.style.display === 'grid' ? 'none' : 'grid';
       });
       document.getElementById('product-corner-list').addEventListener('click', function(e) {
         e.stopPropagation();
@@ -976,7 +976,7 @@
         if (cThumbDiv) {
           cTriggerEl.innerHTML = cThumbDiv.innerHTML;
         } else {
-          var cornerDisplayLabels = {straight:'Straight',soft_round:'Round S',medium_round:'Round M',strong_round:'Round L',mixed_top_straight:'Top straight',mixed_top_round:'Top round',mixed_diag_down:'Diagonal ↘',mixed_diag_up:'Diagonal ↗'};
+          var cornerDisplayLabels = {straight:'A',soft_round:'B',medium_round:'C',strong_round:'D',mixed_top_straight:'E',mixed_top_round:'F',mixed_diag_down:'G',mixed_diag_up:'H'};
           cTriggerEl.textContent = cornerDisplayLabels[currentCornerStyle] || currentCornerStyle;
         }
         renderPreview();
