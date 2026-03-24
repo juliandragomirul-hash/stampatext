@@ -1101,7 +1101,7 @@
         var btn = this;
         try {
           if (!saveSession) {
-            var sess = (await sb.auth.getSession()).data.session;
+            var sess = await getSession();
             if (!sess) {
               document.getElementById('auth-modal').style.display = 'flex';
               return;
