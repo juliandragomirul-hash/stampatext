@@ -307,7 +307,7 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=226"></script>
+  <script src="/js/svg-renderer.js?v=232"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -791,6 +791,7 @@
       setDropdownActive('product-rows-list', String(currentForceLines || 1), 'product-rows-value');
 
       updateShapeConstraints();
+      updateCornerConstraints();
 
       // ---- Event listeners (attached BEFORE first render to guarantee interactivity) ----
 
@@ -885,6 +886,7 @@
         item.classList.add('active');
         currentFrame = item.dataset.value;
         document.getElementById('product-frame-value').textContent = item.textContent;
+        updateCornerConstraints();
         renderPreview();
       });
 
@@ -977,6 +979,7 @@
           currentFrame = 'single';
           setDropdownActive('product-frame-list', 'single', 'product-frame-value');
         }
+        updateCornerConstraints();
         // Re-render with new template
         rebuildWithFont(currentFont).then(function(svg) {
           baseSvg = svg;
@@ -1422,6 +1425,23 @@
           fillGroup.closest('.filter-bar-group').classList.add('filter-disabled');
         } else {
           fillGroup.closest('.filter-bar-group').classList.remove('filter-disabled');
+        }
+      }
+
+      function updateCornerConstraints() {
+        var cornerToggle = document.getElementById('product-corner-toggle');
+        if (!cornerToggle) return;
+        var cornerGroup = cornerToggle.closest('.filter-bar-group');
+        if (!cornerGroup) return;
+        var noCornersStyles = ['wavy', 'zigzag'];
+        if (noCornersStyles.indexOf(currentBorderStyle) >= 0 && currentFrame === 'single') {
+          if (currentCornerStyle !== 'straight') {
+            currentCornerStyle = 'straight';
+            setDropdownActive('product-corner-list', 'straight', 'product-corner-value');
+          }
+          cornerGroup.classList.add('filter-disabled');
+        } else {
+          cornerGroup.classList.remove('filter-disabled');
         }
       }
 

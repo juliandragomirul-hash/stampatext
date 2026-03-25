@@ -860,27 +860,21 @@ const SvgRenderer = {
       return { svg: shapes, innerEdge: innerEdge };
     }
 
-    if (trace.hasRounding) {
-      // Rounded: walk the trace perimeter, place shapes at each point (with rotation for diamonds)
-      var points = SvgRenderer._walkTrace(trace, spacing);
-      for (var i = 0; i < points.length; i++) {
-        shapes += this._borderShape(shapeType, points[i].x, points[i].y, radius, points[i].rotDeg);
+    // Region-based: draw equal corners first, then fill edges
+    var regions = SvgRenderer._splitTraceRegions(trace);
+
+    // 4 corner regions — shapes follow the necklace path (tangent-inclined on arcs)
+    for (var ci = 0; ci < regions.corners.length; ci++) {
+      var pts = SvgRenderer._walkRegion(regions.corners[ci], spacing);
+      for (var pi = 0; pi < pts.length; pi++) {
+        shapes += this._borderShape(shapeType, pts[pi].x, pts[pi].y, radius, pts[pi].rotDeg);
       }
-    } else {
-      // Straight: original full-edge iteration with corners
-      var numH = Math.max(1, Math.round(w / spacing));
-      var hSpacing = w / numH;
-      for (var i = 0; i <= numH; i++) {
-        var cx = x + i * hSpacing;
-        shapes += this._borderShape(shapeType, cx, y, radius);
-        shapes += this._borderShape(shapeType, cx, y + h, radius);
-      }
-      var numV = Math.max(1, Math.round(h / spacing));
-      var vSpacing = h / numV;
-      for (var i = 1; i < numV; i++) {
-        var cy = y + i * vSpacing;
-        shapes += this._borderShape(shapeType, x, cy, radius);
-        shapes += this._borderShape(shapeType, x + w, cy, radius);
+    }
+    // 4 edge regions — evenly spaced on remaining straight segments
+    for (var ei = 0; ei < regions.edges.length; ei++) {
+      var pts = SvgRenderer._walkRegion(regions.edges[ei], spacing);
+      for (var pi = 0; pi < pts.length; pi++) {
+        shapes += this._borderShape(shapeType, pts[pi].x, pts[pi].y, radius, pts[pi].rotDeg);
       }
     }
 
@@ -1109,68 +1103,96 @@ const SvgRenderer = {
       return { svg: shapes, innerEdge: innerEdge };
     }
 
-    if (!trace.hasRounding) {
-      // Straight corners: original behavior with L-corner pieces
-      if (shapeType === 'line') {
-        var arm = dashLen * 0.6;
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y - half).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x + w - arm).toFixed(2) + '" y="' + (y + h - half).toFixed(2) + '" width="' + (arm + half).toFixed(2) + '" height="' + size + '" fill="' + color + '"/>';
-        shapes += '<rect x="' + (x + w - half).toFixed(2) + '" y="' + (y + h - arm).toFixed(2) + '" width="' + size + '" height="' + (arm + half).toFixed(2) + '" fill="' + color + '"/>';
-      } else {
-        addShape(x, y, 0); addShape(x + w, y, 0);
-        addShape(x, y + h, 0); addShape(x + w, y + h, 0);
-      }
-      // Straight edges
-      var numH = Math.max(1, Math.round(w / step));
-      var hStep = w / numH;
-      for (var i = 1; i < numH; i++) addShape(x + i * hStep, y, 0);
-      for (var i = 1; i < numH; i++) addShape(x + i * hStep, y + h, 0);
-      var numV = Math.max(1, Math.round(h / step));
-      var vStep = h / numV;
-      for (var i = 1; i < numV; i++) addShape(x, y + i * vStep, 1);
-      for (var i = 1; i < numV; i++) addShape(x + w, y + i * vStep, 1);
-      return { svg: shapes, innerEdge: innerEdge };
-    }
+    // Region-based: draw equal corners first, then fill edges
+    var regions = SvgRenderer._splitTraceRegions(trace);
 
-    // ---- Rounded corners: use trace ----
-
-    // Stitch line: two-path dasharray approach (edges + arcs)
+    // Stitch line: stitch_square shapes at corners (center-outward), dasharray on edges
     if (shapeType === 'line') {
       var F = function(n) { return n.toFixed(2); };
-      var maxRx = Math.max(trace.rxTL, trace.rxTR, trace.rxBR, trace.rxBL);
-      var arcScale = Math.min(1, maxRx / 120);
-      var cornerDashLen = dashLen * (0.15 + 0.25 * arcScale);
-      var cornerSpacing = spacing * (0.15 + 0.25 * arcScale);
+      var cSqStep = size * 1.5; // tighter than stitch_square for denser corners
 
-      // Path 1: straight edges
+      // Resolve a distance along a region to a point {x, y, angle, rotDeg}
+      function pointAtDist(region, dist) {
+        var cumDist = 0;
+        for (var si = 0; si < region.segments.length; si++) {
+          var seg = region.segments[si];
+          if (cumDist + seg.len >= dist || si === region.segments.length - 1) {
+            var t = seg.len > 0 ? Math.max(0, Math.min(1, (dist - cumDist) / seg.len)) : 0;
+            if (seg.type === 'h' || seg.type === 'v') {
+              return { x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t,
+                       rotDeg: 0 };
+            }
+            var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
+            return { x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a),
+                     rotDeg: (a + Math.PI / 2) * (180 / Math.PI) };
+          }
+          cumDist += seg.len;
+        }
+        return null;
+      }
+
+      // Corner regions: center-outward squares from the exact corner vertex
+      for (var ci = 0; ci < regions.corners.length; ci++) {
+        var cReg = regions.corners[ci];
+        if (cReg.totalLength <= 0) continue;
+        var mid = cReg.totalLength / 2;
+        // Center square first, then radiate outward equally
+        var dists = [mid];
+        for (var d = cSqStep; mid - d >= 0; d += cSqStep) dists.push(mid - d);
+        for (var d = cSqStep; mid + d <= cReg.totalLength; d += cSqStep) dists.push(mid + d);
+        for (var di = 0; di < dists.length; di++) {
+          var pt = pointAtDist(cReg, dists[di]);
+          if (!pt) continue;
+          var rot = pt.rotDeg || 0;
+          shapes += '<rect x="' + F(pt.x - half) + '" y="' + F(pt.y - half) + '" width="' + size + '" height="' + size + '" fill="' + color + '"' +
+            (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + F(pt.x) + ',' + F(pt.y) + ')"' : '') + '/>';
+        }
+      }
+
+      // Edge regions: dasharray paths (normal size)
+      // Convert a region's contiguous segments into an SVG sub-path
+      function regionToPathD(region) {
+        if (!region.segments.length) return '';
+        var d = '';
+        for (var si = 0; si < region.segments.length; si++) {
+          var seg = region.segments[si];
+          if (seg.type === 'h' || seg.type === 'v') {
+            if (si === 0) d += ' M' + F(seg.sx) + ',' + F(seg.sy);
+            d += ' L' + F(seg.ex) + ',' + F(seg.ey);
+          } else { // arc
+            var sx = seg.cx + seg.r * Math.cos(seg.startAngle);
+            var sy = seg.cy + seg.r * Math.sin(seg.startAngle);
+            var ex = seg.cx + seg.r * Math.cos(seg.endAngle);
+            var ey = seg.cy + seg.r * Math.sin(seg.endAngle);
+            if (si === 0) d += ' M' + F(sx) + ',' + F(sy);
+            d += ' A' + F(seg.r) + ',' + F(seg.r) + ' 0 0 1 ' + F(ex) + ',' + F(ey);
+          }
+        }
+        return d;
+      }
+
       var dEdges = '';
-      dEdges += 'M' + F(x + trace.rxTL) + ',' + F(y) + ' H' + F(x + w - trace.rxTR);
-      dEdges += ' M' + F(x + w) + ',' + F(y + trace.rxTR) + ' V' + F(y + h - trace.rxBR);
-      dEdges += ' M' + F(x + w - trace.rxBR) + ',' + F(y + h) + ' H' + F(x + trace.rxBL);
-      dEdges += ' M' + F(x) + ',' + F(y + h - trace.rxBL) + ' V' + F(y + trace.rxTL);
-      shapes += '<path d="' + dEdges + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
-
-      // Path 2: corner arcs (denser dashes)
-      var dArcs = '';
-      if (trace.rxTR > 0) dArcs += 'M' + F(x+w-trace.rxTR) + ',' + F(y) + ' A' + F(trace.rxTR) + ',' + F(trace.rxTR) + ' 0 0 1 ' + F(x+w) + ',' + F(y+trace.rxTR);
-      if (trace.rxBR > 0) dArcs += ' M' + F(x+w) + ',' + F(y+h-trace.rxBR) + ' A' + F(trace.rxBR) + ',' + F(trace.rxBR) + ' 0 0 1 ' + F(x+w-trace.rxBR) + ',' + F(y+h);
-      if (trace.rxBL > 0) dArcs += ' M' + F(x+trace.rxBL) + ',' + F(y+h) + ' A' + F(trace.rxBL) + ',' + F(trace.rxBL) + ' 0 0 1 ' + F(x) + ',' + F(y+h-trace.rxBL);
-      if (trace.rxTL > 0) dArcs += ' M' + F(x) + ',' + F(y+trace.rxTL) + ' A' + F(trace.rxTL) + ',' + F(trace.rxTL) + ' 0 0 1 ' + F(x+trace.rxTL) + ',' + F(y);
-      if (dArcs) {
-        shapes += '<path d="' + dArcs.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + cornerDashLen.toFixed(1) + ' ' + cornerSpacing.toFixed(1) + '" stroke-linecap="butt"/>';
+      for (var ei = 0; ei < regions.edges.length; ei++) {
+        dEdges += regionToPathD(regions.edges[ei]);
+      }
+      if (dEdges) {
+        shapes += '<path d="' + dEdges.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
       }
       return { svg: shapes, innerEdge: innerEdge };
     }
 
-    // Stitch dot/square: walk the trace perimeter
-    var points = SvgRenderer._walkTrace(trace, step);
-    for (var i = 0; i < points.length; i++) {
-      addShape(points[i].x, points[i].y, points[i].angle, points[i].rotDeg);
+    // Stitch dot/square: walk corner regions then edge regions
+    for (var ci = 0; ci < regions.corners.length; ci++) {
+      var pts = SvgRenderer._walkRegion(regions.corners[ci], step);
+      for (var i = 0; i < pts.length; i++) {
+        addShape(pts[i].x, pts[i].y, pts[i].angle, pts[i].rotDeg);
+      }
+    }
+    for (var ei = 0; ei < regions.edges.length; ei++) {
+      var pts = SvgRenderer._walkRegion(regions.edges[ei], step);
+      for (var i = 0; i < pts.length; i++) {
+        addShape(pts[i].x, pts[i].y, pts[i].angle, pts[i].rotDeg);
+      }
     }
     return { svg: shapes, innerEdge: innerEdge };
   },
@@ -3605,82 +3627,58 @@ const SvgRenderer = {
         var plRadius = Math.max(5, Math.round(plBaseRadius * decorWeightRatio));
         if (plShape === 'diamond') plRadius = Math.min(plRadius * 1.5, outerRectSw / 2);
         var plSpacing = plRadius * plSpacingMult;
-        var plSmallR = plRadius * 0.5;
-        var plSmallStep = plSmallR * 2.1;
+        var plSmallR = plRadius * 0.65;
+        var plSmallStep = plRadius * 1.5;
         var plCornerType = cornerType || 'straight';
         var plTrace = SvgRenderer._generateTrace(newRectX, newRectY, newRectWidth, newRectHeight, plCornerType);
-        var plF = function(n) { return n.toFixed(2); };
+        var plRegions = SvgRenderer._splitTraceRegions(plTrace);
         var plHtml = '';
-        // Pass 1: Small dense circles on corners
-        var plCorners = [
-          { rx: plTrace.rxTR, cx: newRectX + newRectWidth - plTrace.rxTR, cy: newRectY + plTrace.rxTR, sa: -90, ea: 0 },
-          { rx: plTrace.rxBR, cx: newRectX + newRectWidth - plTrace.rxBR, cy: newRectY + newRectHeight - plTrace.rxBR, sa: 0, ea: 90 },
-          { rx: plTrace.rxBL, cx: newRectX + plTrace.rxBL, cy: newRectY + newRectHeight - plTrace.rxBL, sa: 90, ea: 180 },
-          { rx: plTrace.rxTL, cx: newRectX + plTrace.rxTL, cy: newRectY + plTrace.rxTL, sa: 180, ea: 270 }
-        ];
-        var plMaxRx = Math.max(plTrace.rxTL, plTrace.rxTR, plTrace.rxBR, plTrace.rxBL);
-        var plNumSmall = plMaxRx > 0 ? Math.max(2, Math.round(plMaxRx * Math.PI / 2 / plSmallStep)) : 3;
-        // Corner points for straight corners (actual corner x,y)
-        var plCornerPts = [
-          { x: newRectX + newRectWidth, y: newRectY },       // TR
-          { x: newRectX + newRectWidth, y: newRectY + newRectHeight }, // BR
-          { x: newRectX, y: newRectY + newRectHeight },       // BL
-          { x: newRectX, y: newRectY }                         // TL
-        ];
-        for (var pci = 0; pci < plCorners.length; pci++) {
-          var pc = plCorners[pci];
-          if (pc.rx > 0) {
-            // Rounded: arc perforations
-            for (var psi = 1; psi < plNumSmall; psi++) {
-              var pt = psi / plNumSmall;
-              var pAngle = (pc.sa + pt * (pc.ea - pc.sa)) * Math.PI / 180;
-              plHtml += '<circle cx="' + plF(pc.cx + pc.rx * Math.cos(pAngle)) + '" cy="' + plF(pc.cy + pc.rx * Math.sin(pAngle)) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
+
+        // Corner regions: center-outward from exact vertex, graduated sizing
+        function plPointAtDist(region, dist) {
+          var cumDist = 0;
+          for (var si = 0; si < region.segments.length; si++) {
+            var seg = region.segments[si];
+            if (cumDist + seg.len >= dist || si === region.segments.length - 1) {
+              var t = seg.len > 0 ? Math.max(0, Math.min(1, (dist - cumDist) / seg.len)) : 0;
+              if (seg.type === 'h' || seg.type === 'v') {
+                return { x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t, rotDeg: 0 };
+              }
+              var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
+              return { x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a),
+                       rotDeg: (a + Math.PI / 2) * (180 / Math.PI) };
             }
-          } else {
-            // Straight: L-shaped small perforations at each corner
-            var cp = plCornerPts[pci];
-            // Arm directions: TR(h=-1,v=+1), BR(h=-1,v=-1), BL(h=+1,v=-1), TL(h=+1,v=+1)
-            var hDirs = [-1, -1, 1, 1];
-            var vDirs = [1, -1, -1, 1];
-            var hd = hDirs[pci], vd = vDirs[pci];
-            var armStep = plSmallR * 2.1;
-            var arms = 2;
-            // Corner point
-            plHtml += '<circle cx="' + plF(cp.x) + '" cy="' + plF(cp.y) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
-            // Horizontal arm
-            for (var ai = 1; ai <= arms; ai++) {
-              plHtml += '<circle cx="' + plF(cp.x + hd * ai * armStep) + '" cy="' + plF(cp.y) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
-            }
-            // Vertical arm
-            for (var ai = 1; ai <= arms; ai++) {
-              plHtml += '<circle cx="' + plF(cp.x) + '" cy="' + plF(cp.y + vd * ai * armStep) + '" r="' + plF(plSmallR) + '" fill="#FFFFFF"/>';
-            }
+            cumDist += seg.len;
+          }
+          return null;
+        }
+
+        for (var pci = 0; pci < plRegions.corners.length; pci++) {
+          var cReg = plRegions.corners[pci];
+          if (cReg.totalLength <= 0) continue;
+          var mid = cReg.totalLength / 2;
+          // Build distances: center first, then outward equally
+          var dists = [mid];
+          for (var d = plSmallStep; mid - d >= 0; d += plSmallStep) dists.push(mid - d);
+          for (var d = plSmallStep; mid + d <= cReg.totalLength; d += plSmallStep) dists.push(mid + d);
+          for (var di = 0; di < dists.length; di++) {
+            var pt = plPointAtDist(cReg, dists[di]);
+            if (!pt) continue;
+            // Graduated: smallest at center (mid), larger toward edges
+            var distFromCenter = Math.abs(dists[di] - mid) / (mid || 1); // 0 at center, 1 at edges
+            var r = plSmallR + (plRadius - plSmallR) * distFromCenter * 0.5;
+            plHtml += SvgRenderer._borderShape(plShape, pt.x, pt.y, r, pt.rotDeg);
           }
         }
-        // Pass 2: Full-size shapes on straight edges
-        var plBite = plSmallR * 5;  // account for L-arm length (2 arms × 2.1 spacing + margin)
-        var plEdges = [
-          { x1: newRectX + plTrace.rxTL, y1: newRectY, x2: newRectX + newRectWidth - plTrace.rxTR, y2: newRectY },
-          { x1: newRectX + newRectWidth, y1: newRectY + plTrace.rxTR, x2: newRectX + newRectWidth, y2: newRectY + newRectHeight - plTrace.rxBR },
-          { x1: newRectX + newRectWidth - plTrace.rxBR, y1: newRectY + newRectHeight, x2: newRectX + plTrace.rxBL, y2: newRectY + newRectHeight },
-          { x1: newRectX, y1: newRectY + newRectHeight - plTrace.rxBL, x2: newRectX, y2: newRectY + plTrace.rxTL }
-        ];
-        for (var pei = 0; pei < plEdges.length; pei++) {
-          var pe = plEdges[pei];
-          var plRawLen = Math.sqrt((pe.x2 - pe.x1) * (pe.x2 - pe.x1) + (pe.y2 - pe.y1) * (pe.y2 - pe.y1));
-          if (plRawLen < plSpacing) continue;
-          var plDx = (pe.x2 - pe.x1) / plRawLen, plDy = (pe.y2 - pe.y1) / plRawLen;
-          var pix1 = pe.x1 + plDx * plBite, piy1 = pe.y1 + plDy * plBite;
-          var pix2 = pe.x2 - plDx * plBite, piy2 = pe.y2 - plDy * plBite;
-          var plEdgeLen = plRawLen - plBite * 2;
-          if (plEdgeLen < plRadius * 2) continue;
-          var plNum = Math.max(1, Math.round(plEdgeLen / plSpacing));
-          for (var pfi = 0; pfi <= plNum; pfi++) {
-            var plt = pfi / plNum;
-            var plRotDeg = plShape === 'diamond' ? Math.atan2(plDy, plDx) * 180 / Math.PI : 0;
-            plHtml += SvgRenderer._borderShape(plShape, pix1 + plt * (pix2 - pix1), piy1 + plt * (piy2 - piy1), plRadius, plRotDeg);
+
+        // Edge regions: full-size shapes at normal spacing
+        for (var pei = 0; pei < plRegions.edges.length; pei++) {
+          var pts = SvgRenderer._walkRegion(plRegions.edges[pei], plSpacing);
+          for (var pi = 0; pi < pts.length; pi++) {
+            plHtml += SvgRenderer._borderShape(plShape, pts[pi].x, pts[pi].y, plRadius, pts[pi].rotDeg);
           }
         }
+
         if (plHtml) result = result.replace(/<\/svg>/, plHtml + '</svg>');
         result = result.replace(/<svg /, '<svg data-perf-line="1" ');
       }
@@ -5182,6 +5180,190 @@ const SvgRenderer = {
           break;
         }
         cumDist += trace.segments[si].len;
+      }
+    }
+    return points;
+  },
+
+  /**
+   * Split a segment at parameter boundaries [startT, endT] ∈ [0,1].
+   * Returns a sub-segment (h/v/arc) covering that portion, or null if degenerate.
+   */
+  _splitSegment: function(seg, startT, endT) {
+    if (startT >= endT || seg.len === 0) return null;
+    if (seg.type === 'h' || seg.type === 'v') {
+      return {
+        type: seg.type,
+        sx: seg.sx + (seg.ex - seg.sx) * startT,
+        sy: seg.sy + (seg.ey - seg.sy) * startT,
+        ex: seg.sx + (seg.ex - seg.sx) * endT,
+        ey: seg.sy + (seg.ey - seg.sy) * endT,
+        len: seg.len * (endT - startT)
+      };
+    }
+    // arc: interpolate angle range
+    return {
+      type: 'arc',
+      cx: seg.cx, cy: seg.cy, r: seg.r,
+      startAngle: seg.startAngle + (seg.endAngle - seg.startAngle) * startT,
+      endAngle:   seg.startAngle + (seg.endAngle - seg.startAngle) * endT,
+      len: seg.len * (endT - startT)
+    };
+  },
+
+  /**
+   * Split a trace into 4 corner regions + 4 edge regions.
+   * Every corner gets a fixed-length region = D-type arc (~188.5 units),
+   * ensuring consistent edge lengths regardless of corner type.
+   *
+   * Segment order in trace: [0]=top-h, [1]=TR-arc, [2]=right-v, [3]=BR-arc,
+   *                          [4]=bottom-h, [5]=BL-arc, [6]=left-v, [7]=TL-arc
+   *
+   * Returns { corners: [{segments, totalLength}] (TR,BR,BL,TL),
+   *           edges:   [{segments, totalLength}] (top,right,bottom,left) }
+   */
+  _splitTraceRegions: function(trace) {
+    var CRL = Math.PI * 120 * 0.6; // corner region length (~226, 1.2× D-type arc)
+    var segs = trace.segments;
+
+    // Corner definitions: arcIdx, prevEdgeIdx (edge before arc), nextEdgeIdx (edge after arc)
+    // TR: end-of-top + TR-arc + start-of-right
+    // BR: end-of-right + BR-arc + start-of-bottom
+    // BL: end-of-bottom + BL-arc + start-of-left
+    // TL: end-of-left + TL-arc + start-of-top
+    var cDefs = [
+      { arcIdx: 1, prevIdx: 0, nextIdx: 2 },
+      { arcIdx: 3, prevIdx: 2, nextIdx: 4 },
+      { arcIdx: 5, prevIdx: 4, nextIdx: 6 },
+      { arcIdx: 7, prevIdx: 6, nextIdx: 0 }
+    ];
+
+    // Per-corner extension into adjacent edges
+    var exts = [];
+    for (var ci = 0; ci < 4; ci++) {
+      var arcLen = segs[cDefs[ci].arcIdx].len;
+      var ext = Math.max(0, (CRL - arcLen) / 2);
+      exts.push({ prev: ext, next: ext });
+    }
+
+    // Each edge is shared between two corners — clamp if combined > edge length.
+    // Edge map: segIdx → which corner takes from start, which from end
+    //   top(0):    start=TL(3).next,  end=TR(0).prev
+    //   right(2):  start=TR(0).next,  end=BR(1).prev
+    //   bottom(4): start=BR(1).next,  end=BL(2).prev
+    //   left(6):   start=BL(2).next,  end=TL(3).prev
+    var eMap = [
+      { segIdx: 0, sCorner: 3, sField: 'next', eCorner: 0, eField: 'prev' },
+      { segIdx: 2, sCorner: 0, sField: 'next', eCorner: 1, eField: 'prev' },
+      { segIdx: 4, sCorner: 1, sField: 'next', eCorner: 2, eField: 'prev' },
+      { segIdx: 6, sCorner: 2, sField: 'next', eCorner: 3, eField: 'prev' }
+    ];
+
+    for (var ei = 0; ei < eMap.length; ei++) {
+      var em = eMap[ei];
+      var edgeLen = segs[em.segIdx].len;
+      var sExt = exts[em.sCorner][em.sField];
+      var eExt = exts[em.eCorner][em.eField];
+      var total = sExt + eExt;
+      if (total > edgeLen && total > 0) {
+        var ratio = edgeLen / total;
+        exts[em.sCorner][em.sField] = sExt * ratio;
+        exts[em.eCorner][em.eField] = eExt * ratio;
+      }
+    }
+
+    // Build 4 corner regions
+    var cornerRegions = [];
+    for (var ci = 0; ci < 4; ci++) {
+      var cd = cDefs[ci];
+      var prevSeg = segs[cd.prevIdx];
+      var arcSeg  = segs[cd.arcIdx];
+      var nextSeg = segs[cd.nextIdx];
+      var prevExt = exts[ci].prev;
+      var nextExt = exts[ci].next;
+      var cSegs = [], cLen = 0;
+
+      // Tail of previous edge
+      if (prevExt > 0 && prevSeg.len > 0) {
+        var sub = SvgRenderer._splitSegment(prevSeg, 1 - prevExt / prevSeg.len, 1);
+        if (sub) { cSegs.push(sub); cLen += sub.len; }
+      }
+      // Full arc (may be zero-length for straight corners)
+      if (arcSeg.len > 0) { cSegs.push(arcSeg); cLen += arcSeg.len; }
+      // Head of next edge
+      if (nextExt > 0 && nextSeg.len > 0) {
+        var sub = SvgRenderer._splitSegment(nextSeg, 0, nextExt / nextSeg.len);
+        if (sub) { cSegs.push(sub); cLen += sub.len; }
+      }
+      cornerRegions.push({ segments: cSegs, totalLength: cLen });
+    }
+
+    // Build 4 edge regions (center remainder of each edge)
+    var edgeRegions = [];
+    for (var ei = 0; ei < eMap.length; ei++) {
+      var em = eMap[ei];
+      var seg = segs[em.segIdx];
+      var sExt = exts[em.sCorner][em.sField];
+      var eExt = exts[em.eCorner][em.eField];
+      var startT = seg.len > 0 ? sExt / seg.len : 0;
+      var endT   = seg.len > 0 ? 1 - eExt / seg.len : 0;
+
+      if (endT > startT + 0.001 && seg.len > 0) {
+        var sub = SvgRenderer._splitSegment(seg, startT, endT);
+        if (sub) {
+          edgeRegions.push({ segments: [sub], totalLength: sub.len });
+          continue;
+        }
+      }
+      edgeRegions.push({ segments: [], totalLength: 0 });
+    }
+
+    return { corners: cornerRegions, edges: edgeRegions };
+  },
+
+  /**
+   * Walk a single region (corner or edge) and return evenly-spaced points
+   * with tangent info. Same output format as _walkTrace.
+   * @param {object} region - { segments, totalLength } from _splitTraceRegions
+   * @param {number} step - desired distance between points
+   * @returns {Array} [{x, y, angle, rotDeg}]
+   */
+  _walkRegion: function(region, step) {
+    if (!region || region.totalLength <= 0 || !region.segments.length) return [];
+    var points = [];
+    var numPoints = Math.max(1, Math.round(region.totalLength / step));
+    var ptStep = region.totalLength / numPoints;
+
+    function getPointOnSeg(seg, t) {
+      if (seg.type === 'h' || seg.type === 'v') {
+        return {
+          x: seg.sx + (seg.ex - seg.sx) * t,
+          y: seg.sy + (seg.ey - seg.sy) * t,
+          angle: seg.type === 'h' ? 0 : 1,
+          rotDeg: 0
+        };
+      }
+      var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
+      return {
+        x: seg.cx + seg.r * Math.cos(a),
+        y: seg.cy + seg.r * Math.sin(a),
+        angle: 0,
+        rotDeg: (a + Math.PI / 2) * (180 / Math.PI)
+      };
+    }
+
+    for (var pi = 0; pi <= numPoints; pi++) {
+      var targetDist = Math.min(pi * ptStep, region.totalLength);
+      var cumDist = 0;
+      for (var si = 0; si < region.segments.length; si++) {
+        var segLen = region.segments[si].len;
+        if (cumDist + segLen >= targetDist || si === region.segments.length - 1) {
+          var localT = segLen > 0 ? (targetDist - cumDist) / segLen : 0;
+          localT = Math.max(0, Math.min(1, localT));
+          points.push(getPointOnSeg(region.segments[si], localT));
+          break;
+        }
+        cumDist += segLen;
       }
     }
     return points;
