@@ -1070,7 +1070,7 @@ const Gallery = {
     document.getElementById('stamp-results').style.display = 'block';
     var filterBar = document.getElementById('stamp-filter-bar');
     if (filterBar) {
-      filterBar.style.display = 'none';
+      filterBar.style.display = 'flex';
       this.initFilterBar();
     }
 

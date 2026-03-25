@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Saved Designs — StampaText</title>
+  <title>My Saves — StampaText</title>
   <link rel="stylesheet" href="/css/style.css?v=57">
   <style>
     .saves-container { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
@@ -12,12 +12,11 @@
     .saves-day-group { margin-bottom: 1.5rem; }
     .saves-day-label { font-size: 0.85rem; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid #eee; }
     .saves-item { display: flex; align-items: center; gap: 8px; padding: 0.5rem 0; }
-    .saves-item a { color: #333; text-decoration: none; font-size: 0.9rem; line-height: 1.4; flex: 1; }
+    .saves-item a { color: #333; text-decoration: none; font-size: 0.9rem; line-height: 1.4; flex: 1; display: block; }
+    .saves-time { display: block; font-size: 0.7rem; color: #bbb; margin-bottom: 2px; }
     .saves-item a:hover { color: #dc2626; text-decoration: underline; }
     .saves-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
     .saves-delete:hover { color: #dc2626; background: #fef2f2; }
-    .saves-back { display: inline-block; margin-bottom: 1rem; color: #666; text-decoration: none; font-size: 0.9rem; }
-    .saves-back:hover { color: #333; }
     .saves-preview { display: none; position: fixed; z-index: 1000; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 12px; width: 280px; pointer-events: none; }
     .saves-preview.active { display: block; }
     .saves-preview svg { width: 100%; height: auto; max-height: 260px; }
@@ -50,8 +49,7 @@
   </header>
 
   <div class="saves-container">
-    <a href="/" class="saves-back">&larr; Back to StampaText</a>
-    <div class="saves-header">My Saved Designs</div>
+    <div class="saves-header">My Saves</div>
     <div id="saves-list">
       <div class="saves-empty">Loading...</div>
     </div>
@@ -266,13 +264,16 @@
           var text = sp.get('text') || '';
           var color = sp.get('color') || '';
           var hasThumbnail = !!s.thumbnail;
+          var saveTime = s.created_at ? new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
           html += '<div class="saves-item" data-id="' + s.id + '"';
           html += ' data-tpl-id="' + tplId + '"';
           html += ' data-text="' + text.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"';
           html += ' data-color="' + color + '"';
           html += ' data-has-thumbnail="' + (hasThumbnail ? '1' : '') + '"';
           html += '>';
-          html += '<a href="' + href + '">' + desc + '</a>';
+          html += '<a href="' + href + '">';
+          if (saveTime) html += '<span class="saves-time">' + saveTime + '</span>';
+          html += desc + '</a>';
           html += '<button class="saves-delete" title="Delete">&times;</button>';
           html += '</div>';
         });

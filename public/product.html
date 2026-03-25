@@ -9,7 +9,7 @@
   <meta property="og:description" content="Customize your stamp and download in high-res PNG or JPG. Choose fonts, colors, borders and more.">
   <meta property="og:image" content="/logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="/css/style.css?v=57">
+  <link rel="stylesheet" href="/css/style.css?v=58">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -106,7 +106,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:3;">
         <label class="filter-bar-label">Frames</label>
-        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:45px">
+        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:35px">
           <span class="filter-bar-dropdown-value" id="product-frame-value">A</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -119,21 +119,18 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" id="product-rows-group" style="order:4;">
         <label class="filter-bar-label">Rows</label>
-        <div class="filter-bar-dropdown-box" id="product-rows-toggle" style="min-width:40px">
+        <div class="filter-bar-dropdown-box" id="product-rows-toggle" style="min-width:35px">
           <span class="filter-bar-dropdown-value" id="product-rows-value">Auto</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-rows-list">
-          <div class="filter-bar-dropdown-item active" data-value="0">Auto</div>
-          <div class="filter-bar-dropdown-item" data-value="1">1</div>
-          <div class="filter-bar-dropdown-item" data-value="2">2</div>
         </div>
       </div>
 
       <!-- Row 2: Color, Fill, Texture, Tilt -->
       <div class="filter-bar-group filter-bar-color-group" style="order:5;">
         <label class="filter-bar-label">Color</label>
-        <div class="filter-bar-color-box" id="product-color-toggle" style="height:46px;box-sizing:border-box;">
+        <div class="filter-bar-color-box" id="product-color-toggle" style="height:46px;box-sizing:border-box;min-width:35px;">
           <span class="filter-bar-color-dot" id="product-color-dot"></span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -154,8 +151,8 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:7;">
         <label class="filter-bar-label">Texture</label>
-        <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:65px">
-          <span class="filter-bar-dropdown-value" id="product-texture-value">None</span>
+        <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:35px">
+          <span class="filter-bar-dropdown-value" id="product-texture-value">No</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-texture-list"></div>
@@ -235,6 +232,7 @@
               <span class="dl-cost" id="dl-cost-svg">= 5 credits</span>
             </label>
           </div>
+          <div id="download-status" style="display:none;margin-top:8px;padding:6px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;font-size:0.78rem;color:#166534;line-height:1.4;"></div>
           <button class="btn btn-primary" id="btn-download-confirm" style="margin-top:10px;padding:10px 24px;font-size:0.95rem;border-radius:6px;width:100%;">Download</button>
         </div>
       </div>
@@ -352,11 +350,12 @@
         wavy: 'wavy', zigzag: 'zigzag', brushstroke: 'brushstroke',
         stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
         torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
-        perforated: 'perforated', sawtooth: 'sawtooth', chalk: 'chalk'
+        perforated: 'perforated', sawtooth: 'sawtooth', chalk: 'chalk',
+        perf_line: 'perforated line', perf_line_spaced: 'perforated line spaced', saw_line: 'saw line'
       };
 
       var TEXTURE_OPTIONS = [
-        { key: '', label: 'None' },
+        { key: '', label: 'No' },
         { key: 'grungy', label: 'A' },
         { key: 'scratched', label: 'B' },
         { key: 'noise', label: 'C' }
@@ -529,9 +528,18 @@
         return;
       }
 
-      // Back link: navigate to gallery with text param (sessionStorage cache will restore)
+      // Back link: contextual based on where user came from
       var backLink = document.getElementById('product-back');
-      backLink.href = '/?text=' + encodeURIComponent(userText);
+      var ref = document.referrer || '';
+      if (ref.indexOf('/app/downloads') >= 0) {
+        backLink.href = '/app/downloads/';
+        backLink.textContent = '\u2190 Back to downloads';
+      } else if (ref.indexOf('/app/saves') >= 0) {
+        backLink.href = '/app/saves/';
+        backLink.textContent = '\u2190 Back to saves';
+      } else {
+        backLink.href = '/?text=' + encodeURIComponent(userText);
+      }
 
       // ---- Fetch template ----
       var { data: tpl, error } = await sb
@@ -593,13 +601,14 @@
         currentTilt = comboFallback.tilt;
       }
 
-      // Store this template's SVG indexed by border type
-      allTemplatesByBorder[currentBorderStyle] = {
+      // Store this template's SVG indexed by its actual border type
+      var actualBorderType = tpl.border_type || 'simple';
+      allTemplatesByBorder[actualBorderType] = {
         svg: cleanedSvg, tpl: tpl, zones: (tpl.text_zones || []).filter(function(z) { return z.is_editable; }).sort(function(a, b) { return a.sort_order - b.sort_order; })
       };
 
       // Background: preload all other active templates for instant border switching
-      (async function() {
+      var preloadPromise = (async function() {
         try {
           var { data: allTpls } = await sb.from('templates').select('*, text_zones(*)').eq('is_active', true).eq('fill_type', 'empty').eq('frame_type', 'single');
           if (allTpls) {
@@ -699,6 +708,18 @@
               if (acThumb) document.getElementById('product-corner-value').innerHTML = acThumb.innerHTML;
             }
           }
+          // Fix restore: if URL style doesn't match loaded template, swap to correct one
+          if (currentBorderStyle && currentBorderStyle !== templateBorderType && allTemplatesByBorder[currentBorderStyle]) {
+            var correctEntry = allTemplatesByBorder[currentBorderStyle];
+            rawCleanedSvg = correctEntry.svg;
+            storedZones = correctEntry.zones;
+            templateBorderType = currentBorderStyle;
+            if (correctEntry.tpl && correctEntry.tpl.id) templateId = correctEntry.tpl.id;
+            rebuildWithFont(currentFont).then(function(svg) {
+              baseSvg = svg;
+              renderPreview();
+            });
+          }
         } catch (e) { console.warn('Failed to preload templates:', e.message); }
       })();
 
@@ -761,17 +782,17 @@
       // Show Rows dropdown: multi-word splits by words, single-word splits by syllables
       var textWords = userText.trim().split(/\s+/);
       var rowsList = document.getElementById('product-rows-list');
-      rowsList.innerHTML = '<div class="filter-bar-dropdown-item' + (currentForceLines === 0 ? ' active' : '') + '" data-value="0">Auto</div>';
       var maxRows = textWords.length >= 2 ? Math.min(textWords.length, 3) : 3;
+      rowsList.innerHTML = '';
       for (var ri = 1; ri <= maxRows; ri++) {
-        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (currentForceLines === ri ? ' active' : '') + '" data-value="' + ri + '">' + ri + '</div>';
+        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + ((currentForceLines === ri || (currentForceLines === 0 && ri === 1)) ? ' active' : '') + '" data-value="' + ri + '">' + ri + '</div>';
       }
-      setDropdownActive('product-rows-list', String(currentForceLines), 'product-rows-value');
+      if (currentForceLines === 0) currentForceLines = 0; // keep auto behavior internally
+      setDropdownActive('product-rows-list', String(currentForceLines || 1), 'product-rows-value');
 
       updateShapeConstraints();
-      await renderPreview();
 
-      // ---- Event listeners ----
+      // ---- Event listeners (attached BEFORE first render to guarantee interactivity) ----
 
       // Font custom dropdown toggle
       document.getElementById('product-font-toggle').addEventListener('click', function(e) {
@@ -785,6 +806,10 @@
         e.stopPropagation();
         var item = e.target.closest('.filter-bar-font-item');
         if (!item) return;
+        if (item.dataset.fontKey === currentFont) {
+          this.style.display = 'none';
+          return;
+        }
         this.querySelectorAll('.filter-bar-font-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         currentFont = item.dataset.fontKey;
@@ -802,7 +827,7 @@
         document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
         document.getElementById('product-font-list').style.display = 'none';
         var grid = document.getElementById('product-color-grid');
-        grid.style.display = grid.style.display === 'flex' ? 'none' : 'flex';
+        grid.style.display = grid.style.display === 'grid' ? 'none' : 'grid';
       });
       document.getElementById('product-color-grid').addEventListener('click', function(e) {
         e.stopPropagation();
@@ -938,6 +963,7 @@
         rawCleanedSvg = entry.svg;
         storedZones = entry.zones;
         templateBorderType = newBorder;
+        if (entry.tpl && entry.tpl.id) templateId = entry.tpl.id;
         // Hide Frames=C for perforated/sawtooth (they use perf_line styles instead)
         var noSplitStyles = ['perforated', 'perforated_spaced', 'sawtooth'];
         var frameItems = document.querySelectorAll('#product-frame-list .filter-bar-dropdown-item');
@@ -1039,6 +1065,13 @@
       // Inline download button
       document.getElementById('btn-download-confirm').addEventListener('click', handleDownload);
 
+      // ---- Initial render (after all listeners attached) ----
+      // If URL style differs from loaded template, wait for preloader to swap the correct template
+      if (currentBorderStyle && currentBorderStyle !== actualBorderType) {
+        await preloadPromise;
+      }
+      await renderPreview();
+
       // ---- Save button logic ----
       var userSaves = [];
       var saveSession = null;
@@ -1094,6 +1127,122 @@
             });
             if (resp.ok) userSaves = await resp.json();
             updateSaveButton();
+          }
+        } catch (e) { /* not logged in */ }
+      })();
+
+      // ---- Download history: detect already-downloaded variants ----
+      var userDownloads = [];
+
+      function normalizeParamsForCompare(paramStr) {
+        var sp = new URLSearchParams(paramStr);
+        // Remove format/cost — not part of the design identity
+        sp.delete('rows');
+        // Normalize defaults
+        if (!sp.get('frame') || sp.get('frame') === 'single') sp.set('frame', 'single');
+        if (!sp.get('fill') || sp.get('fill') === 'empty') sp.set('fill', 'empty');
+        if (!sp.get('shape') || sp.get('shape') === 'rectangle') sp.set('shape', 'rectangle');
+        if (!sp.get('style') || sp.get('style') === 'simple') sp.set('style', 'simple');
+        if (!sp.get('corners') || sp.get('corners') === 'straight') sp.set('corners', 'straight');
+        if (!sp.get('tilt')) sp.set('tilt', '0');
+        if (!sp.get('texture')) sp.set('texture', '');
+        // Sort keys for stable comparison
+        var sorted = Array.from(sp.entries()).sort(function(a, b) { return a[0].localeCompare(b[0]); });
+        return sorted.map(function(e) { return e[0] + '=' + e[1]; }).join('&');
+      }
+
+      function downloadParamsFromRecord(dl) {
+        var inp = dl.input_data || {};
+        if (inp.product_params) return inp.product_params;
+        // Reconstruct from individual fields (old records)
+        return 'id=' + encodeURIComponent(dl.template_id || '') +
+          '&text=' + encodeURIComponent(inp.text || '') +
+          '&color=' + (inp.color || '') +
+          '&font=' + encodeURIComponent(inp.font || '') +
+          '&frame=' + (inp.frameType || inp.frame || 'single') +
+          '&fill=' + (inp.fill || 'empty') +
+          '&shape=' + (inp.shape || 'rectangle') +
+          '&tilt=' + (inp.tilt || 0) +
+          '&style=' + (inp.style || inp.border || 'simple') +
+          '&corners=' + (inp.corners || 'straight') +
+          '&texture=' + encodeURIComponent(inp.texture || '');
+      }
+
+      var FORMAT_TO_ROW = { jpg: 'dl-row-jpg', jpeg: 'dl-row-jpg', png: 'dl-row-png', svg: 'dl-row-svg' };
+
+      function updateDownloadStatus() {
+        var statusEl = document.getElementById('download-status');
+        // Reset all rows to enabled
+        ['dl-row-jpg', 'dl-row-png', 'dl-row-svg'].forEach(function(rid) {
+          var row = document.getElementById(rid);
+          if (row) {
+            row.style.opacity = '';
+            row.style.pointerEvents = '';
+            var radio = row.querySelector('input[type="radio"]');
+            if (radio) radio.disabled = false;
+            var costEl = row.querySelector('.dl-cost');
+            if (costEl && !costEl.dataset.original) costEl.dataset.original = costEl.textContent;
+            if (costEl && costEl.dataset.original) costEl.textContent = costEl.dataset.original;
+          }
+        });
+        if (!userDownloads.length) { statusEl.style.display = 'none'; return; }
+        var currentNorm = normalizeParamsForCompare(getCurrentComboParams());
+        var downloadedFormats = {};
+        for (var di = 0; di < userDownloads.length; di++) {
+          var dl = userDownloads[di];
+          var pp = downloadParamsFromRecord(dl);
+          var dlNorm = normalizeParamsForCompare(pp);
+          if (dlNorm === currentNorm) {
+            var inp = dl.input_data || {};
+            var fmt = (inp.format || inp.ext || '').toLowerCase();
+            if (fmt === 'jpeg') fmt = 'jpg';
+            var date = new Date(dl.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            downloadedFormats[fmt] = date;
+          }
+        }
+        var fmtKeys = Object.keys(downloadedFormats);
+        // Disable already-downloaded format rows
+        fmtKeys.forEach(function(fmt) {
+          var rowId = FORMAT_TO_ROW[fmt];
+          var row = rowId && document.getElementById(rowId);
+          if (row) {
+            row.style.opacity = '0.45';
+            row.style.pointerEvents = 'none';
+            var radio = row.querySelector('input[type="radio"]');
+            if (radio) {
+              radio.disabled = true;
+              if (radio.checked) {
+                // Auto-select the first non-disabled option
+                var allRadios = document.querySelectorAll('input[name="download-product"]');
+                for (var ri = 0; ri < allRadios.length; ri++) {
+                  if (!allRadios[ri].disabled) { allRadios[ri].checked = true; break; }
+                }
+              }
+            }
+            var costEl = row.querySelector('.dl-cost');
+            if (costEl) costEl.textContent = costEl.dataset.original + '  \u2714';
+          }
+        });
+        if (fmtKeys.length) {
+          var parts = fmtKeys.map(function(f) {
+            return f.toUpperCase() + ' on ' + downloadedFormats[f];
+          });
+          statusEl.textContent = '\u2714 Downloaded: ' + parts.join(', ');
+          statusEl.style.display = '';
+        } else {
+          statusEl.style.display = 'none';
+        }
+      }
+
+      (async function() {
+        try {
+          var sess = (await sb.auth.getSession()).data.session;
+          if (sess) {
+            var resp = await fetch('/api/downloads', {
+              headers: { 'Authorization': 'Bearer ' + sess.access_token }
+            });
+            if (resp.ok) userDownloads = await resp.json();
+            updateDownloadStatus();
           }
         } catch (e) { /* not logged in */ }
       })();
@@ -1397,13 +1546,14 @@
         } finally {
           previewEl.style.opacity = '1';
           isProcessing = false;
-          if (typeof updateSaveButton === 'function') updateSaveButton();
+          try { if (typeof updateSaveButton === 'function') updateSaveButton(); } catch(e) {}
+          try { if (typeof updateDownloadStatus === 'function') updateDownloadStatus(); } catch(e) {}
         }
       }
 
       function updateDescription() {
         var colorName = getColorName(currentColor);
-        var border = BORDER_LABELS[templateBorderType] || 'plain';
+        var border = BORDER_LABELS[currentBorderStyle] || BORDER_LABELS[templateBorderType] || 'plain';
         var fill = (currentFill === 'empty') ? 'outlined' : 'filled';
         var texture = '';
         if (currentTexture) {
@@ -1446,15 +1596,7 @@
       }
 
       function updateUrl() {
-        var newUrl = '/product.html?id=' + encodeURIComponent(templateId) +
-          '&text=' + encodeURIComponent(userText) +
-          '&color=' + encodeURIComponent(currentColor.replace('#', '')) +
-          '&font=' + encodeURIComponent(currentFont) +
-          '&frame=' + encodeURIComponent(currentFrame) +
-          '&fill=' + encodeURIComponent(currentFill) +
-          '&shape=' + encodeURIComponent(currentShape) +
-          '&tilt=' + encodeURIComponent(currentTilt) +
-          (currentTexture ? '&texture=' + encodeURIComponent(currentTexture) : '');
+        var newUrl = '/product.html?' + getCurrentComboParams();
         window.history.replaceState(null, '', newUrl);
       }
 
@@ -1514,7 +1656,8 @@
 
           // Deduct credit via API
           var token = session.access_token;
-          var params = new URLSearchParams(window.location.search);
+          var comboParams = getCurrentComboParams();
+          var pp = new URLSearchParams(comboParams);
           var res = await fetch('/api/generations/record', {
             method: 'POST',
             headers: {
@@ -1522,19 +1665,22 @@
               'Authorization': 'Bearer ' + token
             },
             body: JSON.stringify({
-              template_id: params.get('id') || null,
+              template_id: pp.get('id') || null,
               input_data: {
-                text: params.get('text') || '',
-                font: params.get('font') || '',
-                color: params.get('color') || '',
-                border: params.get('border') || '',
-                fill: params.get('fill') || '',
-                corners: params.get('corners') || '',
-                frameType: params.get('frame') || '',
-                shape: params.get('shape') || '',
+                text: pp.get('text') || '',
+                font: pp.get('font') || '',
+                color: pp.get('color') || '',
+                style: pp.get('style') || 'simple',
+                frame: pp.get('frame') || 'single',
+                fill: pp.get('fill') || 'empty',
+                corners: pp.get('corners') || 'straight',
+                shape: pp.get('shape') || 'rectangle',
+                tilt: pp.get('tilt') || '0',
+                texture: pp.get('texture') || '',
                 format: config.ext,
                 credits_cost: config.credits,
-                product_params: window.location.search.substring(1),
+                description: (document.getElementById('product-description') || {}).textContent || '',
+                product_params: comboParams,
                 thumbnail: currentSvg ? currentSvg.replace(/<text[^>]*class="watermark"[^>]*>[\s\S]*?<\/text>/gi, '').replace(/<image[^>]*watermark[^>]*\/?\s*>/gi, '') : ''
               },
               credits_cost: config.credits
@@ -1564,6 +1710,13 @@
           var costMap = {'jpg-1000':'dl-cost-jpg','png-1000':'dl-cost-png','svg-full':'dl-cost-svg'};
           var costEl = document.getElementById(costMap[dlChoice]);
           if (costEl) costEl.textContent = 'Downloaded at ' + new Date().toLocaleTimeString();
+
+          // Update download history for status indicator
+          userDownloads.push({
+            input_data: { product_params: window.location.search.substring(1), format: config.ext },
+            created_at: new Date().toISOString()
+          });
+          updateDownloadStatus();
 
           // Success toast
           showToast('Download started! ' + config.credits + ' credit' + (config.credits > 1 ? 's' : '') + ' used.');

@@ -20,7 +20,11 @@
         <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
         <div class="dropdown-menu" id="user-menu">
           <a class="dropdown-item" href="/">Go stamp</a>
+          <a class="dropdown-item" href="/app/saves" id="menu-saves">Saves</a>
+          <a class="dropdown-item" href="/app/downloads" id="menu-downloads">Downloads</a>
+          <a class="dropdown-item" href="/pricing.html">Buy Credits</a>
           <a class="dropdown-item" href="/app/profile">My Profile</a>
+          <a class="dropdown-item" href="/admin" id="menu-admin" style="display:none;">Admin</a>
           <div class="dropdown-divider"></div>
           <a class="dropdown-item dropdown-item-danger" href="#" onclick="signOut(); return false;">Logout</a>
         </div>

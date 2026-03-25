@@ -12,21 +12,18 @@
     .downloads-empty { color: #888; font-style: italic; margin: 2rem 0; }
     .downloads-day-group { margin-bottom: 1.5rem; }
     .downloads-day-label { font-size: 0.85rem; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid #eee; }
-    .downloads-item { display: flex; align-items: center; gap: 10px; padding: 0.6rem 0; border-bottom: 1px solid #f5f5f5; }
-    .downloads-item a { color: #333; text-decoration: none; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .downloads-item { display: flex; align-items: baseline; gap: 10px; padding: 0.6rem 0; border-bottom: 1px solid #f5f5f5; flex-wrap: wrap; }
+    .downloads-item a { color: #333; text-decoration: none; flex: 1 1 100%; font-size: 0.85rem; line-height: 1.5; display: block; }
     .downloads-item a:hover { color: #dc2626; }
-    .downloads-text { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .downloads-time-above { display: block; font-size: 0.7rem; color: #bbb; margin-bottom: 2px; }
+    .downloads-format-below { display: block; font-size: 0.7rem; color: #bbb; margin-top: 2px; }
     .downloads-badge { display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em; flex-shrink: 0; }
     .downloads-badge-jpg { background: #fef3c7; color: #92400e; }
     .downloads-badge-jpeg { background: #fef3c7; color: #92400e; }
     .downloads-badge-png { background: #dbeafe; color: #1e40af; }
     .downloads-badge-svg { background: #d1fae5; color: #065f46; }
-    .downloads-meta { font-size: 0.75rem; color: #999; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-    .downloads-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 1px solid #ddd; }
     .downloads-credits { font-size: 0.75rem; color: #666; white-space: nowrap; flex-shrink: 0; }
     .downloads-time { font-size: 0.7rem; color: #bbb; white-space: nowrap; flex-shrink: 0; }
-    .downloads-back { display: inline-block; margin-bottom: 1rem; color: #666; text-decoration: none; font-size: 0.9rem; }
-    .downloads-back:hover { color: #333; }
     .downloads-preview { display: none; position: fixed; z-index: 1000; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 12px; width: 280px; pointer-events: none; }
     .downloads-preview.active { display: block; }
     .downloads-preview svg { width: 100%; height: auto; max-height: 260px; }
@@ -59,7 +56,6 @@
   </header>
 
   <div class="downloads-container">
-    <a href="/" class="downloads-back">&larr; Back to StampaText</a>
     <div class="downloads-header">My Downloads</div>
     <div class="downloads-summary" id="downloads-summary"></div>
     <div id="downloads-list">
@@ -225,6 +221,56 @@
       return div.innerHTML;
     }
 
+    var DL_COLOR_NAMES = {
+      '000000': 'Black', '8B0000': 'Dark Red', 'CC0000': 'Crimson', '003366': 'Navy',
+      '2D572C': 'Forest Green', '4B0082': 'Indigo',
+      'FF0000': 'Red', 'FF6600': 'Orange', 'DAA520': 'Goldenrod', '1E90FF': 'Dodger Blue',
+      'FF1493': 'Hot Pink', '32CD32': 'Lime Green'
+    };
+    var DL_BORDER_LABELS = {
+      wavy: 'wavy', zigzag: 'zigzag', brushstroke: 'brushstroke',
+      stitch_line: 'stitch line', stitch_square: 'stitch square', stitch_circle: 'stitch dot',
+      torn_edge: 'torn edge', perforated_spaced: 'spaced perforated',
+      perforated: 'perforated', sawtooth: 'sawtooth', chalk: 'chalk',
+      perf_line: 'perforated line', perf_line_spaced: 'perforated line spaced', saw_line: 'saw line'
+    };
+    var DL_CORNER_LABELS = {
+      strong_round: 'strong round corners', medium_round: 'medium round corners', soft_round: 'soft round corners',
+      mixed_top_straight: 'mixed corners (top straight)', mixed_top_round: 'mixed corners (top round)',
+      mixed_diag_down: 'mixed corners (diagonal down)', mixed_diag_up: 'mixed corners (diagonal up)'
+    };
+    var DL_TEXTURE_LABELS = { grungy: 'grungy', scratched: 'scratched', noise: 'noise', worn: 'worn', speckled: 'speckled' };
+
+    function buildDownloadDescription(inp) {
+      var pp = inp.product_params ? new URLSearchParams(inp.product_params) : null;
+      var text = (pp && pp.get('text')) || inp.text || '(untitled)';
+
+      var colorHex = ((pp && pp.get('color')) || inp.color || '').toUpperCase();
+      var colorName = DL_COLOR_NAMES[colorHex] || (colorHex ? '#' + colorHex : 'black');
+      var font = (pp && pp.get('font')) || inp.font || '';
+      var style = (pp && pp.get('style')) || inp.style || inp.border || '';
+      var border = DL_BORDER_LABELS[style] || 'plain';
+      var frame = (pp && pp.get('frame')) || inp.frameType || inp.frame || 'single';
+      var frameLabel = frame === 'double' ? 'double border' : frame === 'split' ? 'split border' : 'single border';
+      var fill = (pp && pp.get('fill')) || inp.fill || 'empty';
+      var fillLabel = fill === 'full' ? 'filled' : 'outlined';
+      var shape = (pp && pp.get('shape')) || 'rectangle';
+      var corners = (pp && pp.get('corners')) || 'straight';
+      var cornersLabel = DL_CORNER_LABELS[corners] || (shape !== 'lined' ? 'straight corners' : '');
+      var tilt = parseInt((pp && pp.get('tilt')) || '0', 10);
+      var tiltLabel = tilt ? 'tilted' : '';
+      var texture = (pp && pp.get('texture')) || '';
+      var textureLabel = DL_TEXTURE_LABELS[texture] || '';
+
+      var adjectives = [tiltLabel, border, frameLabel].filter(Boolean).join(' ');
+      var objPhrase = (adjectives ? adjectives + ' ' : '') + fillLabel + ' ' + shape.replace(/_/g, ' ') + ' stamp';
+      var withParts = [cornersLabel, textureLabel ? textureLabel + ' texture' : ''].filter(Boolean);
+      var withClause = withParts.length ? ' with ' + withParts.join(' and ') : '';
+      var desc = '\u201C' + text + '\u201D written on ' + colorName.toLowerCase() + ' ' + objPhrase + withClause + '.';
+      if (font) desc += ' FONT: ' + font;
+      return desc;
+    }
+
     (async function() {
       var container = document.getElementById('downloads-list');
       var summaryEl = document.getElementById('downloads-summary');
@@ -295,25 +341,29 @@
           var text = inp.text || '(untitled)';
           var format = (inp.format || inp.ext || '').toLowerCase();
           if (format === 'jpeg') format = 'jpg';
-          var font = inp.font || '';
           var color = inp.color || '';
-          var border = inp.border || '';
           var credits = inp.credits_cost || 1;
           var hasThumbnail = !!inp.thumbnail;
           var time = new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          var desc = inp.description || buildDownloadDescription(inp);
 
           // Build product link
           var href = '/product.html';
           if (inp.product_params) {
             href += '?' + inp.product_params;
           } else if (d.template_id && inp.text) {
-            href += '?id=' + encodeURIComponent(d.template_id) + '&text=' + encodeURIComponent(inp.text);
+            href += '?id=' + encodeURIComponent(d.template_id) +
+              '&text=' + encodeURIComponent(inp.text) +
+              '&color=' + encodeURIComponent(inp.color || '') +
+              '&font=' + encodeURIComponent(inp.font || '') +
+              '&frame=' + encodeURIComponent(inp.frameType || inp.frame || 'single') +
+              '&fill=' + encodeURIComponent(inp.fill || 'empty') +
+              '&shape=' + encodeURIComponent(inp.shape || 'rectangle') +
+              '&style=' + encodeURIComponent(inp.style || inp.border || 'simple') +
+              '&corners=' + encodeURIComponent(inp.corners || 'straight') +
+              '&tilt=' + encodeURIComponent(inp.tilt || '0') +
+              '&texture=' + encodeURIComponent(inp.texture || '');
           }
-
-          var metaParts = [];
-          if (font) metaParts.push(escapeHtml(font));
-          if (color) metaParts.push('<span class="downloads-swatch" style="background:#' + escapeHtml(color) + '"></span>');
-          if (border) metaParts.push(escapeHtml(border));
 
           var svgPath = (d.templates && d.templates.svg_path) || '';
           html += '<div class="downloads-item"';
@@ -324,14 +374,10 @@
           html += ' data-has-thumbnail="' + (hasThumbnail ? '1' : '') + '"';
           html += '>';
           html += '<a href="' + href + '">';
-          html += '<span class="downloads-text">' + escapeHtml(text) + '</span>';
-          if (format) {
-            html += '<span class="downloads-badge downloads-badge-' + format + '">' + format.toUpperCase() + '</span>';
-          }
+          html += '<span class="downloads-time-above">' + time + ' &middot; ' + credits + ' cr</span>';
+          html += escapeHtml(desc);
+          if (format) html += '<span class="downloads-format-below">Downloaded as ' + format.toUpperCase() + '</span>';
           html += '</a>';
-          if (metaParts.length) html += '<span class="downloads-meta">' + metaParts.join(' &middot; ') + '</span>';
-          html += '<span class="downloads-credits">' + credits + ' cr</span>';
-          html += '<span class="downloads-time">' + time + '</span>';
           html += '</div>';
         });
         html += '</div>';
