@@ -1106,88 +1106,153 @@ const SvgRenderer = {
     // Region-based: draw equal corners first, then fill edges
     var regions = SvgRenderer._splitTraceRegions(trace);
 
-    // Stitch line: stitch_square shapes at corners (center-outward), dasharray on edges
+    // Resolve a distance along a region to a point {x, y, rotDeg}
+    function pointAtDist(region, dist) {
+      var cumDist = 0;
+      for (var si = 0; si < region.segments.length; si++) {
+        var seg = region.segments[si];
+        if (cumDist + seg.len >= dist || si === region.segments.length - 1) {
+          var t = seg.len > 0 ? Math.max(0, Math.min(1, (dist - cumDist) / seg.len)) : 0;
+          if (seg.type === 'h' || seg.type === 'v') {
+            return { x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t, rotDeg: 0 };
+          }
+          var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
+          return { x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a),
+                   rotDeg: (a + Math.PI / 2) * (180 / Math.PI) };
+        }
+        cumDist += seg.len;
+      }
+      return null;
+    }
+
+    // Stitch line: precise geometric layout — squares at corners, lines on edges
     if (shapeType === 'line') {
       var F = function(n) { return n.toFixed(2); };
-      var cSqStep = size * 1.5; // tighter than stitch_square for denser corners
 
-      // Resolve a distance along a region to a point {x, y, angle, rotDeg}
-      function pointAtDist(region, dist) {
-        var cumDist = 0;
-        for (var si = 0; si < region.segments.length; si++) {
-          var seg = region.segments[si];
-          if (cumDist + seg.len >= dist || si === region.segments.length - 1) {
-            var t = seg.len > 0 ? Math.max(0, Math.min(1, (dist - cumDist) / seg.len)) : 0;
-            if (seg.type === 'h' || seg.type === 'v') {
-              return { x: seg.sx + (seg.ex - seg.sx) * t, y: seg.sy + (seg.ey - seg.sy) * t,
-                       rotDeg: 0 };
-            }
-            var a = seg.startAngle + (seg.endAngle - seg.startAngle) * t;
-            return { x: seg.cx + seg.r * Math.cos(a), y: seg.cy + seg.r * Math.sin(a),
-                     rotDeg: (a + Math.PI / 2) * (180 / Math.PI) };
-          }
-          cumDist += seg.len;
-        }
-        return null;
-      }
-
-      // Corner regions: center-outward squares from the exact corner vertex
+      // ---- CORNERS: squares from vertex outward, equal on both arms ----
       for (var ci = 0; ci < regions.corners.length; ci++) {
         var cReg = regions.corners[ci];
         if (cReg.totalLength <= 0) continue;
-        var mid = cReg.totalLength / 2;
-        // Center square first, then radiate outward equally
-        var dists = [mid];
-        for (var d = cSqStep; mid - d >= 0; d += cSqStep) dists.push(mid - d);
-        for (var d = cSqStep; mid + d <= cReg.totalLength; d += cSqStep) dists.push(mid + d);
-        for (var di = 0; di < dists.length; di++) {
-          var pt = pointAtDist(cReg, dists[di]);
-          if (!pt) continue;
-          var rot = pt.rotDeg || 0;
-          shapes += '<rect x="' + F(pt.x - half) + '" y="' + F(pt.y - half) + '" width="' + size + '" height="' + size + '" fill="' + color + '"' +
-            (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + F(pt.x) + ',' + F(pt.y) + ')"' : '') + '/>';
-        }
-      }
-
-      // Edge regions: dasharray paths (normal size)
-      // Convert a region's contiguous segments into an SVG sub-path
-      function regionToPathD(region) {
-        if (!region.segments.length) return '';
-        var d = '';
-        for (var si = 0; si < region.segments.length; si++) {
-          var seg = region.segments[si];
-          if (seg.type === 'h' || seg.type === 'v') {
-            if (si === 0) d += ' M' + F(seg.sx) + ',' + F(seg.sy);
-            d += ' L' + F(seg.ex) + ',' + F(seg.ey);
-          } else { // arc
-            var sx = seg.cx + seg.r * Math.cos(seg.startAngle);
-            var sy = seg.cy + seg.r * Math.sin(seg.startAngle);
-            var ex = seg.cx + seg.r * Math.cos(seg.endAngle);
-            var ey = seg.cy + seg.r * Math.sin(seg.endAngle);
-            if (si === 0) d += ' M' + F(sx) + ',' + F(sy);
-            d += ' A' + F(seg.r) + ',' + F(seg.r) + ' 0 0 1 ' + F(ex) + ',' + F(ey);
+        var armLen = cReg.totalLength / 2;
+        var mid = armLen; // vertex = midpoint of corner region
+        // N squares per arm (including the shared vertex square)
+        // Fixed 4 squares per arm for consistent corners across all fonts
+        var nSq = 4;
+        var cornerStep = armLen / (nSq - 1);
+        var cSqSize = Math.min(size, cornerStep * 0.85); // cap to ensure gap
+        var cSqHalf = cSqSize / 2;
+        var bSkipLine = cSqHalf;
+        for (var ai = 0; ai < nSq; ai++) {
+          var d1 = mid - ai * cornerStep;
+          if (d1 >= bSkipLine) {
+            var pt = pointAtDist(cReg, d1);
+            if (pt) {
+              var rot = pt.rotDeg || 0;
+              shapes += '<rect x="' + F(pt.x - cSqHalf) + '" y="' + F(pt.y - cSqHalf) + '" width="' + F(cSqSize) + '" height="' + F(cSqSize) + '" fill="' + color + '"' +
+                (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + F(pt.x) + ',' + F(pt.y) + ')"' : '') + '/>';
+            }
+          }
+          if (ai > 0) {
+            var d2 = mid + ai * cornerStep;
+            if (d2 <= cReg.totalLength - bSkipLine) {
+              var pt = pointAtDist(cReg, d2);
+              if (pt) {
+                var rot = pt.rotDeg || 0;
+                shapes += '<rect x="' + F(pt.x - cSqHalf) + '" y="' + F(pt.y - cSqHalf) + '" width="' + F(cSqSize) + '" height="' + F(cSqSize) + '" fill="' + color + '"' +
+                  (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + F(pt.x) + ',' + F(pt.y) + ')"' : '') + '/>';
+              }
+            }
           }
         }
-        return d;
       }
 
-      var dEdges = '';
+      // ---- EDGES: stitch lines, starts and ends with gap ----
       for (var ei = 0; ei < regions.edges.length; ei++) {
-        dEdges += regionToPathD(regions.edges[ei]);
-      }
-      if (dEdges) {
-        shapes += '<path d="' + dEdges.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + size + '" stroke-dasharray="' + dashLen.toFixed(1) + ' ' + spacing.toFixed(1) + '" stroke-linecap="butt"/>';
+        var edgeReg = regions.edges[ei];
+        var edgeLen = edgeReg.totalLength;
+        if (edgeLen <= 0 || !edgeReg.segments.length) continue;
+        var seg = edgeReg.segments[0]; // always a single straight segment
+        var isVert = (seg.type === 'v');
+
+        // Calculate M stitches with even gaps, starting and ending with a gap
+        var targetW = dashLen * 0.6;
+        var nStitch = Math.max(1, Math.round(edgeLen / (targetW + spacing)));
+        var edgeGap = (edgeLen - nStitch * targetW) / (nStitch + 1);
+        // If gap is too small, reduce stitches
+        while (edgeGap < spacing * 0.3 && nStitch > 1) {
+          nStitch--;
+          edgeGap = (edgeLen - nStitch * targetW) / (nStitch + 1);
+        }
+        // If gap is very large, try increasing stitches
+        while (edgeGap > spacing * 2.5 && nStitch < 50) {
+          nStitch++;
+          edgeGap = (edgeLen - nStitch * targetW) / (nStitch + 1);
+        }
+        var stitchW = targetW;
+        // Ensure gap is positive
+        if (edgeGap < 0) { stitchW = (edgeLen - (nStitch + 1) * spacing * 0.5) / nStitch; edgeGap = spacing * 0.5; }
+
+        // Place stitch rects along the edge
+        var dx = seg.ex - seg.sx, dy = seg.ey - seg.sy;
+        var len = Math.sqrt(dx * dx + dy * dy) || 1;
+        var ux = dx / len, uy = dy / len;
+        for (var si = 0; si < nStitch; si++) {
+          var center = edgeGap + stitchW / 2 + si * (stitchW + edgeGap);
+          var cx = seg.sx + ux * center, cy = seg.sy + uy * center;
+          var rot = isVert ? 90 : 0;
+          var ln = '<rect x="' + F(cx - stitchW / 2) + '" y="' + F(cy - half) + '" width="' + F(stitchW) + '" height="' + size + '" fill="' + color + '"';
+          if (rot !== 0) ln += ' transform="rotate(' + rot + ',' + F(cx) + ',' + F(cy) + ')"';
+          shapes += ln + '/>';
+        }
       }
       return { svg: shapes, innerEdge: innerEdge };
     }
 
-    // Stitch dot/square: walk corner regions then edge regions
-    for (var ci = 0; ci < regions.corners.length; ci++) {
-      var pts = SvgRenderer._walkRegion(regions.corners[ci], step);
-      for (var i = 0; i < pts.length; i++) {
-        addShape(pts[i].x, pts[i].y, pts[i].angle, pts[i].rotDeg);
+    // Stitch square: center-outward corners (square at vertex first), _walkRegion edges
+    // Stitch circle: _walkRegion for both (circles are symmetric, overlaps invisible)
+    if (shapeType === 'square') {
+      for (var ci = 0; ci < regions.corners.length; ci++) {
+        var cReg = regions.corners[ci];
+        if (cReg.totalLength <= 0) continue;
+        var armLen = cReg.totalLength / 2;
+        var mid = armLen;
+        // Fixed 4 squares per arm, cap size to ensure gap
+        var nSq = 4;
+        var cornerStep = armLen / (nSq - 1);
+        var cSqSz = Math.min(size, cornerStep * 0.85);
+        var cSqH = cSqSz / 2;
+        var bSkip = cSqH;
+        for (var ai = 0; ai < nSq; ai++) {
+          var d1 = mid - ai * cornerStep;
+          if (d1 >= bSkip) {
+            var pt = pointAtDist(cReg, d1);
+            if (pt) {
+              var rot = pt.rotDeg || 0;
+              shapes += '<rect x="' + (pt.x - cSqH).toFixed(2) + '" y="' + (pt.y - cSqH).toFixed(2) + '" width="' + cSqSz.toFixed(2) + '" height="' + cSqSz.toFixed(2) + '" fill="' + color + '"' +
+                (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + pt.x.toFixed(2) + ',' + pt.y.toFixed(2) + ')"' : '') + '/>';
+            }
+          }
+          if (ai > 0) {
+            var d2 = mid + ai * cornerStep;
+            if (d2 <= cReg.totalLength - bSkip) {
+              var pt = pointAtDist(cReg, d2);
+              if (pt) {
+                var rot = pt.rotDeg || 0;
+                shapes += '<rect x="' + (pt.x - cSqH).toFixed(2) + '" y="' + (pt.y - cSqH).toFixed(2) + '" width="' + cSqSz.toFixed(2) + '" height="' + cSqSz.toFixed(2) + '" fill="' + color + '"' +
+                  (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + pt.x.toFixed(2) + ',' + pt.y.toFixed(2) + ')"' : '') + '/>';
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Stitch circle: _walkRegion (symmetric, no overlap issues)
+      for (var ci = 0; ci < regions.corners.length; ci++) {
+        var pts = SvgRenderer._walkRegion(regions.corners[ci], step);
+        for (var i = 0; i < pts.length; i++) addShape(pts[i].x, pts[i].y, pts[i].angle, pts[i].rotDeg);
       }
     }
+    // Edges: _walkRegion for both square and circle
     for (var ei = 0; ei < regions.edges.length; ei++) {
       var pts = SvgRenderer._walkRegion(regions.edges[ei], step);
       for (var i = 0; i < pts.length; i++) {

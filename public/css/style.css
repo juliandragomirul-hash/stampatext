@@ -1010,8 +1010,6 @@ body.gallery-active .stamp-hero-input-wrapper {
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
   margin-top: 0.2rem;
   min-width: 160px;
-  max-height: 320px;
-  overflow-y: auto;
 }
 .filter-bar-font-list.open {
   display: flex;
