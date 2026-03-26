@@ -1125,79 +1125,64 @@ const SvgRenderer = {
       return null;
     }
 
-    // Stitch line: precise geometric layout — squares at corners, lines on edges
+    // Stitch line: squares at corners, lines on edges — unified gap
     if (shapeType === 'line') {
       var F = function(n) { return n.toFixed(2); };
+      var sqSize = size;
+      var sqHalf = sqSize / 2;
+      var gap = spacing;
+      var stride = sqSize + gap;
 
-      // ---- CORNERS: squares from vertex outward, equal on both arms ----
+      // ---- CORNERS: squares from vertex outward, dynamic count ----
       for (var ci = 0; ci < regions.corners.length; ci++) {
         var cReg = regions.corners[ci];
         if (cReg.totalLength <= 0) continue;
         var armLen = cReg.totalLength / 2;
-        var mid = armLen; // vertex = midpoint of corner region
-        // N squares per arm (including the shared vertex square)
-        // Fixed 4 squares per arm for consistent corners across all fonts
-        var nSq = 4;
-        var cornerStep = armLen / (nSq - 1);
-        var cSqSize = Math.min(size, cornerStep * 0.85); // cap to ensure gap
-        var cSqHalf = cSqSize / 2;
-        var bSkipLine = cSqHalf;
+        var mid = armLen;
+        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / stride) + 1);
+        var cornerStride = (nSq > 1) ? (armLen - sqHalf) / (nSq - 1) : 0;
         for (var ai = 0; ai < nSq; ai++) {
-          var d1 = mid - ai * cornerStep;
-          if (d1 >= bSkipLine) {
-            var pt = pointAtDist(cReg, d1);
-            if (pt) {
-              var rot = pt.rotDeg || 0;
-              shapes += '<rect x="' + F(pt.x - cSqHalf) + '" y="' + F(pt.y - cSqHalf) + '" width="' + F(cSqSize) + '" height="' + F(cSqSize) + '" fill="' + color + '"' +
-                (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + F(pt.x) + ',' + F(pt.y) + ')"' : '') + '/>';
-            }
+          var d1 = mid - ai * cornerStride;
+          var pt = pointAtDist(cReg, d1);
+          if (pt) {
+            var rot = pt.rotDeg || 0;
+            shapes += '<rect x="' + F(pt.x - sqHalf) + '" y="' + F(pt.y - sqHalf) + '" width="' + F(sqSize) + '" height="' + F(sqSize) + '" fill="' + color + '"' +
+              (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + F(pt.x) + ',' + F(pt.y) + ')"' : '') + '/>';
           }
           if (ai > 0) {
-            var d2 = mid + ai * cornerStep;
-            if (d2 <= cReg.totalLength - bSkipLine) {
-              var pt = pointAtDist(cReg, d2);
-              if (pt) {
-                var rot = pt.rotDeg || 0;
-                shapes += '<rect x="' + F(pt.x - cSqHalf) + '" y="' + F(pt.y - cSqHalf) + '" width="' + F(cSqSize) + '" height="' + F(cSqSize) + '" fill="' + color + '"' +
-                  (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + F(pt.x) + ',' + F(pt.y) + ')"' : '') + '/>';
-              }
+            var d2 = mid + ai * cornerStride;
+            var pt2 = pointAtDist(cReg, d2);
+            if (pt2) {
+              var rot2 = pt2.rotDeg || 0;
+              shapes += '<rect x="' + F(pt2.x - sqHalf) + '" y="' + F(pt2.y - sqHalf) + '" width="' + F(sqSize) + '" height="' + F(sqSize) + '" fill="' + color + '"' +
+                (rot2 !== 0 ? ' transform="rotate(' + rot2.toFixed(1) + ',' + F(pt2.x) + ',' + F(pt2.y) + ')"' : '') + '/>';
             }
           }
         }
       }
 
-      // ---- EDGES: stitch lines, starts and ends with gap ----
+      // ---- EDGES: stitch lines, gap at both ends matching corner squares ----
       for (var ei = 0; ei < regions.edges.length; ei++) {
         var edgeReg = regions.edges[ei];
         var edgeLen = edgeReg.totalLength;
         if (edgeLen <= 0 || !edgeReg.segments.length) continue;
-        var seg = edgeReg.segments[0]; // always a single straight segment
+        var seg = edgeReg.segments[0];
         var isVert = (seg.type === 'v');
-
-        // Calculate M stitches with even gaps, starting and ending with a gap
+        var available = edgeLen - 2 * gap;
+        if (available <= 0) continue;
         var targetW = dashLen * 0.6;
-        var nStitch = Math.max(1, Math.round(edgeLen / (targetW + spacing)));
-        var edgeGap = (edgeLen - nStitch * targetW) / (nStitch + 1);
-        // If gap is too small, reduce stitches
-        while (edgeGap < spacing * 0.3 && nStitch > 1) {
+        var nStitch = Math.max(1, Math.round((available + gap) / (targetW + gap)));
+        var stitchW = (available - (nStitch - 1) * gap) / nStitch;
+        while (stitchW < sqSize && nStitch > 1) {
           nStitch--;
-          edgeGap = (edgeLen - nStitch * targetW) / (nStitch + 1);
+          stitchW = (available - (nStitch - 1) * gap) / nStitch;
         }
-        // If gap is very large, try increasing stitches
-        while (edgeGap > spacing * 2.5 && nStitch < 50) {
-          nStitch++;
-          edgeGap = (edgeLen - nStitch * targetW) / (nStitch + 1);
-        }
-        var stitchW = targetW;
-        // Ensure gap is positive
-        if (edgeGap < 0) { stitchW = (edgeLen - (nStitch + 1) * spacing * 0.5) / nStitch; edgeGap = spacing * 0.5; }
-
-        // Place stitch rects along the edge
+        if (stitchW <= 0) continue;
         var dx = seg.ex - seg.sx, dy = seg.ey - seg.sy;
         var len = Math.sqrt(dx * dx + dy * dy) || 1;
         var ux = dx / len, uy = dy / len;
         for (var si = 0; si < nStitch; si++) {
-          var center = edgeGap + stitchW / 2 + si * (stitchW + edgeGap);
+          var center = gap + stitchW / 2 + si * (stitchW + gap);
           var cx = seg.sx + ux * center, cy = seg.sy + uy * center;
           var rot = isVert ? 90 : 0;
           var ln = '<rect x="' + F(cx - stitchW / 2) + '" y="' + F(cy - half) + '" width="' + F(stitchW) + '" height="' + size + '" fill="' + color + '"';
@@ -1208,55 +1193,89 @@ const SvgRenderer = {
       return { svg: shapes, innerEdge: innerEdge };
     }
 
-    // Stitch square: center-outward corners (square at vertex first), _walkRegion edges
-    // Stitch circle: _walkRegion for both (circles are symmetric, overlaps invisible)
+    // Stitch square: unified corners + manual edge placement
     if (shapeType === 'square') {
+      var sqSize = size;
+      var sqHalf = sqSize / 2;
+      var gap = spacing;
+      var stride = sqSize + gap;
+
+      // ---- CORNERS: squares from vertex outward, dynamic count ----
       for (var ci = 0; ci < regions.corners.length; ci++) {
         var cReg = regions.corners[ci];
         if (cReg.totalLength <= 0) continue;
         var armLen = cReg.totalLength / 2;
         var mid = armLen;
-        // Fixed 4 squares per arm, cap size to ensure gap
-        var nSq = 4;
-        var cornerStep = armLen / (nSq - 1);
-        var cSqSz = Math.min(size, cornerStep * 0.85);
-        var cSqH = cSqSz / 2;
-        var bSkip = cSqH;
+        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / stride) + 1);
+        var cornerStride = (nSq > 1) ? (armLen - sqHalf) / (nSq - 1) : 0;
         for (var ai = 0; ai < nSq; ai++) {
-          var d1 = mid - ai * cornerStep;
-          if (d1 >= bSkip) {
-            var pt = pointAtDist(cReg, d1);
-            if (pt) {
-              var rot = pt.rotDeg || 0;
-              shapes += '<rect x="' + (pt.x - cSqH).toFixed(2) + '" y="' + (pt.y - cSqH).toFixed(2) + '" width="' + cSqSz.toFixed(2) + '" height="' + cSqSz.toFixed(2) + '" fill="' + color + '"' +
-                (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + pt.x.toFixed(2) + ',' + pt.y.toFixed(2) + ')"' : '') + '/>';
-            }
-          }
+          var d1 = mid - ai * cornerStride;
+          var pt = pointAtDist(cReg, d1);
+          if (pt) addShape(pt.x, pt.y, pt.angle, pt.rotDeg);
           if (ai > 0) {
-            var d2 = mid + ai * cornerStep;
-            if (d2 <= cReg.totalLength - bSkip) {
-              var pt = pointAtDist(cReg, d2);
-              if (pt) {
-                var rot = pt.rotDeg || 0;
-                shapes += '<rect x="' + (pt.x - cSqH).toFixed(2) + '" y="' + (pt.y - cSqH).toFixed(2) + '" width="' + cSqSz.toFixed(2) + '" height="' + cSqSz.toFixed(2) + '" fill="' + color + '"' +
-                  (rot !== 0 ? ' transform="rotate(' + rot.toFixed(1) + ',' + pt.x.toFixed(2) + ',' + pt.y.toFixed(2) + ')"' : '') + '/>';
-              }
-            }
+            var d2 = mid + ai * cornerStride;
+            var pt2 = pointAtDist(cReg, d2);
+            if (pt2) addShape(pt2.x, pt2.y, pt2.angle, pt2.rotDeg);
           }
         }
       }
-    } else {
-      // Stitch circle: _walkRegion (symmetric, no overlap issues)
-      for (var ci = 0; ci < regions.corners.length; ci++) {
-        var pts = SvgRenderer._walkRegion(regions.corners[ci], step);
-        for (var i = 0; i < pts.length; i++) addShape(pts[i].x, pts[i].y, pts[i].angle, pts[i].rotDeg);
+      // ---- EDGES: squares with gap at both ends ----
+      for (var ei = 0; ei < regions.edges.length; ei++) {
+        var edgeReg = regions.edges[ei];
+        var edgeLen = edgeReg.totalLength;
+        if (edgeLen <= 0 || !edgeReg.segments.length) continue;
+        var available = edgeLen - 2 * gap;
+        if (available <= 0) continue;
+        var nEdgeSq = Math.max(1, Math.round((available + gap) / stride));
+        var edgeStride = (nEdgeSq > 1) ? (available - sqSize) / (nEdgeSq - 1) : 0;
+        var startOff = (nEdgeSq === 1) ? gap + available / 2 : gap + sqHalf;
+        for (var si = 0; si < nEdgeSq; si++) {
+          var dist = startOff + si * edgeStride;
+          var pt = pointAtDist(edgeReg, dist);
+          if (pt) addShape(pt.x, pt.y, pt.angle, pt.rotDeg);
+        }
       }
-    }
-    // Edges: _walkRegion for both square and circle
-    for (var ei = 0; ei < regions.edges.length; ei++) {
-      var pts = SvgRenderer._walkRegion(regions.edges[ei], step);
-      for (var i = 0; i < pts.length; i++) {
-        addShape(pts[i].x, pts[i].y, pts[i].angle, pts[i].rotDeg);
+    } else {
+      // Stitch circle: same unified corner + edge approach as square
+      var sqSize = size;
+      var sqHalf = sqSize / 2;
+      var gap = spacing;
+      var stride = sqSize + gap;
+
+      // ---- CORNERS: circles from vertex outward, dynamic count ----
+      for (var ci = 0; ci < regions.corners.length; ci++) {
+        var cReg = regions.corners[ci];
+        if (cReg.totalLength <= 0) continue;
+        var armLen = cReg.totalLength / 2;
+        var mid = armLen;
+        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / stride) + 1);
+        var cornerStride = (nSq > 1) ? (armLen - sqHalf) / (nSq - 1) : 0;
+        for (var ai = 0; ai < nSq; ai++) {
+          var d1 = mid - ai * cornerStride;
+          var pt = pointAtDist(cReg, d1);
+          if (pt) addShape(pt.x, pt.y, pt.angle, pt.rotDeg);
+          if (ai > 0) {
+            var d2 = mid + ai * cornerStride;
+            var pt2 = pointAtDist(cReg, d2);
+            if (pt2) addShape(pt2.x, pt2.y, pt2.angle, pt2.rotDeg);
+          }
+        }
+      }
+      // ---- EDGES: circles with gap at both ends ----
+      for (var ei = 0; ei < regions.edges.length; ei++) {
+        var edgeReg = regions.edges[ei];
+        var edgeLen = edgeReg.totalLength;
+        if (edgeLen <= 0 || !edgeReg.segments.length) continue;
+        var available = edgeLen - 2 * gap;
+        if (available <= 0) continue;
+        var nEdgeSq = Math.max(1, Math.round((available + gap) / stride));
+        var edgeStride = (nEdgeSq > 1) ? (available - sqSize) / (nEdgeSq - 1) : 0;
+        var startOff = (nEdgeSq === 1) ? gap + available / 2 : gap + sqHalf;
+        for (var si = 0; si < nEdgeSq; si++) {
+          var dist = startOff + si * edgeStride;
+          var pt = pointAtDist(edgeReg, dist);
+          if (pt) addShape(pt.x, pt.y, pt.angle, pt.rotDeg);
+        }
       }
     }
     return { svg: shapes, innerEdge: innerEdge };
@@ -2626,38 +2645,22 @@ const SvgRenderer = {
     var totalInset;
 
     if (frameMode === 'double') {
-      // --- Exact addDoubleFrame geometry (addDoubleFrame lines 3818-3832) ---
-      var innerSw = Math.max(4, Math.round(sw * 0.24));
-      if (borderFlags.brush) innerSw = Math.max(6, Math.round(sw * 0.5));
-      if (borderFlags.stitch && !isFull) innerSw = Math.max(6, Math.round(sw * 0.3));
-      var frameInset;
-      if (!borderFlags.stitch && isFull) {
-        frameInset = sw / 2 + innerSw / 2;
+      // Unified formula — mirrors addDoubleFrame's inset calculation exactly
+      var innerSw = Math.max(6, Math.round(sw * 0.36));
+      // Predict innerEdge (same values border generators store as data-border-inner-edge)
+      var predictedInnerEdge;
+      if (borderFlags.stitch) predictedInnerEdge = 0;            // shapes sit on rect edge, no intrusion
+      else if (borderFlags.wavy) {
+        var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 10;
+        predictedInnerEdge = depth + 20;                          // depth + wavySw/2 (wavySw=40)
+      } else if (borderFlags.border) {
+        predictedInnerEdge = borderFlags.borderRadius || 10;      // white shape radius
       } else {
-        frameInset = sw / 2 + innerSw * 1.5;
+        predictedInnerEdge = sw / 2;                              // plain, filter, perfLine
       }
-      // Stitch shapes extend outward — inner rect needs offset from rect edge
-      // Filled stitch needs more inset for the visible inner plain border
-      if (borderFlags.stitch) frameInset = isFull ? (sw / 2 + innerSw / 2 + 4) : (innerSw / 2 + 2);
-      if (borderFlags.border) {
-        if (isFull) {
-          frameInset = sw * 0.3;
-        } else {
-          // Outlined zigzag: larger inset to clear shape intrusion (shapes extend sw/2 inward)
-          frameInset = sw * 0.65;
-          frameInset += Math.max(8, Math.round(sw * 0.15)); // proportional white gap
-        }
-      }
-      if (borderFlags.brush) frameInset = Math.max(frameInset, 35);
-      if (borderFlags.filter && !isFull) frameInset = Math.max(frameInset, sw * 0.95);
-      // Filled filter (torn edge): inner rect eats into stroke — minimal inset
-      if (borderFlags.filter && isFull) frameInset = innerSw / 2 + 4;
-      if (borderFlags.wavy) {
-        var wavySw = 40; // hardcoded in _generateWavyBorder
-        frameInset = Math.max(frameInset, wavySw * 1.15 + innerSw / 2);
-      }
-      // Interior = frameInset (to inner rect center) + innerSw/2 (inner stroke paints inward)
-      totalInset = frameInset + innerSw / 2;
+      var whiteGap = isFull ? 2 : innerSw;
+      // inset to inner rect center + innerSw/2 for text inside inner stroke
+      totalInset = predictedInnerEdge + whiteGap + innerSw;
 
     } else {
       // --- Single frame + split (split adds thin white stroke inside outer border,
@@ -3409,7 +3412,7 @@ const SvgRenderer = {
         rawOuterSw = 50;
       }
       // Supplement hasDecorativeBorder from borderFlags (DB may provide border type not in SVG)
-      if (!hasDecorativeBorder && (borderFlags.border || borderFlags.stitch || borderFlags.wavy || borderFlags.brush || borderFlags.filter)) {
+      if (!hasDecorativeBorder && (borderFlags.border || borderFlags.stitch || borderFlags.wavy || borderFlags.brush || borderFlags.filter || borderFlags.perfLine)) {
         hasDecorativeBorder = true;
       }
       // Per-family stroke scaling (table-based ranges)
@@ -3422,7 +3425,10 @@ const SvgRenderer = {
       var outerRectSw;
       var swMin = stampShape === 'square' ? 20 : 30;
       var swMax = stampShape === 'square' ? 200 : 75;
-      if (!hasDecorativeBorder || borderFlags.filter) {
+      if (borderFlags.perfLine) {
+        // Perf_line: stroke must contain perforations, higher minimum
+        outerRectSw = rawOuterSw > 0 ? Math.max(65, Math.min(swMax, proportionalSw * 1.5)) : 0;
+      } else if (!hasDecorativeBorder || borderFlags.filter) {
         // Plain + Torn edge
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
       } else if (borderFlags.border) {
@@ -3498,7 +3504,7 @@ const SvgRenderer = {
             if (hasX) na = na.replace(/\bx=["'][\d.\-]+["']/, 'x="' + newRectX.toFixed(2) + '"');
             if (hasY) na = na.replace(/\by=["'][\d.\-]+["']/, 'y="' + newRectY.toFixed(2) + '"');
             // Set proportional stroke-width on outer rect (plain + torn edge + zigzag)
-            if (!hasDecorativeBorder || borderFlags.filter || borderFlags.border) {
+            if (!hasDecorativeBorder || borderFlags.filter || borderFlags.border || borderFlags.perfLine) {
               na = na.replace(/stroke-width=["'][\d.]+["']/, 'stroke-width="' + outerRectSw + '"');
             }
             // Capture border shape data from outer rect
@@ -3692,14 +3698,11 @@ const SvgRenderer = {
         var plRadius = Math.max(5, Math.round(plBaseRadius * decorWeightRatio));
         if (plShape === 'diamond') plRadius = Math.min(plRadius * 1.5, outerRectSw / 2);
         var plSpacing = plRadius * plSpacingMult;
-        var plSmallR = plRadius * 0.65;
-        var plSmallStep = plRadius * 1.5;
         var plCornerType = cornerType || 'straight';
         var plTrace = SvgRenderer._generateTrace(newRectX, newRectY, newRectWidth, newRectHeight, plCornerType);
         var plRegions = SvgRenderer._splitTraceRegions(plTrace);
         var plHtml = '';
 
-        // Corner regions: center-outward from exact vertex, graduated sizing
         function plPointAtDist(region, dist) {
           var cumDist = 0;
           for (var si = 0; si < region.segments.length; si++) {
@@ -3718,34 +3721,56 @@ const SvgRenderer = {
           return null;
         }
 
+        // Corner regions: vertex-centered, dynamic count, full plRadius
         for (var pci = 0; pci < plRegions.corners.length; pci++) {
           var cReg = plRegions.corners[pci];
           if (cReg.totalLength <= 0) continue;
-          var mid = cReg.totalLength / 2;
-          // Build distances: center first, then outward equally
-          var dists = [mid];
-          for (var d = plSmallStep; mid - d >= 0; d += plSmallStep) dists.push(mid - d);
-          for (var d = plSmallStep; mid + d <= cReg.totalLength; d += plSmallStep) dists.push(mid + d);
-          for (var di = 0; di < dists.length; di++) {
-            var pt = plPointAtDist(cReg, dists[di]);
-            if (!pt) continue;
-            // Graduated: smallest at center (mid), larger toward edges
-            var distFromCenter = Math.abs(dists[di] - mid) / (mid || 1); // 0 at center, 1 at edges
-            var r = plSmallR + (plRadius - plSmallR) * distFromCenter * 0.5;
-            plHtml += SvgRenderer._borderShape(plShape, pt.x, pt.y, r, pt.rotDeg);
+          var armLen = cReg.totalLength / 2;
+          var mid = armLen;
+          var nSq = (armLen < plRadius) ? 1 : Math.max(2, Math.round((armLen - plRadius) / plSpacing) + 1);
+          var cornerStride = (nSq > 1) ? (armLen - plRadius) / (nSq - 1) : 0;
+          for (var ai = 0; ai < nSq; ai++) {
+            var d1 = mid - ai * cornerStride;
+            var pt = plPointAtDist(cReg, d1);
+            if (pt) plHtml += SvgRenderer._borderShape(plShape, pt.x, pt.y, plRadius, pt.rotDeg);
+            if (ai > 0) {
+              var d2 = mid + ai * cornerStride;
+              var pt2 = plPointAtDist(cReg, d2);
+              if (pt2) plHtml += SvgRenderer._borderShape(plShape, pt2.x, pt2.y, plRadius, pt2.rotDeg);
+            }
           }
         }
 
-        // Edge regions: full-size shapes at normal spacing
+        // Edge regions: full-size shapes, gap at both ends, uniform stride from widest edge
+        var plGap = Math.max(0, plSpacing - plRadius * 2);
+        var refStride = plSpacing;
         for (var pei = 0; pei < plRegions.edges.length; pei++) {
-          var pts = SvgRenderer._walkRegion(plRegions.edges[pei], plSpacing);
-          for (var pi = 0; pi < pts.length; pi++) {
-            plHtml += SvgRenderer._borderShape(plShape, pts[pi].x, pts[pi].y, plRadius, pts[pi].rotDeg);
+          var el = plRegions.edges[pei].totalLength;
+          if (el <= 0) continue;
+          var av = el - 2 * plGap;
+          if (av <= plRadius * 2) continue;
+          var rn = Math.max(2, Math.round((av + plGap) / plSpacing));
+          refStride = (av - plRadius * 2) / (rn - 1);
+          break;
+        }
+        for (var pei = 0; pei < plRegions.edges.length; pei++) {
+          var edgeReg = plRegions.edges[pei];
+          var edgeLen = edgeReg.totalLength;
+          if (edgeLen <= 0 || !edgeReg.segments.length) continue;
+          var available = edgeLen - 2 * plGap;
+          if (available <= 0) continue;
+          var nEdge = Math.max(1, Math.round((available - plRadius * 2) / refStride) + 1);
+          var edgeStride = (nEdge > 1) ? (available - plRadius * 2) / (nEdge - 1) : 0;
+          var startOff = (nEdge === 1) ? plGap + available / 2 : plGap + plRadius;
+          for (var si = 0; si < nEdge; si++) {
+            var dist = startOff + si * edgeStride;
+            var pt = plPointAtDist(edgeReg, dist);
+            if (pt) plHtml += SvgRenderer._borderShape(plShape, pt.x, pt.y, plRadius, pt.rotDeg);
           }
         }
 
         if (plHtml) result = result.replace(/<\/svg>/, plHtml + '</svg>');
-        result = result.replace(/<svg /, '<svg data-perf-line="1" ');
+        result = result.replace(/<svg /, '<svg data-perf-line="1" data-border-inner-edge="' + (outerRectSw / 2).toFixed(1) + '" ');
       }
 
       // ---- BORDER FILTER (ripped paper etc.) ----
@@ -5692,23 +5717,12 @@ const SvgRenderer = {
     var propSwAttr = svgStr.match(/data-prop-sw="([\d.]+)"/);
     var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
-    // Read measured innerEdge from Pass 2 (stored as data attribute by border generators)
+    // Unified inner edge: read from data attribute (set by border generators), fallback to half stroke
     var edgeAttr = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
-    // Inner edge: distance from outer rect center to its inner pixel edge
-    // Group 1 (rect-based: plain, perforated, spaced perf, sawtooth) = osw/2 (identical outer rect)
-    // Group 2 (non-rect: stitch, wavy, brush, filter) = custom per style
-    var measuredInnerEdge;
-    if (bi.stitch)      measuredInnerEdge = -8;             // no rect stroke, pull inner rect slightly outward
-    else if (bi.wavy && bi.wavy !== 'zigzag') measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) * 0.7 : wavySw * 0.5;  // wavy: decrease gap more
-    else if (bi.wavy)   measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) * 0.85 : wavySw * 0.6;  // zigzag: decrease gap a bit
-    else if (bi.brush)  measuredInnerEdge = osw * 0.85;
-    else if (bi.filter) measuredInnerEdge = osw * 0.55;
-    else if (bi.border) measuredInnerEdge = effectiveOsw * 0.35;  // perforated/sawtooth: ornaments overlap, reduce gap
-    else                measuredInnerEdge = effectiveOsw * 0.5;   // plain: reference
+    var measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : effectiveOsw / 2;
     // White gap: outlined = innerSw (visual rhythm), filled = minimal (no white band needed)
     var whiteGap = isFull ? 2 : innerSw;
     var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
-    console.log('[FRAME-B] style=' + (bi.stitch ? 'stitch' : bi.border ? 'border:' + bi.border : bi.wavy ? 'wavy' : bi.filter ? 'filter' : 'plain') + ' edgeAttr=' + (edgeAttr ? edgeAttr[1] : 'NONE') + ' measuredInnerEdge=' + measuredInnerEdge.toFixed(1) + ' effectiveOsw=' + effectiveOsw.toFixed(1) + ' innerSw=' + innerSw + ' whiteGap=' + whiteGap + ' inset=' + inset.toFixed(1));
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
 
