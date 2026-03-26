@@ -845,8 +845,8 @@ const SvgRenderer = {
     var shapes = '';
     var spacing = radius * (spacingMult || 2.5);
     var trace = SvgRenderer._generateTrace(x, y, w, h, cornerType || 'straight');
-    // innerEdge: shapes centered on rect edge extend inward by radius
-    var innerEdge = radius;
+    // innerEdge: positive pushes inner rect further from border shapes
+    var innerEdge = 8;
 
     if (shape === 'lined') {
       // Lined: top + bottom only
@@ -1068,8 +1068,8 @@ const SvgRenderer = {
     var shapes = '';
     var half = size / 2;
     // Stitch shapes sit on expanded rect (outward from original rect).
-    // innerEdge = 0 means decoration doesn't intrude past original rect edge.
-    var innerEdge = 0;
+    // Negative innerEdge pulls double-frame inner rect closer to stitch shapes.
+    var innerEdge = -10;
     var dashLen = (shapeType === 'line') ? size * 3.5 : size;
     var step = spacing + dashLen;
     var isLined = (shape === 'lined');
@@ -2649,12 +2649,12 @@ const SvgRenderer = {
       var innerSw = Math.max(6, Math.round(sw * 0.36));
       // Predict innerEdge (same values border generators store as data-border-inner-edge)
       var predictedInnerEdge;
-      if (borderFlags.stitch) predictedInnerEdge = 0;            // shapes sit on rect edge, no intrusion
+      if (borderFlags.stitch) predictedInnerEdge = -10;           // shapes sit on rect edge, pull inner rect closer
       else if (borderFlags.wavy) {
         var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 10;
         predictedInnerEdge = depth + 20;                          // depth + wavySw/2 (wavySw=40)
       } else if (borderFlags.border) {
-        predictedInnerEdge = borderFlags.borderRadius || 10;      // white shape radius
+        predictedInnerEdge = Math.max(15, sw / 2.8);                         // undo 1.4x scaling to match plain-equivalent
       } else {
         predictedInnerEdge = sw / 2;                              // plain, filter, perfLine
       }
@@ -3038,8 +3038,10 @@ const SvgRenderer = {
 
       // Recompute text zone with actual stroke for rect padding (clamped per-family)
       var actualSw = capStroke ? Math.max(30, Math.min(75, proportionalSw)) : estStrokeW;
-      // Zigzag: use proportional stroke (same 30-75 range applied to outerRectSw below)
-      if (borderFlags.border) actualSw = Math.max(30, Math.min(75, proportionalSw));
+      // Border (sawtooth/perforated): match actual outerRectSw formula
+      if (borderFlags.border) actualSw = Math.max(60, Math.min(75, proportionalSw * 1.4));
+      // Perf_line: match its outerRectSw formula
+      if (borderFlags.perfLine) actualSw = Math.max(65, Math.min(75, proportionalSw * 1.5));
       // Pass actual fillType so outlined templates get correct (larger) inset for double frame
       var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, fillType || 'full');
       var hPadding = hInnerGap + actualInset;
@@ -3432,8 +3434,8 @@ const SvgRenderer = {
         // Plain + Torn edge
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
       } else if (borderFlags.border) {
-        // Zigzag/perforated
-        outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
+        // Sawtooth/perforated: thicker stroke to contain white shapes
+        outerRectSw = rawOuterSw > 0 ? Math.max(60, Math.min(swMax, proportionalSw * 1.4)) : 0;
       } else {
         // Stitch, wavy, brush: keep raw stroke, scale decorative elements instead
         outerRectSw = rawOuterSw;
@@ -3629,9 +3631,7 @@ const SvgRenderer = {
           bShape, bRadius, bSpacingMult, stampShape, cornerType
         );
         var shapesHtml = shapesResult.svg;
-        var borderInnerEdge = shapesResult.innerEdge;
         result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
-        result = result.replace(/<svg /, '<svg data-border-inner-edge="' + borderInnerEdge.toFixed(1) + '" ');
       }
 
       // ---- STITCH BORDER (line/square/circle shapes) ----
@@ -5718,7 +5718,7 @@ const SvgRenderer = {
     var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
     // Unified inner edge: read from data attribute (set by border generators), fallback to half stroke
-    var edgeAttr = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
+    var edgeAttr = svgStr.match(/data-border-inner-edge="(-?[\d.]+)"/);
     var measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : effectiveOsw / 2;
     // White gap: outlined = innerSw (visual rhythm), filled = minimal (no white band needed)
     var whiteGap = isFull ? 2 : innerSw;
