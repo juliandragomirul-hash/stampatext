@@ -465,6 +465,18 @@ const Gallery = {
           // Random color per variant
           var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
 
+          // Random fill: 40% chance of filled
+          var variantFill = Math.random() < 0.4 ? 'full' : 'empty';
+
+          // Random corner: pick from available types (skip mixed for lined)
+          var cornerOptions = stampShape === 'lined' ? ['straight'] :
+            ['straight', 'soft_round', 'medium_round', 'strong_round', 'mixed_top_straight', 'mixed_top_round', 'mixed_diag_down', 'mixed_diag_up'];
+          var variantCorner = cornerOptions[Math.floor(Math.random() * cornerOptions.length)];
+
+          // Random tilt: 70% none, 15% slight, 15% moderate
+          var tiltRoll = Math.random();
+          var variantTilt = tiltRoll < 0.7 ? 0 : (tiltRoll < 0.85 ? -7 : -15);
+
           // Per-variant font sizing: re-apply autoFit with frame-specific interior
           var variantSvg = base.svgString;
 
@@ -519,7 +531,7 @@ const Gallery = {
               var origSx = zi.originalScaleX || 1;
               variantSvg = await SvgRenderer.autoFitTextInString(
                 variantSvg, zi.idx, zi.boundingWidth, zi.fontSize, origSx,
-                frameMode, base.fillType || 'empty', base.cornerType || 'straight',
+                frameMode, variantFill, variantCorner,
                 null, stampShape
               );
             } catch (flErr) {
@@ -546,8 +558,8 @@ const Gallery = {
                 base.autoFitZoneInfo.originalScaleX,
                 frameMode,
                 variantMeasurements,
-                base.fillType,
-                base.cornerType,
+                variantFill,
+                variantCorner,
                 base.borderType,
                 null,
                 stampShape
@@ -565,7 +577,14 @@ const Gallery = {
             if (stampShape === 'lined') {
               colorized = SvgRenderer.convertToLined(colorized);
             } else {
-              colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
+              colorized = SvgRenderer.applyCornerRadius(colorized, variantCorner);
+            }
+            // Apply fill conversion
+            if (variantFill === 'full') {
+              var beforeFill = colorized.match(/fill="none"/i);
+              colorized = SvgRenderer.convertFill(colorized, 'full');
+              var afterFill = colorized.match(/fill="none"/i);
+              if (beforeFill && afterFill) console.warn('[FILL-DEBUG] convertFill did NOT change fill="none" for', base.name);
             }
             cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
           } catch (err) {
@@ -574,6 +593,8 @@ const Gallery = {
           }
 
           var framed = cropped;
+          // Set variant fill on border info so addDoubleFrame/addSplitBorder detect it
+          bi.fillType = variantFill;
           try {
             if (frameMode === 'double') {
               framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
@@ -590,15 +611,21 @@ const Gallery = {
             framed = SvgRenderer.addSquareFillerLines(framed, currentRowMode);
           }
 
+          // Apply tilt
+          var tilted = framed;
+          if (variantTilt !== 0) {
+            try { tilted = SvgRenderer.applyTilt(framed, variantTilt); } catch (e) { tilted = framed; }
+          }
+
           var result = {
             templateId: base.templateId,
-            svgString: SvgRenderer.addWatermark(framed),
+            svgString: SvgRenderer.addWatermark(tilted),
             shape: base.shape,
             objectType: base.objectType,
             frameType: base.frameType,
             borderType: base.borderType,
-            fillType: base.fillType,
-            cornerType: base.cornerType,
+            fillType: variantFill,
+            cornerType: variantCorner,
             colors: base.colors,
             width: base.width,
             height: base.height,
@@ -610,7 +637,7 @@ const Gallery = {
             appliedShape: stampShape,
             appliedRowMode: currentRowMode,
             appliedForceLines: appliedForceLines,
-            appliedTilt: 0,
+            appliedTilt: variantTilt,
             appliedTexture: null
           };
 

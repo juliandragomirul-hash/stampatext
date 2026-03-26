@@ -120,7 +120,7 @@
       <div class="filter-bar-group filter-bar-dropdown-group" id="product-rows-group" style="order:4;">
         <label class="filter-bar-label">Rows</label>
         <div class="filter-bar-dropdown-box" id="product-rows-toggle" style="min-width:35px">
-          <span class="filter-bar-dropdown-value" id="product-rows-value">Auto</span>
+          <span class="filter-bar-dropdown-value" id="product-rows-value">1</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-rows-list">
@@ -307,7 +307,8 @@
   <script src="/js/auth.js"></script>
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
-  <script src="/js/svg-renderer.js?v=243"></script>
+  <script src="/js/hypher-bundle.js"></script>
+  <script src="/js/svg-renderer.js?v=244"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -373,7 +374,7 @@
         var weight = FONT_WEIGHTS[fontKey] || '400';
 
         // Start from raw template, apply fill conversion, replace font-family + weight
-        var svg = convertFill(rawCleanedSvg, currentFill);
+        var svg = SvgRenderer.convertFill(rawCleanedSvg, currentFill);
         svg = svg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + fontKey + "'\"");
         svg = svg.replace(/font-weight=["'][^"']*["']/g,
@@ -779,16 +780,25 @@
       setDropdownActive('product-corner-list', currentCornerStyle, 'product-corner-value');
       document.getElementById('product-shape-value').value = currentShape;
 
-      // Show Rows dropdown: multi-word splits by words, single-word splits by syllables
+      // Rows dropdown: fixed 1-4. Multi-word: max = word count. Single-word: max = syllable count.
       var textWords = userText.trim().split(/\s+/);
+      var isSingleWord = textWords.length === 1;
+      var maxRows;
+      if (isSingleWord) {
+        var syllables = SvgRenderer._splitSyllables(userText.trim());
+        maxRows = Math.min(syllables.length, 4);
+      } else {
+        maxRows = Math.min(textWords.length, 4);
+      }
       var rowsList = document.getElementById('product-rows-list');
-      var maxRows = textWords.length >= 2 ? Math.min(textWords.length, 3) : 3;
       rowsList.innerHTML = '';
       for (var ri = 1; ri <= maxRows; ri++) {
         rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + ((currentForceLines === ri || (currentForceLines === 0 && ri === 1)) ? ' active' : '') + '" data-value="' + ri + '">' + ri + '</div>';
       }
-      if (currentForceLines === 0) currentForceLines = 0; // keep auto behavior internally
-      setDropdownActive('product-rows-list', String(currentForceLines || 1), 'product-rows-value');
+      // Clamp currentForceLines to available options
+      if (currentForceLines > maxRows) { currentForceLines = maxRows; }
+      if (currentForceLines === 0) currentForceLines = 1;
+      setDropdownActive('product-rows-list', String(currentForceLines), 'product-rows-value');
 
       updateShapeConstraints();
       updateCornerConstraints();

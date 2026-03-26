@@ -1281,6 +1281,27 @@ const SvgRenderer = {
     return { svg: shapes, innerEdge: innerEdge };
   },
 
+  convertFill(svgString, targetFill) {
+    if (targetFill === 'empty') {
+      var rectM = svgString.match(/<rect[^>]*\bfill=["']#([0-9A-Fa-f]{6})["'][^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)/);
+      if (!rectM) rectM = svgString.match(/<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*\bfill=["']#([0-9A-Fa-f]{6})["']/);
+      if (rectM) {
+        var rectColor = '#' + rectM[1];
+        svgString = svgString.replace(/(<rect[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/, '$1$2none$3$4');
+        svgString = svgString.replace(/(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])#[0-9A-Fa-f]{6}(["'])/, '$1$2none$3');
+        svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{6}(["'])/, '$1$2' + rectColor + '$3');
+        svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[Ff]{3}(["'])/, '$1$2' + rectColor + '$3');
+      }
+    } else if (targetFill === 'full') {
+      var textM = svgString.match(/<text[^>]*\bfill=["']#([0-9A-Fa-f]{3,6})["']/);
+      var fillColor = textM ? '#' + textM[1] : '#BE1E2D';
+      svgString = svgString.replace(/(<rect[^>]*)(fill=["'])none(["'])([^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width))/, '$1$2' + fillColor + '$3$4');
+      svgString = svgString.replace(/(<rect[^>]*(?:data-wavy|data-border|data-stitch|data-filter|data-brush|stroke-width)[^>]*)(fill=["'])none(["'])/, '$1$2' + fillColor + '$3');
+      svgString = svgString.replace(/(<text[^>]*)(fill=["'])#[0-9A-Fa-f]{3,6}(["'])/, '$1$2#FFFFFF$3');
+    }
+    return svgString;
+  },
+
   getDominantColor(svgString) {
     var detected = this.detectColors(svgString);
     for (var i = 0; i < detected.length; i++) {
@@ -1472,22 +1493,41 @@ const SvgRenderer = {
       return result;
     }
 
-    // Force specific line count: override maxCharsPerLine to produce desired number of lines
+    // Rows=1: never break
+    if (forceLines === 1) return [text];
+
+    var words = text.split(' ');
+    var isSingleWord = words.length === 1;
+
+    // Single word: only break when forceLines > 1, using syllable splitting
+    if (isSingleWord) {
+      if (forceLines && forceLines > 1) {
+        var syllables = this._splitSyllables(text);
+        if (syllables.length >= forceLines) {
+          return this._distributeSyllables(syllables, forceLines);
+        }
+        // Not enough syllables — return what we have
+        return syllables.length > 1 ? this._distributeSyllables(syllables, Math.min(forceLines, syllables.length)) : [text];
+      }
+      // Single word, no forceLines: never break
+      return [text];
+    }
+
+    // Multi-word: cap forceLines to word count
     if (forceLines && forceLines > 1) {
-      var words = text.split(' ');
-      if (words.length >= forceLines) {
-        // Distribute words across forceLines rows as evenly as possible
+      var effectiveLines = Math.min(forceLines, words.length);
+      if (words.length >= effectiveLines) {
+        // Distribute words across effectiveLines rows as evenly as possible
         var lines = [];
-        var wordsPerLine = Math.ceil(words.length / forceLines);
+        var wordsPerLine = Math.ceil(words.length / effectiveLines);
         for (var i = 0; i < words.length; i += wordsPerLine) {
           lines.push(words.slice(i, i + wordsPerLine).join(' '));
         }
-        // Balance: try to minimize difference between longest and shortest line
-        if (lines.length === forceLines) return lines;
+        if (lines.length === effectiveLines) return lines;
       }
-      // Not enough words for forceLines — fall through to natural wrapping
     }
 
+    // Multi-word natural wrapping (16/20 char limit)
     var max = this._getMaxCharsPerLine(text.length);
     if (text.length <= max && !forceLines) return [text];
 
@@ -1637,54 +1677,58 @@ const SvgRenderer = {
    * @returns {string[]} - array of syllables
    */
   _splitSyllables(word) {
-    word = word.toLowerCase();
-    if (word.length <= 3) return [word];
+    if (word.length <= 2) return [word];
 
-    var vowels = 'aeiouyàáâãäåèéêëìíîïòóôõöùúûüýÿ';
-    var syllables = [];
-    var current = '';
-
-    for (var i = 0; i < word.length; i++) {
-      current += word[i];
-      var isVowel = vowels.indexOf(word[i]) >= 0;
-      var nextIsVowel = (i + 1 < word.length) && vowels.indexOf(word[i + 1]) >= 0;
-      var nextIsConsonant = (i + 1 < word.length) && vowels.indexOf(word[i + 1]) < 0;
-
-      // Don't split if current syllable is too short
-      if (current.length < 2) continue;
-      // Don't split if remaining is too short
-      if (word.length - i - 1 < 2) continue;
-
-      // Split after a vowel followed by a consonant-vowel pattern (CV)
-      if (isVowel && nextIsConsonant) {
-        // Check if there's a vowel after the next consonant(s)
-        var hasFollowingVowel = false;
-        for (var j = i + 1; j < word.length; j++) {
-          if (vowels.indexOf(word[j]) >= 0) { hasFollowingVowel = true; break; }
+    // Heuristic: vowel-consonant + vowel-vowel splitting (Romanian + Latin scripts)
+    function heuristicSplit(w) {
+      var vowels = 'aeiouyăâîàáâãäåèéêëìíîïòóôõöùúûüýÿ';
+      var syllables = [];
+      var current = '';
+      var lower = w.toLowerCase();
+      for (var i = 0; i < lower.length; i++) {
+        current += w[i];
+        if (current.length < 2 || lower.length - i - 1 < 2) continue;
+        var isV = vowels.indexOf(lower[i]) >= 0;
+        var nextIsV = (i + 1 < lower.length) && vowels.indexOf(lower[i + 1]) >= 0;
+        var nextIsC = (i + 1 < lower.length) && !nextIsV;
+        var shouldBreak = false;
+        if (isV && nextIsC) {
+          // V-CV: break after vowel before consonant (if vowel follows later)
+          for (var j = i + 1; j < lower.length; j++) {
+            if (vowels.indexOf(lower[j]) >= 0) { shouldBreak = true; break; }
+          }
+        } else if (isV && nextIsV) {
+          // V-V: break between adjacent vowels (handles Romanian ia, ea splits)
+          shouldBreak = true;
         }
-        if (hasFollowingVowel && current.length >= 2) {
-          syllables.push(current);
-          current = '';
-        }
+        if (shouldBreak) { syllables.push(current); current = ''; }
       }
-    }
-    if (current) {
-      if (syllables.length > 0 && current.length < 2) {
-        syllables[syllables.length - 1] += current;
-      } else {
-        syllables.push(current);
+      if (current) {
+        if (syllables.length > 0 && current.length < 2) syllables[syllables.length - 1] += current;
+        else syllables.push(current);
       }
+      return syllables.length > 0 ? syllables : [w];
     }
-    // Merge very short syllables
-    var merged = [];
-    for (var k = 0; k < syllables.length; k++) {
-      if (merged.length > 0 && syllables[k].length < 2) {
-        merged[merged.length - 1] += syllables[k];
-      } else {
-        merged.push(syllables[k]);
+
+    // Try Hypher (accurate for EN/FR/DE/ES/IT/PT)
+    var hypherResult = null;
+    if (typeof HypherSplit === 'function') {
+      hypherResult = HypherSplit(word);
+      // Merge very short fragments
+      var merged = [];
+      for (var k = 0; k < hypherResult.length; k++) {
+        if (merged.length > 0 && hypherResult[k].length < 2) merged[merged.length - 1] += hypherResult[k];
+        else merged.push(hypherResult[k]);
       }
+      hypherResult = merged.length > 0 ? merged : [word];
     }
-    return merged.length > 0 ? merged : [word];
+
+    // Try heuristic (better for Romanian and unsupported languages)
+    var heurResult = heuristicSplit(word);
+
+    // Return the split with more syllables (gives user more Rows options)
+    if (hypherResult && hypherResult.length >= heurResult.length) return hypherResult;
+    return heurResult;
   },
 
   /**
