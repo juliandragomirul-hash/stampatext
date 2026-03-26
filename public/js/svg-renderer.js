@@ -2400,7 +2400,7 @@ const SvgRenderer = {
   // Measurement cache: avoids re-creating iframe for same template with different frameMode
   _autoFitMeasureCache: null,
 
-  async autoFitTextInString(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, fillType, cornerType, borderType, stampShape) {
+  async autoFitTextInString(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, fillType, cornerType, borderType, stampShape, rowsMode) {
     originalScaleX = originalScaleX || 1;
     frameMode = frameMode || 'single';
 
@@ -2432,7 +2432,7 @@ const SvgRenderer = {
     }
     var cacheKey = svgString.length + '_' + textIndex + '_' + cacheFont + '_' + cacheTextContent.substring(0, 40) + '_' + svgString.slice(0, 80);
     if (this._autoFitMeasureCache && this._autoFitMeasureCache.key === cacheKey) {
-      return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, this._autoFitMeasureCache, fillType, cornerType, borderType, null, stampShape);
+      return this._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, this._autoFitMeasureCache, fillType, cornerType, borderType, null, stampShape, rowsMode);
     }
 
     // Category 1: Dynamic Frame - TEXT-FIRST approach
@@ -2512,10 +2512,12 @@ const SvgRenderer = {
           // For multi-line text (<tspan> children), measure the longest line
           var tspans = textEl.querySelectorAll('tspan');
           var measuredWidth;
+          var perTspanWidths = []; // per-row widths for 2full mode
           if (tspans.length > 1) {
             measuredWidth = 0;
             for (var ti = 0; ti < tspans.length; ti++) {
               var tw = tspans[ti].getComputedTextLength();
+              perTspanWidths.push(tw);
               if (tw > measuredWidth) measuredWidth = tw;
             }
           } else {
@@ -2591,7 +2593,8 @@ const SvgRenderer = {
             canvasMeasureFontSize: canvasMeasureFontSize,
             canvasInkLeft: canvasInkLeft,
             canvasInkRight: canvasInkRight,
-            canvasAdvanceWidth: canvasAdvanceWidth
+            canvasAdvanceWidth: canvasAdvanceWidth,
+            perTspanWidths: perTspanWidths
           };
 
           // remeasureFn: re-measure text at any font size while iframe is still alive.
@@ -2634,7 +2637,7 @@ const SvgRenderer = {
             }
           } catch (e) {}
 
-          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, SvgRenderer._autoFitMeasureCache, fillType, cornerType, borderType, remeasureFn, stampShape));
+          safeResolve(SvgRenderer._applyAutoFitSizing(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, SvgRenderer._autoFitMeasureCache, fillType, cornerType, borderType, remeasureFn, stampShape, rowsMode));
           return;
 
         } catch (e) {
@@ -2774,7 +2777,7 @@ const SvgRenderer = {
    * @param {Function|null} remeasureFn - optional closure to re-measure text at target font size (iframe must be alive)
    * @returns {string} modified SVG string
    */
-  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType, remeasureFn, stampShape) {
+  _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType, remeasureFn, stampShape, rowsMode) {
     var measuredWidth = measurements.measuredWidth;
     var bbox = measurements.bbox;
     var numTspans = measurements.numTspans;
@@ -3094,7 +3097,8 @@ const SvgRenderer = {
       var vPadding = vInnerGap + actualInset;
       // For multi-line: cap vertical padding to match visible inter-line whitespace.
       // lineHeight includes ink, so the visible gap between lines ≈ lineHeight * 0.5.
-      if (numLines > 1) {
+      // Skip cap for "2 Full" — rows are tall, needs full padding like single-line.
+      if (numLines > 1 && rowsMode !== '2full') {
         var maxVPad = lineHeight * 0.5;
         if (vPadding > maxVPad) {
           vInnerGap = Math.max(0, maxVPad - actualInset);
@@ -3288,6 +3292,77 @@ const SvgRenderer = {
         newRectHeight = squareSide;
       }
 
+      // "2 Full" mode: scale each row to equal width (per-tspan font sizes)
+      var _2fullFontSizes = null;
+      if (rowsMode === '2full' && numLines === 2 && stampShape !== 'square') {
+        // Extract per-row text
+        var fullTspanTexts = [];
+        result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
+          fullTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+        });
+
+        if (fullTspanTexts.length === 2) {
+          // Get per-row widths at measured font size
+          var perWidths = measurements.perTspanWidths;
+          var row0W, row1W;
+          if (perWidths && perWidths.length === 2 && perWidths[0] > 0 && perWidths[1] > 0) {
+            row0W = perWidths[0];
+            row1W = perWidths[1];
+          } else {
+            // Fallback: estimate from character counts
+            var avgCW = measuredWidth / ((fullTspanTexts[0].length + fullTspanTexts[1].length) || 1);
+            row0W = fullTspanTexts[0].length * avgCW;
+            row1W = fullTspanTexts[1].length * avgCW;
+          }
+
+          // Both rows get sized to match the longer row's width
+          // Longer row keeps newFontSize; shorter row gets scaled up
+          var longIdx = (row0W >= row1W) ? 0 : 1;
+          var shortIdx = 1 - longIdx;
+          var longW = longIdx === 0 ? row0W : row1W;
+          var shortW = shortIdx === 0 ? row0W : row1W;
+
+          var longFs = newFontSize;
+          var shortFs = newFontSize * (longW / shortW);
+
+          _2fullFontSizes = [
+            longIdx === 0 ? longFs : shortFs,
+            longIdx === 1 ? longFs : shortFs
+          ];
+
+          // Recalculate text block height with unequal rows
+          // Use actual ink metrics (ascent+descent) per font instead of hardcoded capH
+          var inkRatio = 0.72; // fallback
+          if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
+            inkRatio = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
+          }
+          var row0H = _2fullFontSizes[0] * inkRatio;
+          var row1H = _2fullFontSizes[1] * inkRatio;
+          var fullLineGap = Math.max(_2fullFontSizes[0], _2fullFontSizes[1]) * 0.08;
+          var _2fullTotalH = row0H + fullLineGap + row1H;
+
+          textBlockHeight = _2fullTotalH;
+          newRectHeight = textBlockHeight + hPadding * 2;
+
+          // Apply per-tspan font-size (strip existing, add new)
+          var tspanIdx2f = 0;
+          result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
+            if (tspanIdx2f < _2fullFontSizes.length) {
+              var fs = _2fullFontSizes[tspanIdx2f];
+              tspanIdx2f++;
+              attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
+              return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '">';
+            }
+            return match;
+          });
+
+          // Store for dy positioning
+          var _2fullRow0H = row0H;
+          var _2fullRow1H = row1H;
+          var _2fullGap = fullLineGap;
+        }
+      }
+
       // Aspect ratio enforcement: compress wide one-liners horizontally
       // to produce less squat stamps. Without this, wide fonts (Montserrat,
       // Comfortaa) produce extreme landscape ratios that appear tiny in the
@@ -3357,6 +3432,28 @@ const SvgRenderer = {
               return '<tspan' + before + 'x="' + (parseFloat(xVal) + dxOffset).toFixed(2) + '"';
             });
           }
+        } else if (_2fullFontSizes && _2fullFontSizes.length === 2) {
+          // "2 Full" mode: unequal row heights, center the block
+          var inkR = 0.72;
+          if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
+            inkR = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
+          }
+          var r0H = _2fullFontSizes[0] * inkR;
+          var r1H = _2fullFontSizes[1] * inkR;
+          var gap2f = Math.max(_2fullFontSizes[0], _2fullFontSizes[1]) * 0.08;
+          var total2f = r0H + gap2f + r1H;
+          // First row: shift up by half block, then down by first row cap height
+          var firstDy2f = -(total2f / 2) + r0H;
+          // Second row: descent of first + gap + ascent of second
+          var secondDy2f = _2fullFontSizes[0] * 0.05 + gap2f + r1H;
+
+          var lineIdx2f = 0;
+          result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
+            var before = arguments[1];
+            var dyVal = (lineIdx2f === 0) ? firstDy2f : secondDy2f;
+            lineIdx2f++;
+            return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
+          });
         } else {
           // Standard uniform dy for rectangles/lined
           var totalSpan = (numLines - 1) * lineHeight;

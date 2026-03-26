@@ -404,7 +404,7 @@
               svg, idx, zone.bounding_width,
               zone.font_size, originalScaleX,
               frameMode, currentFill || 'empty', currentCornerStyle || 'straight',
-              currentBorderStyle || null, currentShape
+              currentBorderStyle || null, currentShape, currentRowsMode
             );
             didAutoFit = true;
           }
@@ -521,7 +521,9 @@
       currentCornerStyle = params.get('corners') || 'straight';
       var styleParam = params.get('style');
       if (styleParam) currentBorderStyle = styleParam;
-      var currentForceLines = parseInt(params.get('rows'), 10) || 0;
+      var rowsParam = params.get('rows') || '0';
+      var currentRowsMode = (rowsParam === '2full') ? '2full' : null;
+      var currentForceLines = currentRowsMode ? 2 : (parseInt(rowsParam, 10) || 0);
 
       if (!templateId) {
         document.getElementById('product-preview').innerHTML =
@@ -793,12 +795,20 @@
       var rowsList = document.getElementById('product-rows-list');
       rowsList.innerHTML = '';
       for (var ri = 1; ri <= maxRows; ri++) {
-        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + ((currentForceLines === ri || (currentForceLines === 0 && ri === 1)) ? ' active' : '') + '" data-value="' + ri + '">' + ri + '</div>';
+        var isActive = (!currentRowsMode && (currentForceLines === ri || (currentForceLines === 0 && ri === 1)));
+        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActive ? ' active' : '') + '" data-value="' + ri + '">' + ri + '</div>';
+      }
+      // Add "2 Full" option when 2+ rows possible
+      if (maxRows >= 2) {
+        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (currentRowsMode === '2full' ? ' active' : '') + '" data-value="2full">2 Full</div>';
       }
       // Clamp currentForceLines to available options
-      if (currentForceLines > maxRows) { currentForceLines = maxRows; }
-      if (currentForceLines === 0) currentForceLines = 1;
-      setDropdownActive('product-rows-list', String(currentForceLines), 'product-rows-value');
+      if (!currentRowsMode) {
+        if (currentForceLines > maxRows) { currentForceLines = maxRows; }
+        if (currentForceLines === 0) currentForceLines = 1;
+      }
+      var activeRowsVal = currentRowsMode || String(currentForceLines);
+      setDropdownActive('product-rows-list', activeRowsVal, 'product-rows-value');
 
       updateShapeConstraints();
       updateCornerConstraints();
@@ -1034,7 +1044,14 @@
         if (item.classList.contains('active')) { this.style.display = 'none'; return; }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
-        currentForceLines = parseInt(item.dataset.value, 10) || 0;
+        var rowVal = item.dataset.value;
+        if (rowVal === '2full') {
+          currentRowsMode = '2full';
+          currentForceLines = 2;
+        } else {
+          currentRowsMode = null;
+          currentForceLines = parseInt(rowVal, 10) || 0;
+        }
         document.getElementById('product-rows-value').textContent = item.textContent;
         // Re-render with new line count
         rebuildWithFont(currentFont).then(function(svg) {
@@ -1089,7 +1106,7 @@
           '&style=' + currentBorderStyle +
           '&corners=' + (currentCornerStyle || 'straight') +
           '&texture=' + encodeURIComponent(currentTexture || '') +
-          '&rows=' + (currentForceLines || 0);
+          '&rows=' + (currentRowsMode || currentForceLines || 0);
       }
 
       function isComboSaved() {
