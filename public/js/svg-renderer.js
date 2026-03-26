@@ -2659,6 +2659,8 @@ const SvgRenderer = {
         predictedInnerEdge = sw / 2;                              // plain, filter, perfLine
       }
       var whiteGap = isFull ? 2 : innerSw;
+      // Filled stamps: ensure minimum predicted inset matches addDoubleFrame
+      if (isFull) predictedInnerEdge = Math.max(predictedInnerEdge, sw * 0.3);
       // inset to inner rect center + innerSw/2 for text inside inner stroke
       totalInset = predictedInnerEdge + whiteGap + innerSw;
 
@@ -5721,12 +5723,14 @@ const SvgRenderer = {
     // Use proportional stroke (stored by autoFit) for consistent innerSw across all styles
     var propSwAttr = svgStr.match(/data-prop-sw="([\d.]+)"/);
     var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
-    var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
+    var innerSw = Math.max(6, Math.round(effectiveOsw * (isFull ? 0.24 : 0.36)));
     // Unified inner edge: read from data attribute (set by border generators), fallback to half stroke
     var edgeAttr = svgStr.match(/data-border-inner-edge="(-?[\d.]+)"/);
     var measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : effectiveOsw / 2;
     // White gap: outlined = innerSw (visual rhythm), filled = minimal (no white band needed)
     var whiteGap = isFull ? 2 : innerSw;
+    // Filled stamps: ensure minimum inset so inner rect is visible
+    if (isFull) measuredInnerEdge = Math.max(measuredInnerEdge, effectiveOsw * 0.3);
     var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
     var ix = ox + inset, iy = oy + inset;
     var iw = ow - inset * 2, ih = oh - inset * 2;
@@ -5785,11 +5789,12 @@ const SvgRenderer = {
    */
   addSplitBorder(svgStr, bi) {
     bi = bi || {};
-    // Perforated/sawtooth: create split effect on white shapes
     // Skip brushstroke
     if (bi.brush) return svgStr;
     var isCat1Border = bi.wavy || bi.stitch || bi.filter;
     if (!isCat1Border && /<image[\s>]/i.test(svgStr)) return svgStr;
+    // Detect filled stamps
+    var isFull = bi.fillType === 'full';
 
     // ---- LINED PATH: split with white thin stroke ----
     var linedPathM = svgStr.match(/<path([^>]*data-lined="1"[^>]*)\/>/);
@@ -5912,7 +5917,7 @@ const SvgRenderer = {
       }
       // Perforated/sawtooth: shrink rect inward so thread pierces through shapes
       if (bi.border) {
-        var borderInset = Math.round(osw2 * 0.15);
+        var borderInset = Math.round(osw2 * (isFull ? 0.25 : 0.15));
         ox += borderInset; oy += borderInset; ow -= borderInset * 2; oh -= borderInset * 2;
       }
       // All other types: clone shape with white thin stroke
