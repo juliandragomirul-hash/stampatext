@@ -3652,7 +3652,12 @@ const SvgRenderer = {
         result = result.replace(/<\/svg>/, stitchHtml + '</svg>');
         result = result.replace(/<svg /, '<svg data-border-inner-edge="' + borderInnerEdge.toFixed(1) + '" ');
         // Tag SVG so cropViewBoxToStamp can add stitch margin
-        result = result.replace(/<svg /, '<svg data-stitch-gen="' + sType + '" ');
+        var stitchRx = stitchData.x - sOffset, stitchRy = stitchData.y - sOffset;
+        var stitchRw = stitchData.w + sOffset * 2, stitchRh = stitchData.h + sOffset * 2;
+        result = result.replace(/<svg /, '<svg data-stitch-gen="' + sType + '" data-stitch-rect="' +
+          stitchRx.toFixed(1) + ',' + stitchRy.toFixed(1) + ',' + stitchRw.toFixed(1) + ',' + stitchRh.toFixed(1) +
+          '" data-stitch-size="' + sSize + '" data-stitch-corner="' + (cornerType || 'straight') +
+          '" data-stitch-offset="' + sOffset.toFixed(1) + '" ');
       }
 
       // ---- WAVY / ZIGZAG BORDER ----
@@ -5879,70 +5884,39 @@ const SvgRenderer = {
       }
       var swM2 = outer.attrs.match(/stroke-width=["']([\d.]+)["']/);
       var osw2 = swM2 ? parseFloat(swM2[1]) : (bi.origStrokeWidth || 50);
-      var whiteSw = Math.max(4, Math.round(osw2 * 0.24));
+      var whiteSw = Math.max(3, Math.round(osw2 * (bi.border ? 0.20 : bi.perfLine ? 0.15 : 0.30)));
 
       // Copy filter from outer rect (e.g. ripped paper)
       var filterAttr = outer.attrs.match(/filter="([^"]*)"/);
 
-      // Stitch shapes: overlay white shapes to create hollow/outlined effect
+      // Stitch: white thread trace path "cuts through" all stitch shapes
       if (bi.stitch) {
-        var ringHtml = '';
-        if (bi.stitch === 'circle') {
-          var circleRe = /<circle\s+cx="([\d.\-]+)"\s+cy="([\d.\-]+)"\s+r="([\d.]+)"\s+fill="(?!#FFF|#FFFFFF|white|none)([^"]+)"\s*\/>/gi;
-          var cm;
-          while ((cm = circleRe.exec(svgStr)) !== null) {
-            var ccx = cm[1], ccy = cm[2], cr = parseFloat(cm[3]);
-            ringHtml += '<circle cx="' + ccx + '" cy="' + ccy + '" r="' + (cr * 0.55).toFixed(2) + '" fill="#FFFFFF"/>';
-          }
-        } else {
-          var stitchRectRe = /<rect\s+x="([\d.\-]+)"\s+y="([\d.\-]+)"\s+width="([\d.]+)"\s+height="([\d.]+)"\s+fill="(?!#FFF|#FFFFFF|white|none)([^"]+)"([^\/]*)\/?>/gi;
-          var srm;
-          // Stitch line: uniform inset from shorter dim (even border all sides)
-          // Stitch square: proportional inset per axis (22.5%)
-          var isLine = bi.stitch === 'line';
-          while ((srm = stitchRectRe.exec(svgStr)) !== null) {
-            var sx = parseFloat(srm[1]), sy = parseFloat(srm[2]);
-            var sw = parseFloat(srm[3]), sh = parseFloat(srm[4]);
-            var extraAttrs = srm[6] || '';
-            if (sw > 200 || sh > 200) continue;
-            var uniformInset = Math.min(sw, sh) * 0.225;
-            var insetX = isLine ? uniformInset : sw * 0.225;
-            var insetY = isLine ? uniformInset : sh * 0.225;
-            // Preserve transform (rotation) for corner squares
-            var transformM = extraAttrs.match(/transform="([^"]*)"/);
-            var transformAttr = transformM ? ' transform="' + transformM[1] + '"' : '';
-            ringHtml += '<rect x="' + (sx + insetX).toFixed(2) + '" y="' + (sy + insetY).toFixed(2) +
-              '" width="' + Math.max(1, sw - 2 * insetX).toFixed(2) +
-              '" height="' + Math.max(1, sh - 2 * insetY).toFixed(2) + '" fill="#FFFFFF"' + transformAttr + '/>';
-          }
-        }
-        // Stitch line: also handle dasharray paths
-        if (bi.stitch === 'line') {
-          var dashPathRe = /<path[^>]*stroke-dasharray="[^"]*"[^>]*\/?>/gi;
-          var dpm;
-          while ((dpm = dashPathRe.exec(svgStr)) !== null) {
-            var pathEl = dpm[0];
-            // Skip if already white
-            if (/stroke="#FFF/i.test(pathEl) || /stroke="white/i.test(pathEl)) continue;
-            // Get stroke width and create a thinner white overlay
-            var pswM = pathEl.match(/stroke-width="([\d.]+)"/);
-            var psw = pswM ? parseFloat(pswM[1]) : 20;
-            ringHtml += pathEl
-              .replace(/stroke="[^"]*"/, 'stroke="#FFFFFF"')
-              .replace(/stroke-width="[^"]*"/, 'stroke-width="' + (psw * 0.45).toFixed(1) + '"');
-          }
-        }
-        if (ringHtml) {
-          svgStr = svgStr.replace(/<\/svg>/, ringHtml + '</svg>');
+        var stitchRectM = svgStr.match(/data-stitch-rect="([^"]+)"/);
+        var stitchSizeM = svgStr.match(/data-stitch-size="([\d.]+)"/);
+        var stitchCornerM = svgStr.match(/data-stitch-corner="([^"]+)"/);
+        var stitchOffsetM = svgStr.match(/data-stitch-offset="([\d.]+)"/);
+        if (stitchRectM && stitchSizeM) {
+          var srParts = stitchRectM[1].split(',');
+          var srx = parseFloat(srParts[0]), sry = parseFloat(srParts[1]);
+          var srw = parseFloat(srParts[2]), srh = parseFloat(srParts[3]);
+          var sSize = parseFloat(stitchSizeM[1]);
+          var sCorner = stitchCornerM ? stitchCornerM[1] : 'straight';
+          var sOff = stitchOffsetM ? parseFloat(stitchOffsetM[1]) : 0;
+          var threadSw = Math.max(3, Math.round(sSize * 0.23));
+          // Use _generateTrace to follow the exact stitch perimeter path (including corner arcs)
+          var trace = this._generateTrace(srx, sry, srw, srh, sCorner, sOff);
+          var threadPath = '<path d="' + trace.d + '" fill="none" stroke="#FFFFFF" stroke-width="' + threadSw + '"/>';
+          svgStr = svgStr.replace(/<\/svg>/, threadPath + '</svg>');
         }
         innerHtml = '';
       }
-      // Perforated/sawtooth: skip split (hidden in UI, use perf_line styles instead)
-      else if (bi.border) {
-        innerHtml = '';
+      // Perforated/sawtooth: shrink rect inward so thread pierces through shapes
+      if (bi.border) {
+        var borderInset = Math.round(osw2 * 0.15);
+        ox += borderInset; oy += borderInset; ow -= borderInset * 2; oh -= borderInset * 2;
       }
       // All other types: clone shape with white thin stroke
-      else if (mixedType) {
+      if (mixedType) {
         var mc = this._getMixedCorners(mixedType);
         var maxR = Math.max(0, (Math.min(ow, oh) - 10) / 2);
         var stl = Math.min(mc.tl, maxR), str = Math.min(mc.tr, maxR);

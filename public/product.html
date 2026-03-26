@@ -105,7 +105,7 @@
       </div>
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:3;">
-        <label class="filter-bar-label">Frames</label>
+        <label class="filter-bar-label">Frame</label>
         <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:35px">
           <span class="filter-bar-dropdown-value" id="product-frame-value">A</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
@@ -966,19 +966,7 @@
         storedZones = entry.zones;
         templateBorderType = newBorder;
         if (entry.tpl && entry.tpl.id) templateId = entry.tpl.id;
-        // Hide Frames=C for perforated/sawtooth (they use perf_line styles instead)
-        var noSplitStyles = ['perforated', 'perforated_spaced', 'sawtooth'];
-        var frameItems = document.querySelectorAll('#product-frame-list .filter-bar-dropdown-item');
-        frameItems.forEach(function(fi) {
-          if (fi.dataset.value === 'split') {
-            fi.style.display = noSplitStyles.indexOf(newBorder) >= 0 ? 'none' : '';
-          }
-        });
-        // If currently on C and switching to a no-split style, auto-switch to A
-        if (noSplitStyles.indexOf(newBorder) >= 0 && currentFrame === 'split') {
-          currentFrame = 'single';
-          setDropdownActive('product-frame-list', 'single', 'product-frame-value');
-        }
+        // All styles now support Frame C (split)
         updateCornerConstraints();
         // Re-render with new template
         rebuildWithFont(currentFont).then(function(svg) {
