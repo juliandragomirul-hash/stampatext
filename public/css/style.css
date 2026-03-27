@@ -1523,6 +1523,7 @@ body.gallery-active .stamp-hero-input-wrapper {
   user-select: none;
   height: 46px;
   box-sizing: border-box;
+  min-width: 52px;
 }
 
 .filter-bar-dropdown-value {

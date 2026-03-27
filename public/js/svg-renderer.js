@@ -1132,6 +1132,7 @@ const SvgRenderer = {
       var sqHalf = sqSize / 2;
       var gap = spacing;
       var stride = sqSize + gap;
+      var cornerStep = sqSize * 1.15; // tighter spacing in corner regions
 
       // ---- CORNERS: squares from vertex outward, dynamic count ----
       for (var ci = 0; ci < regions.corners.length; ci++) {
@@ -1139,7 +1140,7 @@ const SvgRenderer = {
         if (cReg.totalLength <= 0) continue;
         var armLen = cReg.totalLength / 2;
         var mid = armLen;
-        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / stride) + 1);
+        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / cornerStep) + 1);
         var cornerStride = (nSq > 1) ? (armLen - sqHalf) / (nSq - 1) : 0;
         for (var ai = 0; ai < nSq; ai++) {
           var d1 = mid - ai * cornerStride;
@@ -1199,6 +1200,7 @@ const SvgRenderer = {
       var sqHalf = sqSize / 2;
       var gap = spacing;
       var stride = sqSize + gap;
+      var cornerStep = sqSize * 1.15; // tighter spacing in corner regions
 
       // ---- CORNERS: squares from vertex outward, dynamic count ----
       for (var ci = 0; ci < regions.corners.length; ci++) {
@@ -1206,7 +1208,7 @@ const SvgRenderer = {
         if (cReg.totalLength <= 0) continue;
         var armLen = cReg.totalLength / 2;
         var mid = armLen;
-        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / stride) + 1);
+        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / cornerStep) + 1);
         var cornerStride = (nSq > 1) ? (armLen - sqHalf) / (nSq - 1) : 0;
         for (var ai = 0; ai < nSq; ai++) {
           var d1 = mid - ai * cornerStride;
@@ -1241,6 +1243,7 @@ const SvgRenderer = {
       var sqHalf = sqSize / 2;
       var gap = spacing;
       var stride = sqSize + gap;
+      var cornerStep = sqSize * 1.15; // tighter spacing in corner regions
 
       // ---- CORNERS: circles from vertex outward, dynamic count ----
       for (var ci = 0; ci < regions.corners.length; ci++) {
@@ -1248,7 +1251,7 @@ const SvgRenderer = {
         if (cReg.totalLength <= 0) continue;
         var armLen = cReg.totalLength / 2;
         var mid = armLen;
-        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / stride) + 1);
+        var nSq = (armLen < sqHalf) ? 1 : Math.max(2, Math.floor((armLen - sqHalf) / cornerStep) + 1);
         var cornerStride = (nSq > 1) ? (armLen - sqHalf) / (nSq - 1) : 0;
         for (var ai = 0; ai < nSq; ai++) {
           var d1 = mid - ai * cornerStride;
@@ -1513,18 +1516,21 @@ const SvgRenderer = {
       return [text];
     }
 
-    // Multi-word: cap forceLines to word count
+    // Multi-word: distribute words evenly across forced row count
     if (forceLines && forceLines > 1) {
       var effectiveLines = Math.min(forceLines, words.length);
-      if (words.length >= effectiveLines) {
-        // Distribute words across effectiveLines rows as evenly as possible
-        var lines = [];
-        var wordsPerLine = Math.ceil(words.length / effectiveLines);
-        for (var i = 0; i < words.length; i += wordsPerLine) {
-          lines.push(words.slice(i, i + wordsPerLine).join(' '));
-        }
-        if (lines.length === effectiveLines) return lines;
+      // Even word-count distribution: floor words per line, remainder goes to last rows
+      var base = Math.floor(words.length / effectiveLines);
+      var extra = words.length % effectiveLines;
+      var lines = [];
+      var wi = 0;
+      for (var li = 0; li < effectiveLines; li++) {
+        // Give extra word to LAST rows so early rows are shorter (visually balanced)
+        var count = base + (li >= effectiveLines - extra ? 1 : 0);
+        lines.push(words.slice(wi, wi + count).join(' '));
+        wi += count;
       }
+      return lines;
     }
 
     // Multi-word natural wrapping (16/20 char limit)
@@ -2780,7 +2786,8 @@ const SvgRenderer = {
   _applyAutoFitSizing: function(svgString, textIndex, maxWidth, originalFontSize, originalScaleX, frameMode, measurements, fillType, cornerType, borderType, remeasureFn, stampShape, rowsMode) {
     var measuredWidth = measurements.measuredWidth;
     var bbox = measurements.bbox;
-    var numTspans = measurements.numTspans;
+    // Use actual tspan count from SVG (not cached) — cache may be stale after row changes
+    var numTspans = (svgString.match(/<tspan/gi) || []).length || 1;
     // Get actual rect width from SVG (more reliable than maxWidth from DB)
     var actualRectWidth = maxWidth;
     var rectWidthMatch = svgString.match(/<rect[^>]*\swidth=["']([\d.]+)["']/i);
@@ -2850,9 +2857,8 @@ const SvgRenderer = {
     var sqCfg = null;
     if (stampShape === 'square') {
       var sqRowModeMatch = svgString.match(/data-sq-rowmode=["']([^"']+)["']/);
-      var sqRowMode = sqRowModeMatch ? sqRowModeMatch[1] : '2up';
+      var sqRowMode = sqRowModeMatch ? sqRowModeMatch[1] : 'hero2up';
       sqCfg = SvgRenderer._getSquareConfig(detectedFont, sqRowMode);
-      console.log('[SQ-CFG] font=' + detectedFont + ' mode=' + sqRowMode + ' capH=' + sqCfg.heroCapH + ' desc=' + sqCfg.heroDescent + ' gap=' + sqCfg.rowGap + ' scaleY=' + sqCfg.heroScaleY + ' hStroke=' + sqCfg.heroStroke);
       fontLetterSpacing = sqCfg.heroSpacing;
     }
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
@@ -3109,7 +3115,9 @@ const SvgRenderer = {
       var newRectHeight = textBlockHeight + vPadding * 2;
 
       // Square shape enforcement: if text is still single-line, split it now
-      if (stampShape === 'square' && numLines <= 1) {
+      // Skip when rowsMode='1' (explicit 1 row) or 'full' with forceLines=1 (Full + 1 row = Hi-style, not split)
+      var sqSkipSplit = (rowsMode === '1') || (rowsMode === 'full' && numLines <= 1);
+      if (stampShape === 'square' && numLines <= 1 && !sqSkipSplit) {
         console.log('[SQ-INLINE-ENTER] numLines=' + numLines + ' numTspans=' + numTspans);
         // Read rowMode from data attribute (set by gallery.js), default to '2up'
         var rmMatch = result.match(/data-sq-rowmode="([^"]+)"/);
@@ -3147,11 +3155,11 @@ const SvgRenderer = {
         }
       }
 
-      // Square shape enforcement: small row anchors width, hero fills remaining height
-      // _sqComputedFontSizes persists to the dy section below
+      // Square shape enforcement (old gallery path): only for gallery-injected sq-scales
+      // Product page uses the Hero block in the 2Full section instead
       var _sqComputedFontSizes = null;
       var _sqHeroIdx = 0;
-      if (stampShape === 'square' && numLines > 1) {
+      if (stampShape === 'square' && numLines > 1 && result.match(/data-sq-scales=/)) {
         // Extract per-row text
         var sqTspanTexts = [];
         result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
@@ -3286,80 +3294,157 @@ const SvgRenderer = {
 
         result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', heroFontSize.toFixed(2));
       } else if (stampShape === 'square') {
-        // Single line square: just force square
+        // Single line square: force square rect
         var squareSide = Math.max(newRectWidth, newRectHeight);
         newRectWidth = squareSide;
         newRectHeight = squareSide;
+        // Full + 1 row: Hi-style — extra scaleY for taller text, textLength fills width
+        var _sqFullHiScale = 1;
+        if (rowsMode === 'full' && numLines <= 1) {
+          var sqInner = squareSide - hPadding * 2;
+          _sqFullHiScale = 2.5; // +150% height via matrix scaleY
+          // textLength forces width to fill square
+          result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
+            attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
+            return '<tspan' + attrs + ' textLength="' + sqInner.toFixed(2) + '" lengthAdjust="spacingAndGlyphs">';
+          });
+        }
       }
 
-      // "2 Full" mode: scale each row to equal width (per-tspan font sizes)
+      // Square hero: ALWAYS equalize row widths via per-row font sizes
       var _2fullFontSizes = null;
-      if (rowsMode === '2full' && numLines === 2 && stampShape !== 'square') {
-        // Extract per-row text
+      if (stampShape === 'square' && numLines >= 2) {
+        // Part A: compute per-row font sizes (always for square)
+        var perWidths = measurements.perTspanWidths;
+        var heroWidths = [];
+        var heroTotalChars = 0;
         var fullTspanTexts = [];
         result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
           fullTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
         });
+        for (var hi = 0; hi < numLines; hi++) heroTotalChars += (fullTspanTexts[hi] || '').length;
+        var avgCW = heroTotalChars > 0 ? measuredWidth / heroTotalChars : 1;
 
-        if (fullTspanTexts.length === 2) {
-          // Get per-row widths at measured font size
-          var perWidths = measurements.perTspanWidths;
-          var row0W, row1W;
-          if (perWidths && perWidths.length === 2 && perWidths[0] > 0 && perWidths[1] > 0) {
-            row0W = perWidths[0];
-            row1W = perWidths[1];
-          } else {
-            // Fallback: estimate from character counts
-            var avgCW = measuredWidth / ((fullTspanTexts[0].length + fullTspanTexts[1].length) || 1);
-            row0W = fullTspanTexts[0].length * avgCW;
-            row1W = fullTspanTexts[1].length * avgCW;
+        var heroMaxW = 0;
+        for (var hi = 0; hi < numLines; hi++) {
+          var hw = (perWidths && perWidths[hi] > 0) ? perWidths[hi] : ((fullTspanTexts[hi] || '').length * avgCW);
+          heroWidths.push(hw);
+          if (hw > heroMaxW) heroMaxW = hw;
+        }
+
+        var inkRatio = 0.72;
+        if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
+          inkRatio = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
+        }
+        var squareSide = Math.max(newRectWidth, newRectHeight);
+        var sqPad = hPadding + squareSide * 0.03;
+        var innerSize = squareSide - sqPad * 2;
+        var sqGapFactor = 0.02;
+        var measureFs = measurements.canvasMeasureFontSize || newFontSize;
+
+        // Each row sized to fill innerSize width
+        _2fullFontSizes = [];
+        for (var hi = 0; hi < numLines; hi++) {
+          var rowW = heroWidths[hi] || 1;
+          _2fullFontSizes.push(measureFs * (innerSize / rowW));
+        }
+
+        // Height constraint: shrink if total exceeds available
+        function heroBlockHeight(sizes) {
+          var h = 0, maxFs = 0;
+          for (var i = 0; i < sizes.length; i++) {
+            h += sizes[i] * inkRatio;
+            if (sizes[i] > maxFs) maxFs = sizes[i];
           }
-
-          // Both rows get sized to match the longer row's width
-          // Longer row keeps newFontSize; shorter row gets scaled up
-          var longIdx = (row0W >= row1W) ? 0 : 1;
-          var shortIdx = 1 - longIdx;
-          var longW = longIdx === 0 ? row0W : row1W;
-          var shortW = shortIdx === 0 ? row0W : row1W;
-
-          var longFs = newFontSize;
-          var shortFs = newFontSize * (longW / shortW);
-
-          _2fullFontSizes = [
-            longIdx === 0 ? longFs : shortFs,
-            longIdx === 1 ? longFs : shortFs
-          ];
-
-          // Recalculate text block height with unequal rows
-          // Use actual ink metrics (ascent+descent) per font instead of hardcoded capH
-          var inkRatio = 0.72; // fallback
-          if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
-            inkRatio = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
+          h += maxFs * sqGapFactor * (sizes.length - 1);
+          return h;
+        }
+        var heroH = heroBlockHeight(_2fullFontSizes);
+        var visualH = heroH * (fontScaleY || 1);
+        if (visualH > innerSize && visualH > 0) {
+          var shrink = innerSize / visualH;
+          for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
+            _2fullFontSizes[hi] *= shrink;
           }
-          var row0H = _2fullFontSizes[0] * inkRatio;
-          var row1H = _2fullFontSizes[1] * inkRatio;
-          var fullLineGap = Math.max(_2fullFontSizes[0], _2fullFontSizes[1]) * 0.08;
-          var _2fullTotalH = row0H + fullLineGap + row1H;
+          heroH = heroBlockHeight(_2fullFontSizes);
+        }
 
-          textBlockHeight = _2fullTotalH;
-          newRectHeight = textBlockHeight + hPadding * 2;
+        textBlockHeight = heroH;
+        newRectWidth = squareSide;
+        newRectHeight = squareSide;
 
-          // Apply per-tspan font-size (strip existing, add new)
-          var tspanIdx2f = 0;
+        // Part B: Full compensation
+        if (rowsMode === 'full') {
+          // Scale hero font sizes to fill square height + capped textLength fills width
+          var visualH2 = heroBlockHeight(_2fullFontSizes) * (fontScaleY || 1);
+          if (visualH2 > 0 && Math.abs(visualH2 - innerSize) > 1) {
+            var scaleFactor = innerSize / visualH2;
+            for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
+              _2fullFontSizes[hi] *= scaleFactor;
+            }
+            heroH = heroBlockHeight(_2fullFontSizes);
+            textBlockHeight = heroH;
+          }
+        }
+
+        // Apply per-tspan font-size (always)
+        var tspanIdx2f = 0;
+        var maxStretchRatio = numLines >= 4 ? 1.3 : (numLines >= 3 ? 1.4 : 1.5);
+        result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
+          if (tspanIdx2f < _2fullFontSizes.length) {
+            var fs = _2fullFontSizes[tspanIdx2f];
+            var ci = tspanIdx2f++;
+            attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
+            attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
+            // Full: add textLength to fill square width (capped)
+            var tlAttr = '';
+            if (rowsMode === 'full') {
+              var naturalW = heroWidths[ci] * (fs / measureFs);
+              var stretchRatio = naturalW > 0 ? innerSize / naturalW : 1;
+              var cappedTL = Math.min(stretchRatio, maxStretchRatio) * naturalW;
+              tlAttr = ' textLength="' + cappedTL.toFixed(2) + '" lengthAdjust="spacingAndGlyphs"';
+            }
+            return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '"' + tlAttr + '>';
+          }
+          return match;
+        });
+      }
+
+      // "Fat" mode: stretch shorter rows horizontally to match longest row width.
+      // Same font-size for all rows — only textLength changes (letters look wider/fatter).
+      var _fatMode = (rowsMode === 'full' && numLines >= 2 && stampShape !== 'square');
+      if (_fatMode) {
+        var perWidths = measurements.perTspanWidths;
+        if (perWidths && perWidths.length >= numLines && measurements.canvasMeasureFontSize > 0) {
+          // Find longest row width (at measured font size), scale to target font size
+          var fatScale = newFontSize / measurements.canvasMeasureFontSize;
+          var fatWidths = [];
+          var fatMaxW = 0;
+          for (var fi = 0; fi < numLines; fi++) {
+            var fw = (perWidths[fi] || 0) * fatScale;
+            fatWidths.push(fw);
+            if (fw > fatMaxW) fatMaxW = fw;
+          }
+          // Apply textLength to each tspan, capping stretch at 2.5×
+          var fatIdx = 0;
           result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
-            if (tspanIdx2f < _2fullFontSizes.length) {
-              var fs = _2fullFontSizes[tspanIdx2f];
-              tspanIdx2f++;
-              attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
-              return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '">';
+            var ci = fatIdx++;
+            if (ci < fatWidths.length && fatMaxW > 0) {
+              var ratio = fatMaxW / (fatWidths[ci] || fatMaxW);
+              if (ratio > 1.05) { // only stretch if meaningfully shorter
+                if (ratio > 2.5) ratio = 2.5; // cap distortion
+                var tl = (fatWidths[ci] * ratio).toFixed(2);
+                // Strip any existing textLength/lengthAdjust
+                attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
+                attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
+                return '<tspan' + attrs + ' textLength="' + tl + '" lengthAdjust="spacingAndGlyphs">';
+              }
             }
             return match;
           });
-
-          // Store for dy positioning
-          var _2fullRow0H = row0H;
-          var _2fullRow1H = row1H;
-          var _2fullGap = fullLineGap;
+          // Rect width based on longest row (textBlockWidth stays as-is from normal sizing)
         }
       }
 
@@ -3432,25 +3517,39 @@ const SvgRenderer = {
               return '<tspan' + before + 'x="' + (parseFloat(xVal) + dxOffset).toFixed(2) + '"';
             });
           }
-        } else if (_2fullFontSizes && _2fullFontSizes.length === 2) {
-          // "2 Full" mode: unequal row heights, center the block
+        } else if (_2fullFontSizes && _2fullFontSizes.length >= 2) {
+          // Hero mode: N rows with per-row font sizes, center the block vertically
           var inkR = 0.72;
           if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
             inkR = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
           }
-          var r0H = _2fullFontSizes[0] * inkR;
-          var r1H = _2fullFontSizes[1] * inkR;
-          var gap2f = Math.max(_2fullFontSizes[0], _2fullFontSizes[1]) * 0.08;
-          var total2f = r0H + gap2f + r1H;
-          // First row: shift up by half block, then down by first row cap height
-          var firstDy2f = -(total2f / 2) + r0H;
-          // Second row: descent of first + gap + ascent of second
-          var secondDy2f = _2fullFontSizes[0] * 0.05 + gap2f + r1H;
+          var ascentR = hasCanvasMetrics ? symAscent / measurements.canvasMeasureFontSize : inkR * 0.9;
+          var descentR = hasCanvasMetrics ? symDescent / measurements.canvasMeasureFontSize : inkR * 0.1;
+          // Compute total block height: sum of ink heights + gaps
+          var heroMaxFs = 0;
+          for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
+            if (_2fullFontSizes[hi] > heroMaxFs) heroMaxFs = _2fullFontSizes[hi];
+          }
+          var gap2f = heroMaxFs * (stampShape === 'square' ? 0.02 : 0.08);
+          var total2f = 0;
+          for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
+            total2f += _2fullFontSizes[hi] * inkR;
+            if (hi < _2fullFontSizes.length - 1) total2f += gap2f;
+          }
+          // Compute per-row dy values: first row positions block, subsequent rows are baseline-to-baseline
+          // Account for fontScaleY: visual block height = total2f * fontScaleY
+          // dy is in pre-transform space, so offset = visualTotal / (2 * fontScaleY) = total2f / 2
+          // But the matrix ty is at viewBoxCenterY (not adjusted for scaleY), so we need:
+          var heroDyVals = [];
+          heroDyVals.push(-(total2f / 2) + _2fullFontSizes[0] * ascentR);
+          for (var hi = 1; hi < _2fullFontSizes.length; hi++) {
+            heroDyVals.push(_2fullFontSizes[hi - 1] * descentR + gap2f + _2fullFontSizes[hi] * ascentR);
+          }
 
           var lineIdx2f = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
             var before = arguments[1];
-            var dyVal = (lineIdx2f === 0) ? firstDy2f : secondDy2f;
+            var dyVal = lineIdx2f < heroDyVals.length ? heroDyVals[lineIdx2f] : 0;
             lineIdx2f++;
             return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
           });
@@ -3511,9 +3610,13 @@ const SvgRenderer = {
             inkHorizCorrection = inkOffset * canvasScale * matrixScaleX * aspectCompressX;
           }
           var newTx = viewBoxCenterX + inkHorizCorrection + fontTune.dx * newFontSize;
-          var newTy = viewBoxCenterY + baselineOffset * fontScaleY + fontTune.dy * newFontSize;
+          // Square hero: dy positioning is self-centering, skip fontTune.dy nudge
+          var dyNudge = (_2fullFontSizes && stampShape === 'square') ? 0 : fontTune.dy * newFontSize;
+          var effectiveSy = fontScaleY * (_sqFullHiScale || 1);
+          var newTy = viewBoxCenterY + baselineOffset * effectiveSy + dyNudge;
           var finalSx = (parseFloat(mMatch[1]) * aspectCompressX).toFixed(4);
-          var sy = fontScaleY !== 1 ? fontScaleY.toFixed(4) : mMatch[4];
+          var effectiveScaleY = fontScaleY * (_sqFullHiScale || 1);
+          var sy = effectiveScaleY !== 1 ? effectiveScaleY.toFixed(4) : mMatch[4];
           var newMat = 'matrix(' + finalSx + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + sy + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
           result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newMat);
         }
@@ -3522,9 +3625,15 @@ const SvgRenderer = {
       // Set text-anchor for horizontal centering
       result = SvgRenderer._setTextAttribute(result, textIndex, 'text-anchor', 'middle');
 
-      // Per-font letter-spacing
-      if (fontLetterSpacing > 0) {
-        result = SvgRenderer._setTextAttribute(result, textIndex, 'letter-spacing', String(fontLetterSpacing));
+      // Per-font letter-spacing — reduce when Full textLength stretches text (avoids huge gaps)
+      var effectiveLS = fontLetterSpacing;
+      if (rowsMode === 'full' && stampShape === 'square' && effectiveLS > 0) {
+        effectiveLS = 0; // textLength handles spacing, extra LS makes gaps too wide
+      }
+      if (effectiveLS > 0) {
+        result = SvgRenderer._setTextAttribute(result, textIndex, 'letter-spacing', String(effectiveLS));
+      } else if (fontLetterSpacing > 0) {
+        result = SvgRenderer._setTextAttribute(result, textIndex, 'letter-spacing', '0');
       }
       // Per-font word-spacing
       if (wordSpacingPx !== 0) {

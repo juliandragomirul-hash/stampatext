@@ -636,7 +636,7 @@ const Gallery = {
             appliedFrame: frameMode,
             appliedShape: stampShape,
             appliedRowMode: currentRowMode,
-            appliedForceLines: appliedForceLines,
+            appliedForceLines: appliedForceLines || (variantSvg.match(/<tspan/gi) || []).length || 1,
             appliedTilt: variantTilt,
             appliedTexture: null
           };
@@ -914,7 +914,8 @@ const Gallery = {
         (r.appliedTexture ? '&texture=' + encodeURIComponent(r.appliedTexture) : '') +
         '&font=' + encodeURIComponent(r.fontKey || '') +
         '&corners=' + encodeURIComponent(r.cornerType || 'straight') +
-        '&style=' + encodeURIComponent(r.borderType || 'simple');
+        '&style=' + encodeURIComponent(r.borderType || 'simple') +
+        (r.appliedForceLines ? '&rows=' + r.appliedForceLines : '');
 
       var previewLink = document.createElement('a');
       previewLink.className = 'stamp-card-preview';
@@ -2135,6 +2136,7 @@ const Gallery = {
       if (combo.tilt !== 0) svg = SvgRenderer.applyTilt(svg, combo.tilt);
 
       // Build product URL with ALL combo params
+      var comboRows = (svg.match(/<tspan/gi) || []).length || 1;
       var productUrl = '/product.html?id=' + encodeURIComponent(entry.tpl.id) +
         '&text=' + encodeURIComponent(self.currentText) +
         '&color=' + encodeURIComponent(combo.color.replace('#', '')) +
@@ -2144,7 +2146,8 @@ const Gallery = {
         '&shape=rectangle&tilt=' + combo.tilt +
         (combo.texture ? '&texture=' + encodeURIComponent(combo.texture) : '') +
         '&corners=' + encodeURIComponent(combo.corners) +
-        '&style=' + encodeURIComponent(borderStyle);
+        '&style=' + encodeURIComponent(borderStyle) +
+        '&rows=' + comboRows;
 
       var card = document.createElement('div');
       card.className = 'stamp-card';

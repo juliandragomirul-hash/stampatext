@@ -61,10 +61,22 @@
       <button class="customize-close-btn" id="customize-close-btn">&times;</button>
       <div id="product-template-info" class="product-template-info" style="display:none;"></div>
 
-      <!-- Row 1: Style, Corners, Frames, Rows -->
+      <!-- Row 1: Shape, Style, Corners, Frames, Rows -->
+      <div class="filter-bar-group filter-bar-dropdown-group" style="order:0;">
+        <label class="filter-bar-label">Shape</label>
+        <div class="filter-bar-dropdown-box" id="product-shape-toggle" style="min-width:52px">
+          <span class="filter-bar-dropdown-value" id="product-shape-value"><span style="display:inline-block;width:24px;height:16px;border:2px solid #555;border-radius:2px;vertical-align:middle;"></span></span>
+          <span class="filter-bar-color-arrow">&#9662;</span>
+        </div>
+        <div class="filter-bar-dropdown-list" id="product-shape-list" style="padding:6px;display:none;">
+          <div class="filter-bar-dropdown-item active" data-value="rectangle" style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:28px;height:18px;border:2px solid #555;border-radius:2px;"></span> Rect</div>
+          <div class="filter-bar-dropdown-item" data-value="square" style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:20px;height:20px;border:2px solid #555;border-radius:2px;"></span> Square</div>
+        </div>
+      </div>
+
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:1;">
         <label class="filter-bar-label">Style</label>
-        <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:70px">
+        <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:90px">
           <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:21px;overflow:hidden;">Plain</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -88,7 +100,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:2;">
         <label class="filter-bar-label">Corners</label>
-        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:70px;padding:2px 4px;">
+        <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:100px;padding:2px 4px;">
           <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:40px;overflow:hidden;display:flex;align-items:center;font-family:'CourierPrime',monospace;">Straight</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -106,7 +118,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:3;">
         <label class="filter-bar-label">Frame</label>
-        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:35px">
+        <div class="filter-bar-dropdown-box" id="product-frame-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-frame-value">A</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -118,8 +130,14 @@
       </div>
 
       <div class="filter-bar-group filter-bar-dropdown-group" id="product-rows-group" style="order:4;">
-        <label class="filter-bar-label">Rows</label>
-        <div class="filter-bar-dropdown-box" id="product-rows-toggle" style="min-width:35px">
+        <label class="filter-bar-label" style="display:flex;align-items:center;gap:4px;">
+          <label id="product-full-label" style="display:none;cursor:pointer;white-space:nowrap;user-select:none;">
+            <input type="checkbox" id="product-full-check" style="margin:0 2px 0 0;vertical-align:middle;cursor:pointer;">
+            <span style="vertical-align:middle;">Full</span>
+          </label>
+          <span>Rows</span>
+        </label>
+        <div class="filter-bar-dropdown-box" id="product-rows-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-rows-value">1</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -130,7 +148,7 @@
       <!-- Row 2: Color, Fill, Texture, Tilt -->
       <div class="filter-bar-group filter-bar-color-group" style="order:5;">
         <label class="filter-bar-label">Color</label>
-        <div class="filter-bar-color-box" id="product-color-toggle" style="height:46px;box-sizing:border-box;min-width:35px;">
+        <div class="filter-bar-color-box" id="product-color-toggle" style="height:46px;box-sizing:border-box;min-width:52px;">
           <span class="filter-bar-color-dot" id="product-color-dot"></span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -139,7 +157,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:6;">
         <label class="filter-bar-label">Fill</label>
-        <div class="filter-bar-dropdown-box" id="product-fill-toggle" style="min-width:35px">
+        <div class="filter-bar-dropdown-box" id="product-fill-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-fill-value">No</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -151,7 +169,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:7;">
         <label class="filter-bar-label">Texture</label>
-        <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:35px">
+        <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-texture-value">No</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -160,7 +178,7 @@
 
       <div class="filter-bar-group filter-bar-dropdown-group" style="order:8;">
         <label class="filter-bar-label">Tilt</label>
-        <div class="filter-bar-dropdown-box" id="product-tilt-toggle" style="min-width:35px">
+        <div class="filter-bar-dropdown-box" id="product-tilt-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-tilt-value">No</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
@@ -308,7 +326,7 @@
   <script src="https://www.paypal.com/sdk/js?client-id=Af9DG3e9fW_gLj5vaBNtrzvCclpY7Ktjl8_Yl71GZaeFEtY8jR4-YbTm7ofJCzVuqAqnUB7pd55EZ_5Y&currency=USD"></script>
   <script src="/js/buy-credits.js"></script>
   <script src="/js/hypher-bundle.js"></script>
-  <script src="/js/svg-renderer.js?v=244"></script>
+  <script src="/js/svg-renderer.js?v=245"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -387,13 +405,7 @@
           var idx = zone.svg_element_index || 0;
           // For square stamps, split text into multi-line with variable font sizes
           var textForReplace = storedDisplayText;
-          if (currentShape === 'square') {
-            var sqResult = SvgRenderer._splitForSquare(storedDisplayText.toUpperCase());
-            if (sqResult.lines.length > 1) {
-              textForReplace = sqResult.lines.join('\n');
-              svg = svg.replace(/<svg/, '<svg data-sq-scales="' + sqResult.fontScales.join(',') + '"');
-            }
-          }
+          // Square rows>1: normal word distribution, hero sizing done in _applyAutoFitSizing
           svg = SvgRenderer.replaceTextInString(svg, idx, textForReplace, currentForceLines > 0 ? currentForceLines : undefined);
 
           if (zone.bounding_width) {
@@ -404,7 +416,7 @@
               svg, idx, zone.bounding_width,
               zone.font_size, originalScaleX,
               frameMode, currentFill || 'empty', currentCornerStyle || 'straight',
-              currentBorderStyle || null, currentShape, currentRowsMode
+              currentBorderStyle || null, currentShape, currentFullMode ? 'full' : (currentForceLines === 1 ? '1' : null)
             );
             didAutoFit = true;
           }
@@ -524,6 +536,7 @@
       var rowsParam = params.get('rows') || '0';
       var currentRowsMode = (rowsParam === '2full') ? '2full' : null;
       var currentForceLines = currentRowsMode ? 2 : (parseInt(rowsParam, 10) || 0);
+      var currentFullMode = params.get('full') === '1';
 
       if (!templateId) {
         document.getElementById('product-preview').innerHTML =
@@ -770,6 +783,12 @@
       // Initial render: run autoFit with selected font
       baseSvg = await rebuildWithFont(currentFont);
 
+      // Auto-detect row count from rendered SVG when no explicit rows param
+      if (currentForceLines === 0 && baseSvg) {
+        var detectedRows = (baseSvg.match(/<tspan/gi) || []).length || 1;
+        currentForceLines = detectedRows;
+      }
+
       // ---- Load font config & Build UI ----
       await SvgRenderer.loadFontConfig();
       buildFontSelect();
@@ -780,7 +799,9 @@
       setDropdownActive('product-tilt-list', String(currentTilt), 'product-tilt-value');
       setDropdownActive('product-border-list', currentBorderStyle, 'product-border-value');
       setDropdownActive('product-corner-list', currentCornerStyle, 'product-corner-value');
-      document.getElementById('product-shape-value').value = currentShape;
+      setDropdownActive('product-shape-list', currentShape, 'product-shape-value');
+      var isRect = currentShape === 'rectangle';
+      document.getElementById('product-shape-value').innerHTML = '<span style="display:inline-block;width:' + (isRect ? '24px;height:16px' : '18px;height:18px') + ';border:2px solid #555;border-radius:2px;vertical-align:middle;"></span>';
 
       // Rows dropdown: fixed 1-4. Multi-word: max = word count. Single-word: max = syllable count.
       var textWords = userText.trim().split(/\s+/);
@@ -794,21 +815,46 @@
       }
       var rowsList = document.getElementById('product-rows-list');
       rowsList.innerHTML = '';
+      var actualMaxRows = 1;
       for (var ri = 1; ri <= maxRows; ri++) {
-        var isActive = (!currentRowsMode && (currentForceLines === ri || (currentForceLines === 0 && ri === 1)));
+        // Fluid min chars per row: more rows → higher minimum (ceil(rows * 0.7))
+        if (ri >= 2 && !isSingleWord) {
+          // Even word-count distribution (same as splitTextIntoLines)
+          var twBase = Math.floor(textWords.length / ri);
+          var twExtra = textWords.length % ri;
+          var testLines = [];
+          var twi = 0;
+          for (var tli = 0; tli < ri; tli++) {
+            var cnt = twBase + (tli >= ri - twExtra ? 1 : 0);
+            testLines.push(textWords.slice(twi, twi + cnt).join(' '));
+            twi += cnt;
+          }
+          var minLen = Infinity;
+          for (var tli = 0; tli < testLines.length; tli++) {
+            if (testLines[tli].length < minLen) minLen = testLines[tli].length;
+          }
+          if (minLen < Math.ceil(ri * 0.7)) continue;
+        }
+        actualMaxRows = ri;
+        var isActive = (currentForceLines === ri);
         rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActive ? ' active' : '') + '" data-value="' + ri + '">' + ri + '</div>';
       }
-      // Add "2 Full" option when 2+ rows possible
-      if (maxRows >= 2) {
-        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (currentRowsMode === '2full' ? ' active' : '') + '" data-value="2full">2 Full</div>';
-      }
+      maxRows = actualMaxRows;
       // Clamp currentForceLines to available options
-      if (!currentRowsMode) {
-        if (currentForceLines > maxRows) { currentForceLines = maxRows; }
-        if (currentForceLines === 0) currentForceLines = 1;
+      if (currentForceLines > maxRows) { currentForceLines = maxRows; }
+      // Legacy: convert old '2full' URL param to fat mode
+      if (currentRowsMode === '2full') {
+        currentRowsMode = null;
+        currentForceLines = 2;
+        currentFullMode = true;
       }
-      var activeRowsVal = currentRowsMode || String(currentForceLines);
-      setDropdownActive('product-rows-list', activeRowsVal, 'product-rows-value');
+      setDropdownActive('product-rows-list', String(currentForceLines), 'product-rows-value');
+      // Show Fat checkbox whenever multi-row is possible for rectangle
+      var fullLabel = document.getElementById('product-full-label');
+      var fullCheck = document.getElementById('product-full-check');
+      fullLabel.style.display = (maxRows >= 2) ? '' : 'none';
+      if (currentForceLines <= 1 && currentShape !== 'square') { currentFullMode = false; }
+      fullCheck.checked = currentFullMode;
 
       updateShapeConstraints();
       updateCornerConstraints();
@@ -893,6 +939,32 @@
           document.getElementById('product-font-list').style.display = 'none';
           document.getElementById('product-color-grid').style.display = 'none';
           list.style.display = list.style.display === 'flex' ? 'none' : 'flex';
+        });
+      });
+
+      // Shape dropdown
+      document.getElementById('product-shape-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('.filter-bar-dropdown-list').forEach(function(l) { l.style.display = 'none'; });
+        document.getElementById('product-color-grid').style.display = 'none';
+        var list = document.getElementById('product-shape-list');
+        list.style.display = list.style.display === 'block' ? 'none' : 'block';
+      });
+      document.getElementById('product-shape-list').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var item = e.target.closest('.filter-bar-dropdown-item');
+        if (!item) return;
+        document.getElementById('product-shape-list').style.display = 'none';
+        if (item.dataset.value === currentShape) return;
+        document.querySelectorAll('#product-shape-list .filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
+        item.classList.add('active');
+        currentShape = item.dataset.value;
+        var isRect = item.dataset.value === 'rectangle';
+        document.getElementById('product-shape-value').innerHTML = '<span style="display:inline-block;width:' + (isRect ? '24px;height:16px' : '18px;height:18px') + ';border:2px solid #555;border-radius:2px;vertical-align:middle;"></span>';
+        updateShapeConstraints();
+        rebuildWithFont(currentFont).then(function(svg) {
+          baseSvg = svg;
+          renderPreview();
         });
       });
 
@@ -1045,15 +1117,28 @@
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
         var rowVal = item.dataset.value;
-        if (rowVal === '2full') {
-          currentRowsMode = '2full';
-          currentForceLines = 2;
-        } else {
-          currentRowsMode = null;
-          currentForceLines = parseInt(rowVal, 10) || 0;
-        }
+        currentRowsMode = null;
+        currentForceLines = parseInt(rowVal, 10) || 0;
         document.getElementById('product-rows-value').textContent = item.textContent;
+        // Uncheck Fat when selecting Rows=1 (Fat stays visible)
+        if (currentForceLines <= 1) {
+          currentFullMode = false;
+          document.getElementById('product-full-check').checked = false;
+        }
         // Re-render with new line count
+        rebuildWithFont(currentFont).then(function(svg) {
+          baseSvg = svg;
+          renderPreview();
+        });
+      });
+
+      // Full checkbox toggle — for rectangle, auto-switch to Rows=2; for square, works with any row count
+      document.getElementById('product-full-check').addEventListener('change', function() {
+        currentFullMode = this.checked;
+        if (currentFullMode && currentForceLines <= 1 && currentShape === 'rectangle') {
+          currentForceLines = 2;
+          setDropdownActive('product-rows-list', '2', 'product-rows-value');
+        }
         rebuildWithFont(currentFont).then(function(svg) {
           baseSvg = svg;
           renderPreview();
@@ -1106,7 +1191,8 @@
           '&style=' + currentBorderStyle +
           '&corners=' + (currentCornerStyle || 'straight') +
           '&texture=' + encodeURIComponent(currentTexture || '') +
-          '&rows=' + (currentRowsMode || currentForceLines || 0);
+          '&rows=' + (currentForceLines || 0) +
+          (currentFullMode ? '&full=1' : '');
       }
 
       function isComboSaved() {
@@ -1440,6 +1526,19 @@
           fillGroup.closest('.filter-bar-group').classList.add('filter-disabled');
         } else {
           fillGroup.closest('.filter-bar-group').classList.remove('filter-disabled');
+        }
+        // Full toggle: visible for both rectangle and square when multi-row possible
+        var fullLabel = document.getElementById('product-full-label');
+        var fullCheck = document.getElementById('product-full-check');
+        if (fullLabel) {
+          var canMultiRow = (document.querySelectorAll('#product-rows-list .filter-bar-dropdown-item').length >= 2);
+          if (currentShape === 'lined' || !canMultiRow) {
+            fullLabel.style.display = 'none';
+            currentFullMode = false;
+            if (fullCheck) fullCheck.checked = false;
+          } else {
+            fullLabel.style.display = '';
+          }
         }
       }
 
