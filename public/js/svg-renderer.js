@@ -68,6 +68,15 @@ const SvgRenderer = {
     return fontEntry;
   },
 
+  // Proportional stroke: scales with font size so all stamps look equally punchy
+  _computeProportionalStroke: function(strokeFactor, fontSize) {
+    if (strokeFactor === 0) return 0;
+    var raw = strokeFactor * (fontSize / 100); // at 100px, stroke === strokeFactor
+    var min = strokeFactor <= 1 ? 0 : Math.max(1, Math.round(strokeFactor * 0.3));
+    var max = strokeFactor * 3;
+    return Math.round(Math.max(min, Math.min(max, raw)));
+  },
+
   _getSquareConfig: function(fontName, rowMode) {
     var defaults = {
       heroStroke: 8.0, heroSpacing: 2.0, heroScaleY: 1.10, heroScaleX: 1.0,
@@ -663,6 +672,10 @@ const SvgRenderer = {
     var fontMatch = svgString.match(/font-family=["']'?([^"']+)'?["']/);
     var fontName = fontMatch ? fontMatch[1] : '';
 
+    // Extract font size for proportional stroke
+    var fsMatcher = svgString.match(/<text[^>]*font-size=["']([\d.]+)["']/i);
+    var fontSize = fsMatcher ? parseFloat(fsMatcher[1]) : 100;
+
     // Per-font stroke from font-config.json: positive = thick (text-colored), negative = thin (bg-colored)
     var textCase = SvgRenderer._detectTextCase(svgString);
     var fc = SvgRenderer._getFontConfig(fontName, textCase);
@@ -691,7 +704,8 @@ const SvgRenderer = {
         });
       }
     }
-    var strokeConfig = { mode: strokeVal > 0 ? 'thick' : 'thin', width: Math.abs(strokeVal) };
+    var propWidth = SvgRenderer._computeProportionalStroke(Math.abs(strokeVal), fontSize);
+    var strokeConfig = { mode: strokeVal > 0 ? 'thick' : 'thin', width: propWidth };
 
     var strokeColor;
     if (strokeConfig.mode === 'thin') {
@@ -800,7 +814,9 @@ const SvgRenderer = {
       var bMatch = svgString.match(/data-border=["']\w+-(\d+)/i);
       decoMargin = bMatch ? Math.max(0, parseFloat(bMatch[1])) : 10;
     } else if (/data-stitch-gen=/i.test(svgString)) {
-      decoMargin = 65; // stitch shapes extend ~50-63px beyond outer rect
+      var stitchSzM = svgString.match(/data-stitch-size="([\d.]+)"/);
+      var stitchSz = stitchSzM ? parseFloat(stitchSzM[1]) : 50;
+      decoMargin = Math.ceil(stitchSz * 0.75 + stitchSz / 2 + 5); // sOffset + half shape + breathing
     }
 
     // Compute cropped viewBox: rect bounds + stroke/2 + decorative + breathing margin
@@ -845,8 +861,8 @@ const SvgRenderer = {
     var shapes = '';
     var spacing = radius * (spacingMult || 2.5);
     var trace = SvgRenderer._generateTrace(x, y, w, h, cornerType || 'straight');
-    // innerEdge: positive pushes inner rect further from border shapes
-    var innerEdge = 8;
+    // innerEdge: distance from rect edge to inner rect placement in double frame
+    var innerEdge = 25;
 
     if (shape === 'lined') {
       // Lined: top + bottom only
@@ -2704,8 +2720,8 @@ const SvgRenderer = {
       var predictedInnerEdge;
       if (borderFlags.stitch) predictedInnerEdge = -10;           // shapes sit on rect edge, pull inner rect closer
       else if (borderFlags.wavy) {
-        var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 10;
-        predictedInnerEdge = depth + 20;                          // depth + wavySw/2 (wavySw=40)
+        var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 7;
+        predictedInnerEdge = depth + 20;                          // depth + wavySw/2 (wavySw~40)
       } else if (borderFlags.border) {
         predictedInnerEdge = Math.max(15, sw / 2.8);                         // undo 1.4x scaling to match plain-equivalent
       } else {
@@ -2715,14 +2731,14 @@ const SvgRenderer = {
       // Filled stamps: ensure minimum predicted inset matches addDoubleFrame
       if (isFull) predictedInnerEdge = Math.max(predictedInnerEdge, sw * 0.3);
       // inset to inner rect center + innerSw/2 for text inside inner stroke
-      totalInset = predictedInnerEdge + whiteGap + innerSw;
+      totalInset = predictedInnerEdge + whiteGap + innerSw * 0.5;
 
     } else {
       // --- Single frame + split (split adds thin white stroke inside outer border,
       //     decorative elements stay in same positions — text zone is identical) ---
       if (borderFlags.wavy) {
         var wavySw = 40; // base stroke for both wavy and zigzag
-        var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 10;
+        var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 7;
         totalInset = depth + wavySw / 2;
       } else if (borderFlags.brush) {
         // Brush templates have sw=0 (brush <g> is the border, not rect stroke)
@@ -2862,9 +2878,6 @@ const SvgRenderer = {
       fontLetterSpacing = sqCfg.heroSpacing;
     }
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
-    if (stampShape === 'square' && sqCfg) {
-      fontTune.stroke = sqCfg.heroStroke;
-    }
     // Letter-spacing is absolute in SVG (doesn't scale with font size).
     // Track it separately so the ratio calculation only scales char widths.
     var lsExtra = 0;
@@ -2935,9 +2948,10 @@ const SvgRenderer = {
       // Short text → high fontRatio (font scales up) → thick border (visual weight on compact stamp)
       // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
-      var proportionalSw = fontRatioForProportional * 30;  // unclamped; per-family min/max below
-      // Square stamps: 1.9x thicker border
-      if (stampShape === 'square') proportionalSw *= 1.9;
+      var rowBoost = 1 + (Math.max(1, numTspans) - 1) * 0.4; // more rows = bigger stamp = thicker border
+      var proportionalSw = fontRatioForProportional * 20 * rowBoost;  // unclamped; per-family min/max below
+      // Square stamps: 2.85x thicker border (compensates lower base to match original 30*1.9)
+      if (stampShape === 'square') proportionalSw *= 2.85;
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2986,7 +3000,6 @@ const SvgRenderer = {
       if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
         var lhScale = newFontSize / measurements.canvasMeasureFontSize;
         var inkLineHeight = (measurements.canvasAscent + measurements.canvasDescent) * lhScale * 1.05;
-        // Ensure minimum spacing for non-diacritic text (where ink bounds are compact)
         lineHeight = Math.max(inkLineHeight, newFontSize * 1.15);
       } else {
         lineHeight = newFontSize * 1.15;
@@ -3077,7 +3090,7 @@ const SvgRenderer = {
       // Text stroke extends visually beyond glyph bounds by strokeWidth/2 per side.
       // Thick stroke (positive) expands text; thin stroke (negative) contracts — no compensation needed.
       // Outlined variants with stroke=0 get auto +2 from applyThinStroke.
-      var effectiveStroke = fontTune.stroke;
+      var effectiveStroke = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize);
       if (effectiveStroke === 0 && fillType === 'empty') effectiveStroke = 2;
       if (effectiveStroke > 0) {
         textBlockWidth += effectiveStroke;
@@ -3087,20 +3100,60 @@ const SvgRenderer = {
       // STEP 2: Inside-out rect wrapping
       // Inner gap: proportional breathing room — larger font (short text) gets more gap
       // Square stamps use minimal padding for tight, punchy look
-      var baseGap = stampShape === 'square' ? 1 : 10;
-      var hInnerGap = stampShape === 'square' ? 1 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
-      var vInnerGap = stampShape === 'square' ? 1 : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
+      // Square + single: tight gap (1) for punchy look. Square + double: standard gap (10)
+      // because the inner rect stroke needs breathing room around text.
+      var baseGap = (stampShape === 'square' && frameMode !== 'double') ? 1 : (stampShape === 'square' ? 20 : 10);
+      var hInnerGap = stampShape === 'square' ? baseGap : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
+      var vInnerGap = stampShape === 'square' ? baseGap : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
 
       // Recompute text zone with actual stroke for rect padding (clamped per-family)
-      var actualSw = capStroke ? Math.max(30, Math.min(75, proportionalSw)) : estStrokeW;
+      var swMin = (stampShape === 'square') ? 20 : Math.round(20 * rowBoost);
+      var swMax = (stampShape === 'square') ? 80 : Math.round(60 * rowBoost);
+      var actualSw = capStroke ? Math.max(swMin, Math.min(swMax, proportionalSw)) : estStrokeW;
       // Border (sawtooth/perforated): match actual outerRectSw formula
-      if (borderFlags.border) actualSw = Math.max(60, Math.min(75, proportionalSw * 1.4));
+      var bFloor2 = stampShape === 'square' ? 60 : Math.round(35 * rowBoost);
+      if (borderFlags.border) actualSw = Math.max(bFloor2, Math.min(swMax, proportionalSw * 1.4));
       // Perf_line: match its outerRectSw formula
-      if (borderFlags.perfLine) actualSw = Math.max(65, Math.min(75, proportionalSw * 1.5));
-      // Pass actual fillType so outlined templates get correct (larger) inset for double frame
-      var actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, fillType || 'full');
-      var hPadding = hInnerGap + actualInset;
-      var vPadding = vInnerGap + actualInset;
+      var plFloor2 = stampShape === 'square' ? 60 : Math.round(35 * rowBoost);
+      if (borderFlags.perfLine) actualSw = Math.max(plFloor2, Math.min(swMax, proportionalSw * 1.5));
+      var actualInset;
+      if (frameMode === 'double') {
+        // Inline double-frame inset: mirrors addDoubleFrame exactly using clampedPropSw
+        // (same value addDoubleFrame reads from data-prop-sw), eliminating prediction errors
+        var isFull = fillType === 'full';
+        var dfSw = Math.max(swMin, Math.min(swMax, proportionalSw));
+        var dfInnerSw = Math.max(6, Math.round(dfSw * (isFull ? 0.24 : 0.36)));
+        var dfWhiteGap = isFull ? 2 : dfInnerSw;
+        var dfInnerEdge;
+        if (borderFlags.stitch) dfInnerEdge = -10;
+        else if (borderFlags.wavy) {
+          var wDepth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 7;
+          dfInnerEdge = wDepth + 20; // depth + wavySw/2 (~40/2)
+        } else if (borderFlags.border) {
+          dfInnerEdge = 25; // perforated/sawtooth inner-to-outer rect gap
+        } else {
+          dfInnerEdge = dfSw / 2; // plain, filter, perfLine — matches addDoubleFrame fallback
+        }
+        if (isFull) dfInnerEdge = Math.max(dfInnerEdge, dfSw * 0.3);
+        actualInset = dfInnerEdge + dfWhiteGap + dfInnerSw * 0.5;
+      } else {
+        // Single/split: use computeTextZone prediction (already accurate for Frame A)
+        actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, fillType || 'full');
+        // Multi-row filter borders: displacement is more visible on taller stamps
+        if (borderFlags.filter && numTspans > 1) {
+          actualInset *= 1 + (numTspans - 1) * 1.0;
+        }
+      }
+      // Per-border text gap override for square + double
+      var textGap = hInnerGap;
+      if (stampShape === 'square' && frameMode === 'double') {
+        textGap = 30; // default for square+double (plain, perf line, zigzag, torn edge, chalk)
+        if (borderFlags.wavy && !borderFlags.wavyZigzag) textGap = 35; // wavy gentle/strong
+        if (borderFlags.border) textGap = 35; // perforated, sawtooth
+        if (borderFlags.stitch) textGap = 20; // stitch stays tight
+      }
+      var hPadding = textGap + actualInset;
+      var vPadding = textGap + actualInset;
       // For multi-line: cap vertical padding to match visible inter-line whitespace.
       // lineHeight includes ink, so the visible gap between lines ≈ lineHeight * 0.5.
       // Skip cap for "2 Full" — rows are tall, needs full padding like single-line.
@@ -3251,8 +3304,7 @@ const SvgRenderer = {
         // Apply per-tspan: font-size × scaleY, stroke, spacing, scaleX via textLength
         // ScaleY multiplied into font-size (makes text taller)
         // Stroke scaled inversely so it doesn't thicken with font size
-        var _hStroke = sqCfg ? sqCfg.heroStroke : 8;
-        var _sStroke = sqCfg ? sqCfg.smallStroke : 5;
+        var _propStroke = SvgRenderer._computeProportionalStroke(fc.stroke || 0, newFontSize);
         var _hSpace = sqCfg ? sqCfg.heroSpacing : 2;
         var _sSpace = sqCfg ? sqCfg.smallSpacing : 2;
         var tspanFontIdx = 0;
@@ -3269,7 +3321,7 @@ const SvgRenderer = {
             attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
             var scX = isHero ? _hScX : _sScX;
             var scY = isHero ? _hScY : _sScY;
-            var strokeW = isHero ? _hStroke : _sStroke;
+            var strokeW = _propStroke;
             var spacing = isHero ? _hSpace : _sSpace;
             // ScaleY: multiply into font-size (taller text)
             var effectiveFs = fs * scY;
@@ -3301,7 +3353,7 @@ const SvgRenderer = {
         // Full + 1 row: Hi-style — extra scaleY for taller text, textLength fills width
         var _sqFullHiScale = 1;
         if (rowsMode === 'full' && numLines <= 1) {
-          var sqInner = squareSide - hPadding * 2;
+          var sqInner = squareSide - Math.max(hPadding + squareSide * 0.02, squareSide * 0.08) * 2;
           _sqFullHiScale = 2.5; // +150% height via matrix scaleY
           // textLength forces width to fill square
           result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
@@ -3338,23 +3390,33 @@ const SvgRenderer = {
           inkRatio = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
         }
         var squareSide = Math.max(newRectWidth, newRectHeight);
-        var sqPad = hPadding + squareSide * 0.03;
-        var innerSize = squareSide - sqPad * 2;
+        var sqPad = Math.max(hPadding + squareSide * 0.02, squareSide * 0.08);
+        // Split inner dimensions: independent h/v control for asymmetric border intrusion
+        var innerH = squareSide - sqPad * 2;
+        var hSqPadAdj = 0; // horizontal padding adjustment (negative = tighter)
+        if (frameMode !== 'double') {
+          // Tuning knob: set negative values to tighten horizontal padding
+          // e.g. hSqPadAdj = -(sqPad - 50) for 50px horizontal padding
+        }
+        var innerW = squareSide - (sqPad + hSqPadAdj) * 2;
         var sqGapFactor = 0.02;
         var measureFs = measurements.canvasMeasureFontSize || newFontSize;
 
-        // Each row sized to fill innerSize width
+        // Each row sized to fill innerW (width), height constrained to innerH
         _2fullFontSizes = [];
         for (var hi = 0; hi < numLines; hi++) {
           var rowW = heroWidths[hi] || 1;
-          _2fullFontSizes.push(measureFs * (innerSize / rowW));
+          _2fullFontSizes.push(measureFs * (innerW / rowW));
         }
 
         // Height constraint: shrink if total exceeds available
+        // Include text stroke in height — ink bounds don't account for stroke visual weight
+        var propStroke = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize);
+        var strokeAdd = propStroke * 2; // stroke extends both up and down
         function heroBlockHeight(sizes) {
           var h = 0, maxFs = 0;
           for (var i = 0; i < sizes.length; i++) {
-            h += sizes[i] * inkRatio;
+            h += sizes[i] * inkRatio + strokeAdd;
             if (sizes[i] > maxFs) maxFs = sizes[i];
           }
           h += maxFs * sqGapFactor * (sizes.length - 1);
@@ -3362,8 +3424,8 @@ const SvgRenderer = {
         }
         var heroH = heroBlockHeight(_2fullFontSizes);
         var visualH = heroH * (fontScaleY || 1);
-        if (visualH > innerSize && visualH > 0) {
-          var shrink = innerSize / visualH;
+        if (visualH > innerH && visualH > 0) {
+          var shrink = innerH / visualH;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             _2fullFontSizes[hi] *= shrink;
           }
@@ -3378,13 +3440,24 @@ const SvgRenderer = {
         if (rowsMode === 'full') {
           // Scale hero font sizes to fill square height + capped textLength fills width
           var visualH2 = heroBlockHeight(_2fullFontSizes) * (fontScaleY || 1);
-          if (visualH2 > 0 && Math.abs(visualH2 - innerSize) > 1) {
-            var scaleFactor = innerSize / visualH2;
+          if (visualH2 > 0 && Math.abs(visualH2 - innerH) > 1) {
+            var scaleFactor = innerH / visualH2;
             for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
               _2fullFontSizes[hi] *= scaleFactor;
             }
             heroH = heroBlockHeight(_2fullFontSizes);
             textBlockHeight = heroH;
+          }
+          // Calculated scaleY boost: textLength fills width exactly to innerW,
+          // but font-size fills height only to inkRatio precision (systematic underestimation).
+          // Boost scaleY by inverse of ink coverage ratio to match textLength's exact fill.
+          var rawInkH = 0;
+          for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
+            rawInkH += _2fullFontSizes[hi] * inkRatio;
+          }
+          rawInkH *= (fontScaleY || 1);
+          if (rawInkH > 0) {
+            _sqFullHiScale = innerH / rawInkH;
           }
         }
 
@@ -3402,7 +3475,7 @@ const SvgRenderer = {
             var tlAttr = '';
             if (rowsMode === 'full') {
               var naturalW = heroWidths[ci] * (fs / measureFs);
-              var stretchRatio = naturalW > 0 ? innerSize / naturalW : 1;
+              var stretchRatio = naturalW > 0 ? innerW / naturalW : 1;
               var cappedTL = Math.min(stretchRatio, maxStretchRatio) * naturalW;
               tlAttr = ' textLength="' + cappedTL.toFixed(2) + '" lengthAdjust="spacingAndGlyphs"';
             }
@@ -3609,7 +3682,9 @@ const SvgRenderer = {
             var matrixScaleX = parseFloat(mMatch[1]) || 1;
             inkHorizCorrection = inkOffset * canvasScale * matrixScaleX * aspectCompressX;
           }
-          var newTx = viewBoxCenterX + inkHorizCorrection + fontTune.dx * newFontSize;
+          // Square Full: textLength handles width exactly, skip ink/dx corrections that shift text off-center
+          var hNudge = (_2fullFontSizes && stampShape === 'square' && rowsMode === 'full') ? 0 : inkHorizCorrection + fontTune.dx * newFontSize;
+          var newTx = viewBoxCenterX + hNudge;
           // Square hero: dy positioning is self-centering, skip fontTune.dy nudge
           var dyNudge = (_2fullFontSizes && stampShape === 'square') ? 0 : fontTune.dy * newFontSize;
           var effectiveSy = fontScaleY * (_sqFullHiScale || 1);
@@ -3677,25 +3752,33 @@ const SvgRenderer = {
       //   Wavy:      outerRectSw raw     (wavy path handles visual weight)
       //   Brush:     outerRectSw raw     (brush group handles visual weight)
       var outerRectSw;
-      var swMin = stampShape === 'square' ? 20 : 30;
-      var swMax = stampShape === 'square' ? 200 : 75;
+      var rectRowBoost = stampShape === 'square' ? 1 : rowBoost;
+      var swMin = stampShape === 'square' ? 20 : Math.round(20 * rectRowBoost);
+      var swMax = stampShape === 'square' ? 80 : Math.round(60 * rectRowBoost);
       if (borderFlags.perfLine) {
         // Perf_line: stroke must contain perforations, higher minimum
-        outerRectSw = rawOuterSw > 0 ? Math.max(65, Math.min(swMax, proportionalSw * 1.5)) : 0;
+        var plFloor = stampShape === 'square' ? 65 : Math.round(35 * rectRowBoost);
+        outerRectSw = rawOuterSw > 0 ? Math.max(plFloor, Math.min(swMax, proportionalSw * 1.5)) : 0;
       } else if (!hasDecorativeBorder || borderFlags.filter) {
         // Plain + Torn edge
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
       } else if (borderFlags.border) {
         // Sawtooth/perforated: thicker stroke to contain white shapes
-        outerRectSw = rawOuterSw > 0 ? Math.max(60, Math.min(swMax, proportionalSw * 1.4)) : 0;
+        var bFloor = stampShape === 'square' ? 60 : Math.round(35 * rectRowBoost);
+        outerRectSw = rawOuterSw > 0 ? Math.max(bFloor, Math.min(swMax, proportionalSw * 1.4)) : 0;
       } else {
-        // Stitch, wavy, brush: keep raw stroke, scale decorative elements instead
-        outerRectSw = rawOuterSw;
+        // Stitch, wavy, brush: keep raw stroke, boost with row count for rectangles
+        outerRectSw = rawOuterSw * rectRowBoost;
       }
       // Weight ratio for decorative element sizing (clamped 0.5-1.3 for brush; others clamp per-item)
       var decorWeightRatio = rawOuterSw > 0
         ? Math.max(0.5, Math.min(1.3, proportionalSw / rawOuterSw))
         : 1;
+      // Multi-row rectangles: stamp grows with more rows, decorative elements
+      // must not shrink. Guarantee at least 1.0 (template-designed size).
+      if (numTspans > 1 && stampShape !== 'square') {
+        decorWeightRatio = Math.max(1.0, decorWeightRatio);
+      }
       var mainRectThreshold = outerRectOrigW * 0.7;
       var decorScale = newRectWidth / outerRectOrigW;
       var innerPaddingX = outerRectSw > 0 ? outerRectSw * 0.22 : 11;
@@ -3883,13 +3966,15 @@ const SvgRenderer = {
           bShape, bRadius, bSpacingMult, stampShape, cornerType
         );
         var shapesHtml = shapesResult.svg;
+        var borderInnerEdge = shapesResult.innerEdge;
         result = result.replace(/<\/svg>/, shapesHtml + '</svg>');
+        result = result.replace(/<svg /, '<svg data-border-inner-edge="' + borderInnerEdge.toFixed(1) + '" ');
       }
 
       // ---- STITCH BORDER (line/square/circle shapes) ----
       if (stitchData) {
         var sType = stitchData.type;
-        // Stitch: 20-50 range (clamped to prevent dot clipping on short text)
+        // Stitch: 20-50 range, scaled by decorWeightRatio (≥1.0 for multi-row rects)
         var sSize = Math.max(20, Math.min(50, Math.round(((sType === 'circle') ? 50 : 40) * decorWeightRatio)));
         var sSpacing = Math.max(10, Math.min(50, Math.round(((sType === 'circle') ? 20 : (sType === 'line') ? 50 : 20) * decorWeightRatio)));
         // Offset shapes outward so they're clearly outside the fill
