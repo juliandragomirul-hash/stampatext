@@ -3164,6 +3164,10 @@ const SvgRenderer = {
           vPadding = vInnerGap + actualInset;
         }
       }
+      // 1-row square: boost horizontal padding so text doesn't touch edges
+      if (stampShape === 'square' && numLines <= 1 && rowsMode !== 'full') {
+        hPadding = Math.max(hPadding, textBlockWidth * 0.06);
+      }
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
 
@@ -3354,13 +3358,19 @@ const SvgRenderer = {
         var _sqFullHiScale = 1;
         if (rowsMode === 'full' && numLines <= 1) {
           var sqInner = squareSide - Math.max(hPadding + squareSide * 0.02, squareSide * 0.08) * 2;
-          _sqFullHiScale = 2.5; // +150% height via matrix scaleY
+          _sqFullHiScale = 2.0; // +100% height via matrix scaleY
           // textLength forces width to fill square
           result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
             attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
             return '<tspan' + attrs + ' textLength="' + sqInner.toFixed(2) + '" lengthAdjust="spacingAndGlyphs">';
           });
+        }
+        // Stamp square layout for decorative lines
+        if (numLines <= 1) {
+          var vis1H = textBlockHeight * (fontScaleY || 1) * (_sqFullHiScale || 1);
+          var sq1Pad = Math.max(hPadding + squareSide * 0.02, squareSide * 0.08);
+          result = result.replace(/<svg/, '<svg data-sq-pad="' + sq1Pad.toFixed(1) + '" data-sq-vis-h="' + vis1H.toFixed(1) + '" data-sq-side="' + squareSide.toFixed(1) + '"');
         }
       }
 
@@ -3392,27 +3402,70 @@ const SvgRenderer = {
         var squareSide = Math.max(newRectWidth, newRectHeight);
         var sqPad = Math.max(hPadding + squareSide * 0.02, squareSide * 0.08);
         // Split inner dimensions: independent h/v control for asymmetric border intrusion
-        var innerH = squareSide - sqPad * 2;
-        var hSqPadAdj = 0; // horizontal padding adjustment (negative = tighter)
-        if (frameMode !== 'double') {
-          // Tuning knob: set negative values to tighten horizontal padding
-          // e.g. hSqPadAdj = -(sqPad - 50) for 50px horizontal padding
-        }
+        // 3-row: tighter vertical padding to give more room for short row
+        var vSqPad = (numLines === 3) ? sqPad * 0.7 : sqPad;
+        var innerH = squareSide - vSqPad * 2;
+        var hSqPadAdj = 0;
         var innerW = squareSide - (sqPad + hSqPadAdj) * 2;
-        var sqGapFactor = 0.02;
+        var sqGapFactor = 0.04;
         var measureFs = measurements.canvasMeasureFontSize || newFontSize;
 
-        // Each row sized to fill innerW (width), height constrained to innerH
+        // Stroke overhead for height calculations
+        var propStroke = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize);
+        var strokeAdd = propStroke * 2; // stroke extends both up and down
+        var _sq3RowHalfH = 0; // stored for dy positioning (pre-scaleY half-height)
+
+        // Per-row font sizing
         _2fullFontSizes = [];
-        for (var hi = 0; hi < numLines; hi++) {
-          var rowW = heroWidths[hi] || 1;
-          _2fullFontSizes.push(measureFs * (innerW / rowW));
+        var _sqShortIdx = -1; // index of short row (3-row only, gets remainder height)
+        if (numLines === 3) {
+          // 3-row hierarchy: 2 longest fill width, shortest gets remaining height
+          var targetH = innerH / (fontScaleY || 1); // pre-compensate for scaleY
+          var shortIdx = 0, shortW = heroWidths[0];
+          for (var hi = 1; hi < 3; hi++) {
+            if (heroWidths[hi] < shortW) { shortW = heroWidths[hi]; shortIdx = hi; }
+          }
+          _sqShortIdx = shortIdx;
+          // Size the 2 longer rows to fill width
+          var heroSizes = [];
+          for (var hi = 0; hi < 3; hi++) {
+            if (hi === shortIdx) {
+              heroSizes.push(0); // placeholder
+            } else {
+              heroSizes.push(measureFs * (innerW / heroWidths[hi]));
+            }
+          }
+          // Compute height consumed by 2 hero rows
+          var heroUsedH = 0;
+          for (var hi = 0; hi < 3; hi++) {
+            if (hi !== shortIdx) heroUsedH += heroSizes[hi] * inkRatio + strokeAdd;
+          }
+          var heroMax = Math.max(heroSizes[0], heroSizes[1], heroSizes[2]);
+          heroUsedH += heroMax * sqGapFactor * 2; // 2 gaps
+          // If heroes already exceed targetH, shrink them to leave 15% for short row
+          var minShortH = targetH * 0.15;
+          if (heroUsedH + minShortH > targetH) {
+            var heroShrink = (targetH - minShortH) / heroUsedH;
+            for (var hi = 0; hi < 3; hi++) {
+              if (hi !== shortIdx) heroSizes[hi] *= heroShrink;
+            }
+            heroUsedH *= heroShrink;
+          }
+          // Short row gets remaining vertical space
+          var remainH = targetH - heroUsedH;
+          var shortFs = Math.max((remainH - strokeAdd) / inkRatio, heroMax * 0.1);
+          heroSizes[shortIdx] = shortFs;
+          _2fullFontSizes = heroSizes;
+          _sq3RowHalfH = innerH / (2 * (fontScaleY || 1)); // pre-transform half-height for dy
+        } else {
+          // 2 rows: both fill width (existing behavior)
+          for (var hi = 0; hi < numLines; hi++) {
+            var rowW = heroWidths[hi] || 1;
+            _2fullFontSizes.push(measureFs * (innerW / rowW));
+          }
         }
 
         // Height constraint: shrink if total exceeds available
-        // Include text stroke in height — ink bounds don't account for stroke visual weight
-        var propStroke = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize);
-        var strokeAdd = propStroke * 2; // stroke extends both up and down
         function heroBlockHeight(sizes) {
           var h = 0, maxFs = 0;
           for (var i = 0; i < sizes.length; i++) {
@@ -3461,6 +3514,10 @@ const SvgRenderer = {
           }
         }
 
+        // Stamp text block height for decorative lines (visual height including scaleY)
+        var visualBlockH = textBlockHeight * (fontScaleY || 1) * (_sqFullHiScale || 1);
+        result = result.replace(/<svg/, '<svg data-sq-pad="' + vSqPad.toFixed(1) + '" data-sq-vis-h="' + visualBlockH.toFixed(1) + '" data-sq-side="' + squareSide.toFixed(1) + '"');
+
         // Apply per-tspan font-size (always)
         var tspanIdx2f = 0;
         var maxStretchRatio = numLines >= 4 ? 1.3 : (numLines >= 3 ? 1.4 : 1.5);
@@ -3472,8 +3529,9 @@ const SvgRenderer = {
             attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
             // Full: add textLength to fill square width (capped)
+            // Skip textLength for short row in 3-row mode (it stays at natural width)
             var tlAttr = '';
-            if (rowsMode === 'full') {
+            if (rowsMode === 'full' && ci !== _sqShortIdx) {
               var naturalW = heroWidths[ci] * (fs / measureFs);
               var stretchRatio = naturalW > 0 ? innerW / naturalW : 1;
               var cappedTL = Math.min(stretchRatio, maxStretchRatio) * naturalW;
@@ -3603,7 +3661,7 @@ const SvgRenderer = {
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             if (_2fullFontSizes[hi] > heroMaxFs) heroMaxFs = _2fullFontSizes[hi];
           }
-          var gap2f = heroMaxFs * (stampShape === 'square' ? 0.02 : 0.08);
+          var gap2f = heroMaxFs * (stampShape === 'square' ? 0.04 : 0.08);
           var total2f = 0;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             total2f += _2fullFontSizes[hi] * inkR;
@@ -3614,9 +3672,24 @@ const SvgRenderer = {
           // dy is in pre-transform space, so offset = visualTotal / (2 * fontScaleY) = total2f / 2
           // But the matrix ty is at viewBoxCenterY (not adjusted for scaleY), so we need:
           var heroDyVals = [];
-          heroDyVals.push(-(total2f / 2) + _2fullFontSizes[0] * ascentR);
-          for (var hi = 1; hi < _2fullFontSizes.length; hi++) {
-            heroDyVals.push(_2fullFontSizes[hi - 1] * descentR + gap2f + _2fullFontSizes[hi] * ascentR);
+          if (_sq3RowHalfH > 0 && _2fullFontSizes.length === 3) {
+            // 3-row spread: BACK at top, SCHOOL at bottom, TO centered between
+            var halfH = _sq3RowHalfH;
+            var bl0 = -halfH + _2fullFontSizes[0] * ascentR; // first baseline: cap top at inner top
+            var bl2 = halfH - _2fullFontSizes[2] * descentR; // last baseline: descent bottom at inner bottom
+            // Center TO's ink in the gap between BACK's bottom and SCHOOL's top
+            var gapTop = bl0 + _2fullFontSizes[0] * descentR; // bottom of BACK
+            var gapBot = bl2 - _2fullFontSizes[2] * ascentR; // top of SCHOOL
+            var bl1 = (gapTop + gapBot) / 2 + _2fullFontSizes[1] * (ascentR - descentR) / 2; // center TO's ink
+            heroDyVals.push(bl0);
+            heroDyVals.push(bl1 - bl0);
+            heroDyVals.push(bl2 - bl1);
+          } else {
+            // 2-row: center the block
+            heroDyVals.push(-(total2f / 2) + _2fullFontSizes[0] * ascentR);
+            for (var hi = 1; hi < _2fullFontSizes.length; hi++) {
+              heroDyVals.push(_2fullFontSizes[hi - 1] * descentR + gap2f + _2fullFontSizes[hi] * ascentR);
+            }
           }
 
           var lineIdx2f = 0;
@@ -4030,6 +4103,20 @@ const SvgRenderer = {
       // Store proportional stroke for consistent innerSw in addDoubleFrame
       var clampedPropSw = Math.max(swMin, Math.min(swMax, proportionalSw));
       result = result.replace(/<svg /, '<svg data-prop-sw="' + clampedPropSw.toFixed(1) + '" ');
+
+      // Stamp exact decorative line Y positions for square stamps
+      if (stampShape === 'square') {
+        var sqInnerStrokeTop = newRectY + outerRectSw / 2; // inner face of top stroke
+        var sqInnerStrokeBot = newRectY + newRectHeight - outerRectSw / 2;
+        var sqTextVisH = textBlockHeight * (fontScaleY || 1) * (_sqFullHiScale || 1) * 0.92;
+        var sqTextTop = viewBoxCenterY - sqTextVisH / 2;
+        var sqTextBot = viewBoxCenterY + sqTextVisH / 2;
+        var sqVoidTop = sqTextTop - sqInnerStrokeTop; // void between inner stroke and text
+        var sqVoidBot = sqInnerStrokeBot - sqTextBot;
+        var sqLineTopY = sqInnerStrokeTop + sqVoidTop / 2; // centered in top void
+        var sqLineBotY = sqInnerStrokeBot - sqVoidBot / 2; // centered in bottom void
+        result = result.replace(/<svg /, '<svg data-deco-line-top="' + sqLineTopY.toFixed(1) + '" data-deco-line-bot="' + sqLineBotY.toFixed(1) + '" data-deco-void="' + Math.min(sqVoidTop, sqVoidBot).toFixed(1) + '" ');
+      }
 
       // ---- PERFORATION LINE STYLES (mid-stroke perforation on plain rect) ----
       if (borderFlags.perfLine) {
@@ -4949,6 +5036,143 @@ const SvgRenderer = {
       svgEl.removeAttribute('height');
     }
     return wrapper;
+  },
+
+  /**
+   * Add decorative horizontal lines to fill white void in square stamps.
+   * @param {string} svgString - The SVG string
+   * @param {string} rowVariant - 'A' or 'B'
+   * @param {number} numRows - 1, 2, or 3
+   * @returns {string} SVG with decorative lines added
+   *
+   * Modes:
+   *   1A/1B: horizontal line above and below text
+   *   2A: horizontal line above row1 and below row2
+   *   3B: horizontal lines flanking the short middle row ("── TO ──")
+   *   2B, 3A: no lines (already fill space)
+   */
+  addDecorativeLines(svgString, rowVariant, numRows) {
+    // Only draw lines for specific modes
+    var needsLines = (numRows <= 2 && rowVariant === 'A') ||
+                     (numRows <= 2 && rowVariant === 'B' && numRows === 1) ||
+                     (numRows === 3); // 3A: per-row flanking, 3B: fatten + flanking
+    if (!needsLines) return svgString;
+
+    // Parse viewBox
+    var vbMatch = svgString.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+    if (!vbMatch) return svgString;
+    var vbX = parseFloat(vbMatch[1]), vbY = parseFloat(vbMatch[2]);
+    var vbW = parseFloat(vbMatch[3]), vbH = parseFloat(vbMatch[4]);
+    var cx = vbX + vbW / 2; // horizontal center
+    var vcY = vbY + vbH / 2; // vertical center
+
+    // Find outer rect stroke-width and color
+    var rectMatch = svgString.match(/<rect[^>]*stroke-width=["']([\d.]+)["'][^>]*>/i);
+    var outerSw = rectMatch ? parseFloat(rectMatch[1]) : 50;
+    var colorMatch = svgString.match(/<rect[^>]*stroke=["']([^"']+)["']/i);
+    var stampColor = colorMatch ? colorMatch[1] : '#000000';
+
+    // Line specs: stroke = outerSw/2
+    var lineSw = outerSw / 2;
+    // Inner edges from viewBox (rect fills viewBox after crop)
+    var innerLeft = vbX + outerSw;
+    var innerRight = vbX + vbW - outerSw;
+    // Line length = 50% of viewBox width (= stamp width)
+    var lineLen = vbW * 0.5;
+    var lineX1 = cx - lineLen / 2;
+    var lineX2 = cx + lineLen / 2;
+
+    // Read exact line positions from autoFit (stamped as data attributes)
+    var decoTopMatch = svgString.match(/data-deco-line-top=["']([\d.\-]+)["']/);
+    var decoBotMatch = svgString.match(/data-deco-line-bot=["']([\d.\-]+)["']/);
+    var decoVoidMatch = svgString.match(/data-deco-void=["']([\d.\-]+)["']/);
+
+    var lineTopY = decoTopMatch ? parseFloat(decoTopMatch[1]) : (vbY + vbH * 0.2);
+    var lineBotY = decoBotMatch ? parseFloat(decoBotMatch[1]) : (vbY + vbH * 0.8);
+    var minVoidSize = decoVoidMatch ? parseFloat(decoVoidMatch[1]) : 0;
+    lineSw = Math.min(outerSw / 2, minVoidSize * 0.25);
+
+    var lines = '';
+
+    if (numRows === 3) {
+      // 3A/3B: per-row flanking lines (left + right of each row, centered at row's Y)
+      // Parse all tspan texts, font-sizes, and dy values
+      var allTspanTexts = [];
+      svgString.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
+        allTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+      });
+      var tspanFsArr = [];
+      svgString.replace(/<tspan[^>]*?font-size=["']([\d.]+)["']/gi, function(m, fs) {
+        tspanFsArr.push(parseFloat(fs));
+      });
+      // Parse dy values and matrix for vertical positions
+      var tspanDyArr = [];
+      svgString.replace(/<tspan[^>]*?\bdy=["']([\d.\-]+)["']/gi, function(m, dy) {
+        tspanDyArr.push(parseFloat(dy));
+      });
+      var matMatch = svgString.match(/<text[^>]*transform=["'][^"]*matrix\(\s*[\d.\-]+\s*,\s*[\d.\-]+\s*,\s*[\d.\-]+\s*,\s*([\d.\-]+)\s*,\s*[\d.\-]+\s*,\s*([\d.\-]+)\s*\)/i);
+      var flkSy = matMatch ? parseFloat(matMatch[1]) : 1;
+      var flkTy = matMatch ? parseFloat(matMatch[2]) : vcY;
+      // Default font-size fallback
+      var textFsMatch = svgString.match(/<text[^>]*font-size=["']([\d.]+)["']/i);
+      var defFs = textFsMatch ? parseFloat(textFsMatch[1]) : 100;
+
+      var innerW = vbW - outerSw * 2;
+      for (var ri = 0; ri < Math.min(allTspanTexts.length, 3); ri++) {
+        var rowFs = tspanFsArr[ri] || defFs;
+        // Row visual Y: baseline from dy accumulation, then center of row = baseline - ascent/2
+        var cumDy = 0;
+        for (var di = 0; di <= ri; di++) cumDy += (tspanDyArr[di] || 0);
+        var rowBaselineY = flkTy + cumDy * flkSy;
+        var rowCenterY = rowBaselineY - rowFs * 0.3 * flkSy; // approximate: baseline - capHeight/2
+
+        // Row width: use textLength if available, else estimate
+        // Cap to inner stroke width (no row wider than rect interior)
+        var maxRowW = sqSideVal - outerSw;
+        var rawRowW = allTspanTexts[ri].length * rowFs * 0.55;
+        var rowW = Math.min(rawRowW, maxRowW);
+        var rowLeft = cx - rowW / 2;
+        var rowRight = cx + rowW / 2;
+
+        // Horizontal void: from inner stroke face to text edge
+        // Use data-sq-side + viewBox center for reliable rect position
+        var sqSideAttr = svgString.match(/data-sq-side=["']([\d.]+)["']/);
+        var sqSideVal = sqSideAttr ? parseFloat(sqSideAttr[1]) : vbW;
+        var rectLeft = cx - sqSideVal / 2;
+        var innerStrokeLeft = rectLeft + outerSw / 2;
+        var innerStrokeRight = rectLeft + sqSideVal - outerSw / 2;
+        // Use viewBox-based calculation as fallback
+        var hVoid = rowLeft - innerStrokeLeft;
+        // Proportional gaps: 25% border gap, 15% text gap, 60% line
+        var borderGap = Math.max(hVoid * 0.25, 8);
+        var textGap = Math.max(hVoid * 0.15, 5);
+        var flankLen = hVoid - textGap - borderGap;
+
+        // Scale line thickness with void width
+        var rowLineSw = Math.min(outerSw / 2, Math.max(1.5, flankLen * 0.15));
+
+        if (flankLen > 5 && rowLineSw > 0.5) {
+          // Left flanking line (starts at borderGap from inner stroke, ends at textGap from text)
+          var lx1 = innerStrokeLeft + borderGap;
+          var lx2 = rowLeft - textGap;
+          lines += '<line x1="' + lx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + lx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
+          // Right flanking line
+          var rx1 = rowRight + textGap;
+          var rx2 = innerStrokeRight - borderGap;
+          lines += '<line x1="' + rx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + rx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
+        }
+      }
+    } else {
+      // 1A, 1B, 2A: horizontal lines centered in void above and below text
+      if (minVoidSize > lineSw * 3 && lineSw > 1) {
+        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+      }
+    }
+
+    if (!lines) return svgString;
+    // Insert lines before </svg>
+    return svgString.replace(/<\/svg>\s*$/i, lines + '</svg>');
   },
 
   /**

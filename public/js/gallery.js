@@ -1943,19 +1943,31 @@ const Gallery = {
     return div.innerHTML;
   },
 
-  // ========== NEW GALLERY: Shuffle Bag Randomized Combos ==========
+  // ========== NEW GALLERY: Deterministic Sequential Combos ==========
 
-  // Param pools for randomization
-  COMBO_POOLS: {
+  // Long pools (5+ items) — rotating start per cycle
+  COMBO_LONG: {
+    style: ['simple','stitch_line','stitch_square','stitch_circle','sawtooth','perforated','perforated_spaced','wavy','zigzag','torn_edge','chalk','perf_line','perf_line_spaced','saw_line'],
     color: ['#000000','#8B0000','#CC0000','#FF0000','#2D572C','#32CD32','#003366','#1E90FF','#4B0082','#FF6600','#DAA520','#FF1493'],
     font: ['Oswald','CourierPrime','Montserrat','Yomogi','BlackOpsOne','Nunito','Exo2','Bitter','Comfortaa','FuzzyBubbles','BebasNeue'],
-    style: ['simple','stitch_line','stitch_square','stitch_circle','sawtooth','perforated','perforated_spaced','wavy','zigzag','torn_edge','chalk','perf_line','perf_line_spaced','saw_line'],
-    corners: ['straight','soft_round','medium_round','strong_round','mixed_top_straight','mixed_top_round','mixed_diag_down','mixed_diag_up'],
-    frames: ['single','double','split'],
-    fill: ['empty'],
-    texture: ['','grungy','scratched','noise'],
-    tilt: [0, -10]
+    corners: ['straight','soft_round','medium_round','strong_round','mixed_top_straight','mixed_top_round','mixed_diag_down','mixed_diag_up']
   },
+
+  // Short pools (<5 items) — balanced repeat
+  COMBO_SHORT: {
+    frames: ['single','double','split'],
+    texture: ['','grungy','scratched','noise'],
+    shape: ['rectangle','square','lined']
+  },
+
+  // Predefined patterns — fixed sequence then restart
+  COMBO_PATTERNS: {
+    fill: ['full','empty','full','full','empty','empty','empty','full'],
+    tilt: [-10, 0, -10, -10, 0, 0, 0, -10]
+  },
+
+  // Rows sub-pool for square shape only
+  COMBO_SQUARE_ROWS: ['2up','2down','3'],
 
   FONT_WEIGHTS: {
     'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700',
@@ -1964,63 +1976,54 @@ const Gallery = {
     'FuzzyBubbles': '700', 'BebasNeue': '400'
   },
 
-  comboBags: {},
+  comboIndex: 0,
   generatedCount: 0,
-  lastCombo: null,
   totalCombos: 0,
   generatedCombos: [],  // stored for cache restore
 
-  _shuffle: function(arr) {
-    for (var i = arr.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
-    }
-    return arr;
-  },
-
   resetBags: function() {
-    var self = this;
-    this.comboBags = {};
-    Object.keys(this.COMBO_POOLS).forEach(function(key) {
-      self.comboBags[key] = self._shuffle(self.COMBO_POOLS[key].slice());
-    });
+    this.comboIndex = 0;
     this.generatedCount = 0;
-    this.lastCombo = null;
     this.generatedCombos = [];
-    // Total = product of all pool sizes × number of base templates
-    this.totalCombos = 1;
-    Object.keys(this.COMBO_POOLS).forEach(function(key) {
-      self.totalCombos *= self.COMBO_POOLS[key].length;
-    });
-    this.totalCombos *= Math.max(1, this.baseResults.length);
+    this.totalCombos = 500;
   },
 
-  drawCombo: function() {
+  drawCombo: function(i) {
     var combo = {};
     var self = this;
-    Object.keys(this.COMBO_POOLS).forEach(function(key) {
-      if (self.comboBags[key].length === 0) {
-        self.comboBags[key] = self._shuffle(self.COMBO_POOLS[key].slice());
-      }
-      var pick = self.comboBags[key].pop();
-      // Adjacency contrast: color, font (via template), style must differ from previous
-      if (self.lastCombo && pick === self.lastCombo[key] && self.comboBags[key].length > 0) {
-        self.comboBags[key].unshift(pick);
-        pick = self.comboBags[key].pop();
-      }
-      combo[key] = pick;
+
+    // Long pools: rotating start per cycle
+    // cycle = floor(i/N) % N, position = i % N, value = pool[(cycle + position) % N]
+    Object.keys(this.COMBO_LONG).forEach(function(key) {
+      var pool = self.COMBO_LONG[key];
+      var N = pool.length;
+      var cycle = Math.floor(i / N) % N;
+      var position = i % N;
+      combo[key] = pool[(cycle + position) % N];
     });
-    // Pick a random base template (provides font + style variety)
-    var baseIdx = Math.floor(Math.random() * this.baseResults.length);
-    // Ensure different template from previous
-    if (this.lastCombo && this.baseResults.length > 1) {
-      var attempts = 0;
-      while (baseIdx === this.lastCombo._baseIdx && attempts < 5) {
-        baseIdx = Math.floor(Math.random() * this.baseResults.length);
-        attempts++;
-      }
+
+    // Short pools: balanced repeat
+    Object.keys(this.COMBO_SHORT).forEach(function(key) {
+      var pool = self.COMBO_SHORT[key];
+      combo[key] = pool[i % pool.length];
+    });
+
+    // Predefined patterns
+    Object.keys(this.COMBO_PATTERNS).forEach(function(key) {
+      var pattern = self.COMBO_PATTERNS[key];
+      combo[key] = pattern[i % pattern.length];
+    });
+
+    // Rows: shape-dependent
+    if (combo.shape === 'square') {
+      combo.rows = this.COMBO_SQUARE_ROWS[i % this.COMBO_SQUARE_ROWS.length];
+    } else {
+      combo.rows = null; // auto-determined by text fitting
     }
-    combo._baseIdx = baseIdx;
+
+    // Base template: deterministic cycle
+    combo._baseIdx = i % Math.max(1, this.baseResults.length);
+
     return combo;
   },
 
@@ -2053,14 +2056,19 @@ const Gallery = {
       document.body.appendChild(loadPill);
     }
 
-    for (var i = 0; i < actualCount; i++) {
-      loadPill.textContent = 'Generating stamp ' + (i + 1) + ' of ' + actualCount + '...';
+    var generated = 0;
+    var maxAttempts = actualCount * 5;
+    while (generated < actualCount && maxAttempts-- > 0) {
+      var combo = this.drawCombo(this.comboIndex++);
+      // Skip invalid combos
+      if (combo.shape === 'lined' && combo.fill === 'full') continue;
+      if (combo.shape === 'lined' && combo.corners !== 'straight') continue;
+      loadPill.textContent = 'Generating stamp ' + (generated + 1) + ' of ' + actualCount + '...';
       loadPill.style.display = '';
-      var combo = this.drawCombo();
-      this.lastCombo = combo;
       this.generatedCount++;
       this.generatedCombos.push(combo);
       await this._renderComboCard(combo, grid);
+      generated++;
     }
     loadPill.style.display = 'none';
 
@@ -2106,7 +2114,7 @@ const Gallery = {
           svg, idx, zone.bounding_width, zone.font_size || 128,
           originalScaleX, combo.frames || 'single',
           combo.fill || 'empty', combo.corners || 'straight',
-          borderStyle, 'rectangle'
+          borderStyle, combo.shape || 'rectangle'
         );
       }
 
@@ -2115,10 +2123,18 @@ const Gallery = {
       svg = SvgRenderer.applyThinStroke(svg);
       svg = SvgRenderer.cropViewBoxToStamp(svg);
 
-      if (combo.corners && combo.corners !== 'straight') {
+      // Shape pipeline: lined → convert, else apply corners
+      if (combo.shape === 'lined') {
+        svg = SvgRenderer.convertToLined(svg);
+      } else if (combo.corners && combo.corners !== 'straight') {
         svg = SvgRenderer.applyCornerRadius(svg, combo.corners);
       } else {
         svg = svg.replace(/\s*rx=["'][\d.]+["']/gi, '').replace(/\s*ry=["'][\d.]+["']/gi, '');
+      }
+
+      // Fill conversion (outlined → filled)
+      if (combo.fill === 'full') {
+        svg = SvgRenderer.convertFill(svg, 'full');
       }
 
       var bi = SvgRenderer.detectBorderType(svg);
@@ -2136,14 +2152,15 @@ const Gallery = {
       if (combo.tilt !== 0) svg = SvgRenderer.applyTilt(svg, combo.tilt);
 
       // Build product URL with ALL combo params
-      var comboRows = (svg.match(/<tspan/gi) || []).length || 1;
+      var comboRows = combo.rows || (svg.match(/<tspan/gi) || []).length || 1;
+      var comboShape = combo.shape || 'rectangle';
       var productUrl = '/product.html?id=' + encodeURIComponent(entry.tpl.id) +
         '&text=' + encodeURIComponent(self.currentText) +
         '&color=' + encodeURIComponent(combo.color.replace('#', '')) +
         '&font=' + encodeURIComponent(fontKey) +
         '&frame=' + encodeURIComponent(combo.frames) +
         '&fill=' + encodeURIComponent(combo.fill) +
-        '&shape=rectangle&tilt=' + combo.tilt +
+        '&shape=' + encodeURIComponent(comboShape) + '&tilt=' + combo.tilt +
         (combo.texture ? '&texture=' + encodeURIComponent(combo.texture) : '') +
         '&corners=' + encodeURIComponent(combo.corners) +
         '&style=' + encodeURIComponent(borderStyle) +
@@ -2159,7 +2176,8 @@ const Gallery = {
         try {
           sessionStorage.setItem('stx-product-combo', JSON.stringify({
             corners: combo.corners, style: borderStyle, fill: combo.fill,
-            texture: combo.texture, tilt: combo.tilt
+            texture: combo.texture, tilt: combo.tilt,
+            shape: combo.shape, rows: combo.rows
           }));
         } catch(e) {}
       });
@@ -2186,8 +2204,9 @@ const Gallery = {
       await this.processAll(this.currentText);
       loadPill.style.display = 'none';
     }
+    this.comboIndex = cachedData.comboIndex || cachedData.generatedCount || 0;
     this.generatedCount = cachedData.generatedCount || 0;
-    this.totalCombos = cachedData.totalCombos || 0;
+    this.totalCombos = cachedData.totalCombos || 500;
     this.generatedCombos = cachedData.combos || [];
 
     var container = document.getElementById('results-batches');

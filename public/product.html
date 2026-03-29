@@ -130,15 +130,9 @@
       </div>
 
       <div class="filter-bar-group filter-bar-dropdown-group" id="product-rows-group" style="order:4;">
-        <label class="filter-bar-label" style="display:flex;align-items:center;gap:4px;">
-          <label id="product-full-label" style="display:none;cursor:pointer;white-space:nowrap;user-select:none;">
-            <input type="checkbox" id="product-full-check" style="margin:0 2px 0 0;vertical-align:middle;cursor:pointer;">
-            <span style="vertical-align:middle;">Big</span>
-          </label>
-          <span>Rows</span>
-        </label>
+        <label class="filter-bar-label"><span>Rows</span></label>
         <div class="filter-bar-dropdown-box" id="product-rows-toggle" style="min-width:52px">
-          <span class="filter-bar-dropdown-value" id="product-rows-value">1</span>
+          <span class="filter-bar-dropdown-value" id="product-rows-value">1A</span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-rows-list">
@@ -416,7 +410,7 @@
               svg, idx, zone.bounding_width,
               zone.font_size, originalScaleX,
               frameMode, currentFill || 'empty', currentCornerStyle || 'straight',
-              currentBorderStyle || null, currentShape, currentFullMode ? 'full' : (currentForceLines === 1 ? '1' : null)
+              currentBorderStyle || null, currentShape, currentFullMode ? 'full' : (currentForceLines === 1 ? '1' : null), currentRowVariant
             );
             didAutoFit = true;
           }
@@ -534,9 +528,22 @@
       var styleParam = params.get('style');
       if (styleParam) currentBorderStyle = styleParam;
       var rowsParam = params.get('rows') || '0';
-      var currentRowsMode = (rowsParam === '2full') ? '2full' : null;
-      var currentForceLines = currentRowsMode ? 2 : (parseInt(rowsParam, 10) || 0);
-      var currentFullMode = params.get('full') === '1';
+      // Parse rows param: "1A", "2B", "3A" etc. Legacy: "2full", plain "2", "0"
+      var currentRowVariant = 'A'; // A = normal/lines, B = big/full
+      var currentRowsMode = null;
+      var currentForceLines = 0;
+      var currentFullMode = false; // legacy compat
+      if (rowsParam === '2full') {
+        currentForceLines = 2; currentRowVariant = 'B'; currentFullMode = true;
+      } else if (/^\d+[AB]$/i.test(rowsParam)) {
+        currentForceLines = parseInt(rowsParam, 10) || 1;
+        currentRowVariant = rowsParam.slice(-1).toUpperCase();
+        currentFullMode = (currentRowVariant === 'B' && currentForceLines <= 2);
+      } else {
+        currentForceLines = parseInt(rowsParam, 10) || 0;
+        // Legacy: check old &full=1 param
+        if (params.get('full') === '1') { currentRowVariant = 'B'; currentFullMode = true; }
+      }
 
       if (!templateId) {
         document.getElementById('product-preview').innerHTML =
@@ -816,10 +823,10 @@
       var rowsList = document.getElementById('product-rows-list');
       rowsList.innerHTML = '';
       var actualMaxRows = 1;
-      for (var ri = 1; ri <= maxRows; ri++) {
-        // Fluid min chars per row: more rows → higher minimum (ceil(rows * 0.7))
-        if (ri >= 2 && !isSingleWord) {
-          // Even word-count distribution (same as splitTextIntoLines)
+      var validRowCounts = [1]; // always have 1
+      for (var ri = 2; ri <= maxRows; ri++) {
+        // Fluid min chars per row: more rows → higher minimum
+        if (!isSingleWord) {
           var twBase = Math.floor(textWords.length / ri);
           var twExtra = textWords.length % ri;
           var testLines = [];
@@ -833,28 +840,33 @@
           for (var tli = 0; tli < testLines.length; tli++) {
             if (testLines[tli].length < minLen) minLen = testLines[tli].length;
           }
-          if (minLen < Math.ceil(ri * 0.7)) continue;
+          if (minLen < Math.ceil(ri * 0.3)) continue;
         }
         actualMaxRows = ri;
-        var isActive = (currentForceLines === ri);
-        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActive ? ' active' : '') + '" data-value="' + ri + '">' + ri + '</div>';
+        validRowCounts.push(ri);
       }
       maxRows = actualMaxRows;
-      // Clamp currentForceLines to available options
-      if (currentForceLines > maxRows) { currentForceLines = maxRows; }
-      // Legacy: convert old '2full' URL param to fat mode
-      if (currentRowsMode === '2full') {
-        currentRowsMode = null;
-        currentForceLines = 2;
-        currentFullMode = true;
+      // Build A/B mode items: 1A, 1B, 2A, 2B, 3A, 3B
+      // Row mode labels: A = normal (+ lines where applicable), B = big/full
+      var ROW_MODE_LABELS = { '1A': '1', '1B': '1 Big', '2A': '2', '2B': '2 Big', '3A': '3', '3B': '3 +' };
+      var currentRowMode = currentForceLines + currentRowVariant;
+      for (var vi = 0; vi < validRowCounts.length; vi++) {
+        var rc = validRowCounts[vi];
+        var modes = (rc <= 2) ? ['A', 'B'] : ['A', 'B']; // all row counts get A/B
+        for (var mi = 0; mi < modes.length; mi++) {
+          var mode = rc + modes[mi];
+          var label = ROW_MODE_LABELS[mode] || mode;
+          var isActive = (mode === currentRowMode);
+          rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActive ? ' active' : '') + '" data-value="' + mode + '">' + label + '</div>';
+        }
       }
-      setDropdownActive('product-rows-list', String(currentForceLines), 'product-rows-value');
-      // Show Fat checkbox whenever multi-row is possible for rectangle
-      var fullLabel = document.getElementById('product-full-label');
-      var fullCheck = document.getElementById('product-full-check');
-      fullLabel.style.display = (maxRows >= 2) ? '' : 'none';
-      if (currentForceLines <= 1 && currentShape !== 'square') { currentFullMode = false; }
-      fullCheck.checked = currentFullMode;
+      // Clamp currentForceLines to available options
+      if (currentForceLines > maxRows) {
+        currentForceLines = maxRows;
+        currentRowMode = currentForceLines + currentRowVariant;
+      }
+      if (currentForceLines === 0) { currentForceLines = 1; currentRowMode = '1A'; }
+      setDropdownActive('product-rows-list', currentRowMode, 'product-rows-value');
 
       updateShapeConstraints();
       updateCornerConstraints();
@@ -1116,29 +1128,13 @@
         if (item.classList.contains('active')) { this.style.display = 'none'; return; }
         this.querySelectorAll('.filter-bar-dropdown-item').forEach(function(el) { el.classList.remove('active'); });
         item.classList.add('active');
-        var rowVal = item.dataset.value;
+        var rowVal = item.dataset.value; // e.g. "1A", "2B", "3A"
+        currentForceLines = parseInt(rowVal, 10) || 1;
+        currentRowVariant = rowVal.slice(-1).toUpperCase();
+        currentFullMode = (currentRowVariant === 'B' && currentForceLines <= 2);
         currentRowsMode = null;
-        currentForceLines = parseInt(rowVal, 10) || 0;
         document.getElementById('product-rows-value').textContent = item.textContent;
-        // Uncheck Fat when selecting Rows=1 (Fat stays visible)
-        if (currentForceLines <= 1) {
-          currentFullMode = false;
-          document.getElementById('product-full-check').checked = false;
-        }
-        // Re-render with new line count
-        rebuildWithFont(currentFont).then(function(svg) {
-          baseSvg = svg;
-          renderPreview();
-        });
-      });
-
-      // Full checkbox toggle — for rectangle, auto-switch to Rows=2; for square, works with any row count
-      document.getElementById('product-full-check').addEventListener('change', function() {
-        currentFullMode = this.checked;
-        if (currentFullMode && currentForceLines <= 1 && currentShape === 'rectangle') {
-          currentForceLines = 2;
-          setDropdownActive('product-rows-list', '2', 'product-rows-value');
-        }
+        // Re-render with new mode
         rebuildWithFont(currentFont).then(function(svg) {
           baseSvg = svg;
           renderPreview();
@@ -1191,8 +1187,7 @@
           '&style=' + currentBorderStyle +
           '&corners=' + (currentCornerStyle || 'straight') +
           '&texture=' + encodeURIComponent(currentTexture || '') +
-          '&rows=' + (currentForceLines || 0) +
-          (currentFullMode ? '&full=1' : '');
+          '&rows=' + (currentForceLines || 1) + (currentRowVariant || 'A');
       }
 
       function isComboSaved() {
@@ -1655,6 +1650,11 @@
             } else {
               svg = await SvgRenderer.applyTexture(svg, currentTexture);
             }
+          }
+          // Decorative lines for square stamps (A/B variant)
+          if (currentShape === 'square' && currentRowVariant) {
+            var dlRows = (svg.match(/<tspan/gi) || []).length || 1;
+            svg = SvgRenderer.addDecorativeLines(svg, currentRowVariant, dlRows);
           }
           // Watermark before tilt — sized to stamp viewBox, rotates with stamp
           svg = SvgRenderer.addWatermark(svg);
