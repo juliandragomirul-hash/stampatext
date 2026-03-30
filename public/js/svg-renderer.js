@@ -3427,7 +3427,7 @@ const SvgRenderer = {
         // 5. Repeat for all lines
         _2fullFontSizes = [];
         var _sqShortIdx = -1;
-        var targetH = innerH / (fontScaleY || 1); // pre-compensate for scaleY
+        var targetH = innerH / (fontScaleY || 1);
 
         // Build sorted index array (longest width first)
         var sortedIndices = [];
@@ -3442,7 +3442,14 @@ const SvgRenderer = {
         // Check if all rows are similar width (within 20%) → equal sizing instead of cascade
         var widthRatio = heroWidths[sortedIndices[0]] > 0
           ? heroWidths[sortedIndices[sortedIndices.length - 1]] / heroWidths[sortedIndices[0]] : 1;
-        var equalMode = (widthRatio > 0.8);
+        // Equal mode unless there's exactly ONE outlier row (much narrower than the rest)
+        // Count how many rows are within 50% of the widest
+        var wideCount = 0;
+        for (var wi = 0; wi < numLines; wi++) {
+          if (heroWidths[wi] >= heroWidths[sortedIndices[0]] * 0.5) wideCount++;
+        }
+        // Cascade only if exactly 1 row is the outlier (narrow), rest are wide
+        var equalMode = (wideCount >= numLines - 1) ? (widthRatio > 0.4) : true;
 
         if (equalMode) {
           // Equal sizing: all rows get same font size, constrained by height
@@ -3455,22 +3462,45 @@ const SvgRenderer = {
             _2fullFontSizes[hi] = Math.min(equalFs, fsByW);
           }
         } else {
-          // Cascade: widest row first, each fills width, constrained by remaining height.
-          // Widest row gets biggest possible font. Narrower rows get what's left.
-          var remainingH = targetH;
-          for (var si = 0; si < sortedIndices.length; si++) {
+          // Cascade: all rows except last fill width freely. Last gets remainder.
+          // Boost targetH by 12% to compensate for inkRatio underestimation (gives last row more room)
+          var cascadeTargetH = targetH * 1.05;
+          // Step 1: All-but-last fill width (no height constraint)
+          var lastIdx = sortedIndices[sortedIndices.length - 1]; // narrowest row
+          var consumedH = 0;
+          for (var si = 0; si < sortedIndices.length - 1; si++) {
             var idx = sortedIndices[si];
             var rowW = heroWidths[idx] || 1;
-            // Font size to fill width
-            var fsByWidth = measureFs * (innerW / rowW);
-            // Font size to fit ALL remaining height (not fair-share)
-            var fsByHeight = Math.max((remainingH - strokeAdd) / inkRatio, measureFs * 0.1);
-            var finalFs = Math.min(fsByWidth, fsByHeight);
-            _2fullFontSizes[idx] = finalFs;
-            // Deduct consumed height
-            remainingH -= finalFs * inkRatio + strokeAdd;
-            if (remainingH < 0) remainingH = 0;
+            var fs = measureFs * (innerW / rowW);
+            _2fullFontSizes[idx] = fs;
+            consumedH += fs * inkRatio + strokeAdd;
           }
+          // Add gaps between all-but-last rows
+          var maxFsABL = 0;
+          for (var si = 0; si < sortedIndices.length - 1; si++) {
+            if (_2fullFontSizes[sortedIndices[si]] > maxFsABL) maxFsABL = _2fullFontSizes[sortedIndices[si]];
+          }
+          consumedH += maxFsABL * sqGapFactor * Math.max(0, sortedIndices.length - 2);
+
+          // Step 2: If all-but-last overflow, shrink them proportionally
+          var availForLast = cascadeTargetH - consumedH;
+          if (availForLast < cascadeTargetH * 0.1) {
+            // Shrink all-but-last to leave at least 10% for last row
+            var shrinkTarget = cascadeTargetH * 0.9;
+            var shrinkFactor = shrinkTarget / consumedH;
+            for (var si = 0; si < sortedIndices.length - 1; si++) {
+              _2fullFontSizes[sortedIndices[si]] *= shrinkFactor;
+            }
+            availForLast = cascadeTargetH * 0.1;
+          }
+
+          // Step 3: Last row (narrowest) gets remaining height
+          var lastW = heroWidths[lastIdx] || 1;
+          var fsByWidthLast = measureFs * (innerW / lastW);
+          // One gap between last row and the row above it
+          var lastGap = maxFsABL * sqGapFactor;
+          var fsByHeightLast = Math.max((availForLast - strokeAdd - lastGap) / inkRatio, measureFs * 0.1);
+          _2fullFontSizes[lastIdx] = Math.min(fsByWidthLast, fsByHeightLast);
         }
 
         if (numLines === 3) {
@@ -3489,7 +3519,8 @@ const SvgRenderer = {
         }
         var heroH = heroBlockHeight(_2fullFontSizes);
         var visualH = heroH * (fontScaleY || 1);
-        if (visualH > innerH && visualH > 0) {
+        // Only shrink for equal mode — cascade already self-limits via remainingH
+        if (equalMode && visualH > innerH && visualH > 0) {
           var shrink = innerH / visualH;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             _2fullFontSizes[hi] *= shrink;
@@ -3501,11 +3532,12 @@ const SvgRenderer = {
         newRectWidth = squareSide;
         newRectHeight = squareSide;
 
-        // Part B: Full compensation — scale font sizes to fill square height (no scaleY boost)
+        // Part B: Full compensation — scale font sizes to fill square height
+        // Boost by 1.08 to compensate for inkRatio systematic underestimation
         if (rowsMode === 'full') {
           var visualH2 = heroBlockHeight(_2fullFontSizes) * (fontScaleY || 1);
           if (visualH2 > 0 && Math.abs(visualH2 - innerH) > 1) {
-            var scaleFactor = innerH / visualH2;
+            var scaleFactor = (innerH / visualH2) * 1.08;
             for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
               _2fullFontSizes[hi] *= scaleFactor;
             }
@@ -3672,7 +3704,7 @@ const SvgRenderer = {
           // dy is in pre-transform space, so offset = visualTotal / (2 * fontScaleY) = total2f / 2
           // But the matrix ty is at viewBoxCenterY (not adjusted for scaleY), so we need:
           var heroDyVals = [];
-          var useSpread = (rowsMode === 'full' && stampShape === 'square') || (_sq3RowHalfH > 0 && _2fullFontSizes.length === 3);
+          var useSpread = false; // disabled — use centered block for all modes
           if (useSpread) {
             // Spread layout: divide inner height into bands proportional to font size.
             // Each row's ink visually centered in its band.
