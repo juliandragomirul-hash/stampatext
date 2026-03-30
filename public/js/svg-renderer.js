@@ -5145,6 +5145,9 @@ const SvgRenderer = {
     var outerSw = rectMatch ? parseFloat(rectMatch[1]) : 50;
     var colorMatch = svgString.match(/<rect[^>]*stroke=["']([^"']+)["']/i);
     var stampColor = colorMatch ? colorMatch[1] : '#000000';
+    // For filled stamps, use text color (contrast) instead of rect stroke
+    var textFillMatch = svgString.match(/<text[^>]*fill=["']([^"']+)["']/i);
+    var lineColor = textFillMatch ? textFillMatch[1] : stampColor;
 
     // Line specs: stroke = outerSw/2
     var lineSw = outerSw / 2;
@@ -5229,25 +5232,25 @@ const SvgRenderer = {
           if (rowLineSw > 0.5) {
             var lx1 = innerStrokeLeft + borderGap;
             var lx2 = rowLeft - textGap;
-            lines += '<line x1="' + lx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + lx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
+            lines += '<line x1="' + lx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + lx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
             var rx1 = rowRight + textGap;
             var rx2 = innerStrokeRight - borderGap;
-            lines += '<line x1="' + rx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + rx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
+            lines += '<line x1="' + rx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + rx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
           }
         }
       } else if (!hasHorizontalVoid) {
         // VERTICAL VOID: top/bottom horizontal lines
         if (minVoidSize > vbH * 0.10 && lineSw > 1) {
-          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
-          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
         }
       }
     } else {
       // 1-row: horizontal lines centered in void above and below text
       // Only draw when void is at least 15% of stamp height
       if (minVoidSize > vbH * 0.15 && lineSw > 1) {
-        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
-        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
       }
     }
 
