@@ -1576,6 +1576,7 @@ body.gallery-active .stamp-hero-input-wrapper {
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: flex-end;
+  justify-content: center;
   padding: 0.75rem 2rem;
   margin-bottom: 0.5rem;
   background: #f8f8f8;
