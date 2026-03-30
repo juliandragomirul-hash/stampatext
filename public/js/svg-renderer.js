@@ -3404,7 +3404,10 @@ const SvgRenderer = {
         var sqPad = Math.max(hPadding + squareSide * 0.02, squareSide * 0.08);
         // Split inner dimensions: independent h/v control for asymmetric border intrusion
         // 3-row: tighter vertical padding to give more room for short row
-        var vSqPad = (numLines >= 2 && rowsMode !== 'full') ? sqPad * 0.7 : sqPad;
+        // Full mode: tighter vPad for more rows (compensates inkR underestimation compounding)
+        var vPadScale = (rowsMode === 'full') ? Math.max(0.5, 1.0 - (numLines - 1) * 0.1) :
+                        (numLines >= 2) ? 0.7 : 1.0;
+        var vSqPad = sqPad * vPadScale;
         var innerH = squareSide - vSqPad * 2;
         var hSqPadAdj = 0;
         var innerW = squareSide - (sqPad + hSqPadAdj) * 2;
@@ -3452,22 +3455,21 @@ const SvgRenderer = {
             _2fullFontSizes[hi] = Math.min(equalFs, fsByW);
           }
         } else {
-          // Cascade: longest first, each constrained by remaining height
+          // Cascade: widest row first, each fills width, constrained by remaining height.
+          // Widest row gets biggest possible font. Narrower rows get what's left.
           var remainingH = targetH;
-          var remainingRows = numLines;
           for (var si = 0; si < sortedIndices.length; si++) {
             var idx = sortedIndices[si];
             var rowW = heroWidths[idx] || 1;
+            // Font size to fill width
             var fsByWidth = measureFs * (innerW / rowW);
-            // Height constraint: this row gets its fair share of remaining space
-            var gapH = remainingRows > 1 ? fsByWidth * sqGapFactor : 0;
-            var maxHForRow = remainingH / remainingRows;
-            var fsByHeight = Math.max((maxHForRow - strokeAdd - gapH) / inkRatio, measureFs * 0.1);
+            // Font size to fit ALL remaining height (not fair-share)
+            var fsByHeight = Math.max((remainingH - strokeAdd) / inkRatio, measureFs * 0.1);
             var finalFs = Math.min(fsByWidth, fsByHeight);
             _2fullFontSizes[idx] = finalFs;
-            var consumedH = finalFs * inkRatio + strokeAdd + (remainingRows > 1 ? finalFs * sqGapFactor : 0);
-            remainingH -= consumedH;
-            remainingRows--;
+            // Deduct consumed height
+            remainingH -= finalFs * inkRatio + strokeAdd;
+            if (remainingH < 0) remainingH = 0;
           }
         }
 
@@ -3518,7 +3520,7 @@ const SvgRenderer = {
 
         // Apply per-tspan font-size (always)
         var tspanIdx2f = 0;
-        var maxStretchRatio = numLines >= 4 ? 2.0 : (numLines >= 3 ? 2.0 : 2.5);
+        var maxStretchRatio = numLines >= 4 ? 2.0 : 2.5;
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
           if (tspanIdx2f < _2fullFontSizes.length) {
             var fs = _2fullFontSizes[tspanIdx2f];
@@ -3672,26 +3674,30 @@ const SvgRenderer = {
           var heroDyVals = [];
           var useSpread = (rowsMode === 'full' && stampShape === 'square') || (_sq3RowHalfH > 0 && _2fullFontSizes.length === 3);
           if (useSpread) {
-            // Spread layout: pin first row at top, last at bottom, distribute evenly
-            var halfH = _sq3RowHalfH > 0 ? _sq3RowHalfH : (innerH / (2 * (fontScaleY || 1)));
+            // Spread layout: divide inner height into bands proportional to font size.
+            // Each row's ink visually centered in its band.
+            var rawHalfH = _sq3RowHalfH > 0 ? _sq3RowHalfH : (innerH / (2 * (fontScaleY || 1)));
             var nR = _2fullFontSizes.length;
-            // Baselines array (absolute, relative to matrix ty=0)
+            // Compensate inkR underestimation: expand spread zone by ~5% per row
+            var spreadBoost = 1.0 + (nR - 1) * 0.03;
+            var halfH = rawHalfH * spreadBoost;
+            var totalH = halfH * 2;
+
+            // Band weights = font sizes (not inkR — avoids systematic underestimate)
+            var totalFs = 0;
+            for (var ri = 0; ri < nR; ri++) totalFs += _2fullFontSizes[ri];
+
+            // Baseline = band center + (ascent - descent) / 2 for visual ink centering
             var baselines = [];
-            baselines.push(-halfH + _2fullFontSizes[0] * ascentR);
-            baselines.push(halfH - _2fullFontSizes[nR - 1] * descentR);
-            if (nR > 2) {
-              // Intermediate rows: distribute evenly between first and last baseline
-              var spanBL = baselines[1] - baselines[0];
-              var intermediates = [];
-              for (var mi = 1; mi < nR - 1; mi++) {
-                intermediates.push(baselines[0] + spanBL * (mi / (nR - 1)));
-              }
-              // Rebuild baselines in order: first, intermediates, last
-              var lastBL = baselines[1];
-              baselines = [baselines[0]];
-              for (var mi = 0; mi < intermediates.length; mi++) baselines.push(intermediates[mi]);
-              baselines.push(lastBL);
+            var bandTop = -halfH;
+            for (var ri = 0; ri < nR; ri++) {
+              var bandH = (_2fullFontSizes[ri] / totalFs) * totalH;
+              var bandCenter = bandTop + bandH / 2;
+              var bl = bandCenter + _2fullFontSizes[ri] * (ascentR - descentR) * 0.3;
+              baselines.push(bl);
+              bandTop += bandH;
             }
+
             // Convert to dy values (first absolute, rest relative)
             heroDyVals.push(baselines[0]);
             for (var di = 1; di < baselines.length; di++) {
@@ -5158,17 +5164,20 @@ const SvgRenderer = {
       var rowWidthsAttr = svgString.match(/data-row-widths=["']([^"']+)["']/);
       var rowWidths = rowWidthsAttr ? rowWidthsAttr[1].split(',').map(parseFloat) : null;
 
-      // First pass: check if any row has horizontal void (>5% per side)
+      // First pass: check if any row has horizontal void
+      // A mode: higher threshold (15%) since text is already stretched, only big gaps matter
+      // Normal mode: lower threshold (5%) to catch natural void
+      var voidThreshold = (rowVariant === 'A') ? 0.15 : 0.05;
       var hasHorizontalVoid = false;
       var innerW = sqSideVal - outerSw;
       if (rowWidths) {
         for (var ri = 0; ri < Math.min(rowWidths.length, numRows); ri++) {
           var hVoid = (innerW - rowWidths[ri]) / 2;
-          if (hVoid >= innerW * 0.05) { hasHorizontalVoid = true; break; }
+          if (hVoid >= innerW * voidThreshold) { hasHorizontalVoid = true; break; }
         }
       }
 
-      if (hasHorizontalVoid && rowCenters && rowWidths && rowVariant !== 'A') {
+      if (hasHorizontalVoid && rowCenters && rowWidths) {
         // HORIZONTAL VOID: lateral flanking lines per row
         for (var ri = 0; ri < Math.min(numRows, rowCenters.length); ri++) {
           var rowCenterY = rowCenters[ri];
