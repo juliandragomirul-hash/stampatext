@@ -1584,6 +1584,7 @@ body.gallery-active .stamp-hero-input-wrapper {
   position: relative;
   width: 100%;
   box-sizing: border-box;
+  min-height: 90px;
 }
 .customize-close-btn {
   position: absolute;
