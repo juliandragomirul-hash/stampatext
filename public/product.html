@@ -1647,7 +1647,7 @@
           // Decorative lines for square stamps
           if (currentShape === 'square') {
             var dlRows = (svg.match(/<tspan/gi) || []).length || 1;
-            svg = SvgRenderer.addDecorativeLines(svg, currentRowVariant || 'A', dlRows);
+            svg = SvgRenderer.addDecorativeLines(svg, currentFullMode ? 'A' : '', dlRows);
           }
           // Watermark before tilt — sized to stamp viewBox, rotates with stamp
           svg = SvgRenderer.addWatermark(svg);

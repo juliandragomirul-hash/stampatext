@@ -3408,7 +3408,7 @@ const SvgRenderer = {
         var innerH = squareSide - vSqPad * 2;
         var hSqPadAdj = 0;
         var innerW = squareSide - (sqPad + hSqPadAdj) * 2;
-        var sqGapFactor = 0.04;
+        var sqGapFactor = numLines >= 4 ? 0.02 : 0.04;
         var measureFs = measurements.canvasMeasureFontSize || newFontSize;
 
         // Stroke overhead for height calculations
@@ -3499,9 +3499,8 @@ const SvgRenderer = {
         newRectWidth = squareSide;
         newRectHeight = squareSide;
 
-        // Part B: Full compensation
+        // Part B: Full compensation — scale font sizes to fill square height (no scaleY boost)
         if (rowsMode === 'full') {
-          // Scale hero font sizes to fill square height + capped textLength fills width
           var visualH2 = heroBlockHeight(_2fullFontSizes) * (fontScaleY || 1);
           if (visualH2 > 0 && Math.abs(visualH2 - innerH) > 1) {
             var scaleFactor = innerH / visualH2;
@@ -3511,17 +3510,6 @@ const SvgRenderer = {
             heroH = heroBlockHeight(_2fullFontSizes);
             textBlockHeight = heroH;
           }
-          // Calculated scaleY boost: textLength fills width exactly to innerW,
-          // but font-size fills height only to inkRatio precision (systematic underestimation).
-          // Boost scaleY by inverse of ink coverage ratio to match textLength's exact fill.
-          var rawInkH = 0;
-          for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
-            rawInkH += _2fullFontSizes[hi] * inkRatio;
-          }
-          rawInkH *= (fontScaleY || 1);
-          if (rawInkH > 0) {
-            _sqFullHiScale = (innerH / rawInkH) * 0.92; // 8% breathing room
-          }
         }
 
         // Stamp text block height for decorative lines (visual height including scaleY)
@@ -3530,7 +3518,7 @@ const SvgRenderer = {
 
         // Apply per-tspan font-size (always)
         var tspanIdx2f = 0;
-        var maxStretchRatio = numLines >= 4 ? 1.5 : (numLines >= 3 ? 2.0 : 2.5);
+        var maxStretchRatio = numLines >= 4 ? 2.0 : (numLines >= 3 ? 2.0 : 2.5);
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
           if (tspanIdx2f < _2fullFontSizes.length) {
             var fs = _2fullFontSizes[tspanIdx2f];
@@ -3541,7 +3529,7 @@ const SvgRenderer = {
             // Full: add textLength to fill square width (capped)
             // Apply textLength in full mode. Skip short row only for 3+ rows (stays natural width).
             var tlAttr = '';
-            if (rowsMode === 'full' && (numLines <= 2 || ci !== _sqShortIdx)) {
+            if (rowsMode === 'full') {
               var naturalW = heroWidths[ci] * (fs / measureFs);
               var stretchRatio = naturalW > 0 ? innerW / naturalW : 1;
               var cappedTL = Math.min(stretchRatio, maxStretchRatio) * naturalW;
@@ -3682,20 +3670,35 @@ const SvgRenderer = {
           // dy is in pre-transform space, so offset = visualTotal / (2 * fontScaleY) = total2f / 2
           // But the matrix ty is at viewBoxCenterY (not adjusted for scaleY), so we need:
           var heroDyVals = [];
-          if (_sq3RowHalfH > 0 && _2fullFontSizes.length === 3) {
-            // 3-row spread: BACK at top, SCHOOL at bottom, TO centered between
-            var halfH = _sq3RowHalfH;
-            var bl0 = -halfH + _2fullFontSizes[0] * ascentR; // first baseline: cap top at inner top
-            var bl2 = halfH - _2fullFontSizes[2] * descentR; // last baseline: descent bottom at inner bottom
-            // Center TO's ink in the gap between BACK's bottom and SCHOOL's top
-            var gapTop = bl0 + _2fullFontSizes[0] * descentR; // bottom of BACK
-            var gapBot = bl2 - _2fullFontSizes[2] * ascentR; // top of SCHOOL
-            var bl1 = (gapTop + gapBot) / 2 + _2fullFontSizes[1] * (ascentR - descentR) / 2; // center TO's ink
-            heroDyVals.push(bl0);
-            heroDyVals.push(bl1 - bl0);
-            heroDyVals.push(bl2 - bl1);
+          var useSpread = (rowsMode === 'full' && stampShape === 'square') || (_sq3RowHalfH > 0 && _2fullFontSizes.length === 3);
+          if (useSpread) {
+            // Spread layout: pin first row at top, last at bottom, distribute evenly
+            var halfH = _sq3RowHalfH > 0 ? _sq3RowHalfH : (innerH / (2 * (fontScaleY || 1)));
+            var nR = _2fullFontSizes.length;
+            // Baselines array (absolute, relative to matrix ty=0)
+            var baselines = [];
+            baselines.push(-halfH + _2fullFontSizes[0] * ascentR);
+            baselines.push(halfH - _2fullFontSizes[nR - 1] * descentR);
+            if (nR > 2) {
+              // Intermediate rows: distribute evenly between first and last baseline
+              var spanBL = baselines[1] - baselines[0];
+              var intermediates = [];
+              for (var mi = 1; mi < nR - 1; mi++) {
+                intermediates.push(baselines[0] + spanBL * (mi / (nR - 1)));
+              }
+              // Rebuild baselines in order: first, intermediates, last
+              var lastBL = baselines[1];
+              baselines = [baselines[0]];
+              for (var mi = 0; mi < intermediates.length; mi++) baselines.push(intermediates[mi]);
+              baselines.push(lastBL);
+            }
+            // Convert to dy values (first absolute, rest relative)
+            heroDyVals.push(baselines[0]);
+            for (var di = 1; di < baselines.length; di++) {
+              heroDyVals.push(baselines[di] - baselines[di - 1]);
+            }
           } else {
-            // 2-row: center the block
+            // Normal mode: center the block using total2f
             heroDyVals.push(-(total2f / 2) + _2fullFontSizes[0] * ascentR);
             for (var hi = 1; hi < _2fullFontSizes.length; hi++) {
               heroDyVals.push(_2fullFontSizes[hi - 1] * descentR + gap2f + _2fullFontSizes[hi] * ascentR);
@@ -5165,7 +5168,7 @@ const SvgRenderer = {
         }
       }
 
-      if (hasHorizontalVoid && rowCenters && rowWidths) {
+      if (hasHorizontalVoid && rowCenters && rowWidths && rowVariant !== 'A') {
         // HORIZONTAL VOID: lateral flanking lines per row
         for (var ri = 0; ri < Math.min(numRows, rowCenters.length); ri++) {
           var rowCenterY = rowCenters[ri];
@@ -5175,8 +5178,8 @@ const SvgRenderer = {
 
           var hVoid = rowLeft - innerStrokeLeft;
           if (hVoid < 10) continue;
-          // Proportional gaps: 15% each for edge and text, 70% for line
-          var borderGap = Math.max(hVoid * 0.15, 4);
+          // Fixed edge gap (consistent across all rows), proportional text gap
+          var borderGap = outerSw * 0.55;
           var textGap = Math.max(hVoid * 0.15, 4);
           var flankLen = hVoid - textGap - borderGap;
           if (flankLen < 8) continue;
