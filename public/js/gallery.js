@@ -503,22 +503,27 @@ const Gallery = {
             variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-rowmode="' + currentRowMode + '"');
           }
 
-          // Rectangle/Lined: randomly force multi-line for multi-word text
+          // Rectangle/Lined: randomly pick a row count from valid range
           var appliedForceLines = null;
           if (stampShape !== 'square' && base.preAutoFitSvg) {
             var rectText = (self.currentText || 'Your text here').toUpperCase();
             var rectWords = rectText.trim().split(/\s+/);
-            if (rectWords.length >= 2) {
-              // 50% chance of forcing 2 lines for 2+ word text
-              var forceMulti = Math.random() < 0.5;
-              if (forceMulti) {
-                appliedForceLines = Math.min(rectWords.length, 2);
+            var rectChars = rectText.trim().length;
+            var rectMinRows = rectWords.length <= 1 ? 1 : Math.max(1, Math.ceil(rectChars / 25));
+            var rectMaxRows = rectWords.length <= 1 ? 1 : Math.min(rectWords.length, 5);
+            if (rectMinRows > rectMaxRows) rectMinRows = rectMaxRows;
+            if (rectMaxRows > 1) {
+              // Pick random row count from valid range
+              appliedForceLines = rectMinRows + Math.floor(Math.random() * (rectMaxRows - rectMinRows + 1));
+              if (appliedForceLines > 1) {
                 variantSvg = SvgRenderer.replaceTextInString(
                   base.preAutoFitSvg,
                   base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0,
                   rectText,
                   appliedForceLines
                 );
+              } else {
+                appliedForceLines = null; // 1 row = default, no force needed
               }
             }
           }

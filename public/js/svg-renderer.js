@@ -1348,10 +1348,10 @@ const SvgRenderer = {
    * @returns {number}
    */
   _getMaxCharsPerLine(len) {
-    // 1-60 chars: 16 chars per line
-    // 61+ chars: 20 chars per line
-    return len <= 60 ? 16 : 20;
-  },
+    // 1-60 chars: 25 chars per line
+    // 61+ chars: 30 chars per line
+    return len <= 60 ? 25 : 30;
+},
 
   /**
    * Split text into lines for Fixed Frame templates.
@@ -1518,17 +1518,8 @@ const SvgRenderer = {
     var words = text.split(' ');
     var isSingleWord = words.length === 1;
 
-    // Single word: only break when forceLines > 1, using syllable splitting
+    // Single word: never break (syllable splitting removed for rectangles)
     if (isSingleWord) {
-      if (forceLines && forceLines > 1) {
-        var syllables = this._splitSyllables(text);
-        if (syllables.length >= forceLines) {
-          return this._distributeSyllables(syllables, forceLines);
-        }
-        // Not enough syllables — return what we have
-        return syllables.length > 1 ? this._distributeSyllables(syllables, Math.min(forceLines, syllables.length)) : [text];
-      }
-      // Single word, no forceLines: never break
       return [text];
     }
 
@@ -3212,6 +3203,9 @@ const SvgRenderer = {
         }
       }
 
+      // Full Hi scale: 2x vertical stretch for 1-row full mode (square or rect 1A)
+      var _sqFullHiScale = 1;
+
       // Square shape enforcement (old gallery path): only for gallery-injected sq-scales
       // Product page uses the Hero block in the 2Full section instead
       var _sqComputedFontSizes = null;
@@ -3355,10 +3349,11 @@ const SvgRenderer = {
         newRectWidth = squareSide;
         newRectHeight = squareSide;
         // Full + 1 row: Hi-style — extra scaleY for taller text, textLength fills width
-        var _sqFullHiScale = 1;
         if (rowsMode === 'full' && numLines <= 1) {
           var sqInner = squareSide - Math.max(hPadding + squareSide * 0.02, squareSide * 0.08) * 2;
-          _sqFullHiScale = 2.0; // +100% height via matrix scaleY
+          // Dynamic scaleY: fill available inner height, cap at 2.0
+          var currentTextH = textBlockHeight * (fontScaleY || 1);
+          _sqFullHiScale = currentTextH > 0 ? Math.min(sqInner / currentTextH, 2.0) : 2.0;
           // textLength forces width to fill square
           result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
             attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
@@ -3372,6 +3367,12 @@ const SvgRenderer = {
           var sq1Pad = Math.max(hPadding + squareSide * 0.02, squareSide * 0.08);
           result = result.replace(/<svg/, '<svg data-sq-pad="' + sq1Pad.toFixed(1) + '" data-sq-vis-h="' + vis1H.toFixed(1) + '" data-sq-side="' + squareSide.toFixed(1) + '"');
         }
+      }
+
+      // Rectangle 1A: double text height via scaleY (same concept as square Hi-style)
+      if (stampShape !== 'square' && rowsMode === 'full' && numLines <= 1) {
+        _sqFullHiScale = 2.0;
+        newRectHeight = textBlockHeight * 2 + vPadding * 2;
       }
 
       // Square hero: ALWAYS equalize row widths via per-row font sizes
@@ -3403,7 +3404,7 @@ const SvgRenderer = {
         var sqPad = Math.max(hPadding + squareSide * 0.02, squareSide * 0.08);
         // Split inner dimensions: independent h/v control for asymmetric border intrusion
         // 3-row: tighter vertical padding to give more room for short row
-        var vSqPad = (numLines === 3) ? sqPad * 0.7 : sqPad;
+        var vSqPad = (numLines >= 2 && rowsMode !== 'full') ? sqPad * 0.7 : sqPad;
         var innerH = squareSide - vSqPad * 2;
         var hSqPadAdj = 0;
         var innerW = squareSide - (sqPad + hSqPadAdj) * 2;
@@ -3415,54 +3416,63 @@ const SvgRenderer = {
         var strokeAdd = propStroke * 2; // stroke extends both up and down
         var _sq3RowHalfH = 0; // stored for dy positioning (pre-scaleY half-height)
 
-        // Per-row font sizing
+        // Per-row font sizing: longest-first cascade
+        // 1. Sort lines by width (longest first)
+        // 2. Longest fills square width → determines its font size
+        // 3. Deduct ink height from available vertical space
+        // 4. Next line: font size = min(fill-width, fit-remaining-height)
+        // 5. Repeat for all lines
         _2fullFontSizes = [];
-        var _sqShortIdx = -1; // index of short row (3-row only, gets remainder height)
-        if (numLines === 3) {
-          // 3-row hierarchy: 2 longest fill width, shortest gets remaining height
-          var targetH = innerH / (fontScaleY || 1); // pre-compensate for scaleY
-          var shortIdx = 0, shortW = heroWidths[0];
-          for (var hi = 1; hi < 3; hi++) {
-            if (heroWidths[hi] < shortW) { shortW = heroWidths[hi]; shortIdx = hi; }
-          }
-          _sqShortIdx = shortIdx;
-          // Size the 2 longer rows to fill width
-          var heroSizes = [];
-          for (var hi = 0; hi < 3; hi++) {
-            if (hi === shortIdx) {
-              heroSizes.push(0); // placeholder
-            } else {
-              heroSizes.push(measureFs * (innerW / heroWidths[hi]));
-            }
-          }
-          // Compute height consumed by 2 hero rows
-          var heroUsedH = 0;
-          for (var hi = 0; hi < 3; hi++) {
-            if (hi !== shortIdx) heroUsedH += heroSizes[hi] * inkRatio + strokeAdd;
-          }
-          var heroMax = Math.max(heroSizes[0], heroSizes[1], heroSizes[2]);
-          heroUsedH += heroMax * sqGapFactor * 2; // 2 gaps
-          // If heroes already exceed targetH, shrink them to leave 15% for short row
-          var minShortH = targetH * 0.15;
-          if (heroUsedH + minShortH > targetH) {
-            var heroShrink = (targetH - minShortH) / heroUsedH;
-            for (var hi = 0; hi < 3; hi++) {
-              if (hi !== shortIdx) heroSizes[hi] *= heroShrink;
-            }
-            heroUsedH *= heroShrink;
-          }
-          // Short row gets remaining vertical space
-          var remainH = targetH - heroUsedH;
-          var shortFs = Math.max((remainH - strokeAdd) / inkRatio, heroMax * 0.1);
-          heroSizes[shortIdx] = shortFs;
-          _2fullFontSizes = heroSizes;
-          _sq3RowHalfH = innerH / (2 * (fontScaleY || 1)); // pre-transform half-height for dy
-        } else {
-          // 2 rows: both fill width (existing behavior)
+        var _sqShortIdx = -1;
+        var targetH = innerH / (fontScaleY || 1); // pre-compensate for scaleY
+
+        // Build sorted index array (longest width first)
+        var sortedIndices = [];
+        for (var hi = 0; hi < numLines; hi++) sortedIndices.push(hi);
+        sortedIndices.sort(function(a, b) { return heroWidths[b] - heroWidths[a]; });
+        // Track shortest row for textLength skip
+        _sqShortIdx = sortedIndices[sortedIndices.length - 1];
+
+        // Initialize font sizes array
+        for (var hi = 0; hi < numLines; hi++) _2fullFontSizes.push(0);
+
+        // Check if all rows are similar width (within 20%) → equal sizing instead of cascade
+        var widthRatio = heroWidths[sortedIndices[0]] > 0
+          ? heroWidths[sortedIndices[sortedIndices.length - 1]] / heroWidths[sortedIndices[0]] : 1;
+        var equalMode = (widthRatio > 0.8);
+
+        if (equalMode) {
+          // Equal sizing: all rows get same font size, constrained by height
+          // totalH = numLines * (fs * inkRatio + strokeAdd) + (numLines-1) * fs * sqGapFactor
+          //        = fs * (numLines * inkRatio + (numLines-1) * sqGapFactor) + numLines * strokeAdd
+          var equalFs = (targetH - numLines * strokeAdd) / (numLines * inkRatio + (numLines - 1) * sqGapFactor);
           for (var hi = 0; hi < numLines; hi++) {
-            var rowW = heroWidths[hi] || 1;
-            _2fullFontSizes.push(measureFs * (innerW / rowW));
+            // Also cap by width
+            var fsByW = measureFs * (innerW / (heroWidths[hi] || 1));
+            _2fullFontSizes[hi] = Math.min(equalFs, fsByW);
           }
+        } else {
+          // Cascade: longest first, each constrained by remaining height
+          var remainingH = targetH;
+          var remainingRows = numLines;
+          for (var si = 0; si < sortedIndices.length; si++) {
+            var idx = sortedIndices[si];
+            var rowW = heroWidths[idx] || 1;
+            var fsByWidth = measureFs * (innerW / rowW);
+            // Height constraint: this row gets its fair share of remaining space
+            var gapH = remainingRows > 1 ? fsByWidth * sqGapFactor : 0;
+            var maxHForRow = remainingH / remainingRows;
+            var fsByHeight = Math.max((maxHForRow - strokeAdd - gapH) / inkRatio, measureFs * 0.1);
+            var finalFs = Math.min(fsByWidth, fsByHeight);
+            _2fullFontSizes[idx] = finalFs;
+            var consumedH = finalFs * inkRatio + strokeAdd + (remainingRows > 1 ? finalFs * sqGapFactor : 0);
+            remainingH -= consumedH;
+            remainingRows--;
+          }
+        }
+
+        if (numLines === 3) {
+          _sq3RowHalfH = innerH / (2 * (fontScaleY || 1));
         }
 
         // Height constraint: shrink if total exceeds available
@@ -3510,7 +3520,7 @@ const SvgRenderer = {
           }
           rawInkH *= (fontScaleY || 1);
           if (rawInkH > 0) {
-            _sqFullHiScale = innerH / rawInkH;
+            _sqFullHiScale = (innerH / rawInkH) * 0.92; // 8% breathing room
           }
         }
 
@@ -3520,7 +3530,7 @@ const SvgRenderer = {
 
         // Apply per-tspan font-size (always)
         var tspanIdx2f = 0;
-        var maxStretchRatio = numLines >= 4 ? 1.3 : (numLines >= 3 ? 1.4 : 1.5);
+        var maxStretchRatio = numLines >= 4 ? 1.5 : (numLines >= 3 ? 2.0 : 2.5);
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
           if (tspanIdx2f < _2fullFontSizes.length) {
             var fs = _2fullFontSizes[tspanIdx2f];
@@ -3529,9 +3539,9 @@ const SvgRenderer = {
             attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
             attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
             // Full: add textLength to fill square width (capped)
-            // Skip textLength for short row in 3-row mode (it stays at natural width)
+            // Apply textLength in full mode. Skip short row only for 3+ rows (stays natural width).
             var tlAttr = '';
-            if (rowsMode === 'full' && ci !== _sqShortIdx) {
+            if (rowsMode === 'full' && (numLines <= 2 || ci !== _sqShortIdx)) {
               var naturalW = heroWidths[ci] * (fs / measureFs);
               var stretchRatio = naturalW > 0 ? innerW / naturalW : 1;
               var cappedTL = Math.min(stretchRatio, maxStretchRatio) * naturalW;
@@ -3768,6 +3778,31 @@ const SvgRenderer = {
           var newMat = 'matrix(' + finalSx + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + sy + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
           result = SvgRenderer._setTextAttribute(result, textIndex, 'transform', newMat);
         }
+      }
+
+      // Stamp row center Y positions for decorative flanking lines
+      if (_2fullFontSizes && heroDyVals && heroDyVals.length >= 2) {
+        var rcSy = fontScaleY * (_sqFullHiScale || 1);
+        var rcTy = (typeof newTy !== 'undefined') ? newTy : viewBoxCenterY;
+        var rowCenters = [];
+        var cumDyRC = 0;
+        for (var rci = 0; rci < heroDyVals.length; rci++) {
+          cumDyRC += heroDyVals[rci];
+          var baselineY = rcTy + cumDyRC * rcSy;
+          var inkCenterY = baselineY - _2fullFontSizes[rci] * 0.35 * rcSy;
+          rowCenters.push(inkCenterY);
+        }
+        // Stamp effective row widths (textLength if applied, else natural scaled width)
+        var rowWidths = [];
+        var _tlWidths = []; // populated during tspan rewrite above
+        result.replace(/<tspan[^>]*?textLength=["']([\d.]+)["']/gi, function(m, tl) {
+          _tlWidths.push(parseFloat(tl));
+        });
+        for (var rwi = 0; rwi < _2fullFontSizes.length; rwi++) {
+          var rw = (_tlWidths[rwi] > 0) ? _tlWidths[rwi] : (heroWidths[rwi] || 0) * (_2fullFontSizes[rwi] / measureFs);
+          rowWidths.push(rw);
+        }
+        result = result.replace(/<svg/, '<svg data-row-centers="' + rowCenters.map(function(v){return v.toFixed(1)}).join(',') + '" data-row-widths="' + rowWidths.map(function(v){return v.toFixed(1)}).join(',') + '"');
       }
 
       // Set text-anchor for horizontal centering
@@ -5052,10 +5087,8 @@ const SvgRenderer = {
    *   2B, 3A: no lines (already fill space)
    */
   addDecorativeLines(svgString, rowVariant, numRows) {
-    // Only draw lines for specific modes
-    var needsLines = (numRows <= 2 && rowVariant === 'A') ||
-                     (numRows <= 2 && rowVariant === 'B' && numRows === 1) ||
-                     (numRows === 3); // 3A: per-row flanking, 3B: fatten + flanking
+    // Draw lines: 1-row = top/bottom horizontal, 2+ rows = per-row lateral flanking
+    var needsLines = (numRows === 1) || (numRows >= 2);
     if (!needsLines) return svgString;
 
     // Parse viewBox
@@ -5094,9 +5127,10 @@ const SvgRenderer = {
 
     var lines = '';
 
-    if (numRows === 3) {
-      // 3A/3B: per-row flanking lines (left + right of each row, centered at row's Y)
-      // Parse all tspan texts, font-sizes, and dy values
+    if (numRows >= 2) {
+      // 2+ rows: detect void type and draw appropriate lines
+      // Horizontal void → lateral flanking per row (centered on row text)
+      // Vertical void → top/bottom horizontal lines
       var allTspanTexts = [];
       svgString.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
         allTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
@@ -5105,66 +5139,69 @@ const SvgRenderer = {
       svgString.replace(/<tspan[^>]*?font-size=["']([\d.]+)["']/gi, function(m, fs) {
         tspanFsArr.push(parseFloat(fs));
       });
-      // Parse dy values and matrix for vertical positions
-      var tspanDyArr = [];
-      svgString.replace(/<tspan[^>]*?\bdy=["']([\d.\-]+)["']/gi, function(m, dy) {
-        tspanDyArr.push(parseFloat(dy));
-      });
-      var matMatch = svgString.match(/<text[^>]*transform=["'][^"]*matrix\(\s*[\d.\-]+\s*,\s*[\d.\-]+\s*,\s*[\d.\-]+\s*,\s*([\d.\-]+)\s*,\s*[\d.\-]+\s*,\s*([\d.\-]+)\s*\)/i);
-      var flkSy = matMatch ? parseFloat(matMatch[1]) : 1;
-      var flkTy = matMatch ? parseFloat(matMatch[2]) : vcY;
-      // Default font-size fallback
       var textFsMatch = svgString.match(/<text[^>]*font-size=["']([\d.]+)["']/i);
       var defFs = textFsMatch ? parseFloat(textFsMatch[1]) : 100;
 
-      var innerW = vbW - outerSw * 2;
-      for (var ri = 0; ri < Math.min(allTspanTexts.length, 3); ri++) {
-        var rowFs = tspanFsArr[ri] || defFs;
-        // Row visual Y: baseline from dy accumulation, then center of row = baseline - ascent/2
-        var cumDy = 0;
-        for (var di = 0; di <= ri; di++) cumDy += (tspanDyArr[di] || 0);
-        var rowBaselineY = flkTy + cumDy * flkSy;
-        var rowCenterY = rowBaselineY - rowFs * 0.3 * flkSy; // approximate: baseline - capHeight/2
+      // Rect geometry
+      var sqSideAttr = svgString.match(/data-sq-side=["']([\d.]+)["']/);
+      var sqSideVal = sqSideAttr ? parseFloat(sqSideAttr[1]) : vbW;
+      var rectLeft = cx - sqSideVal / 2;
+      var innerStrokeLeft = rectLeft + outerSw / 2;
+      var innerStrokeRight = rectLeft + sqSideVal - outerSw / 2;
 
-        // Row width: use textLength if available, else estimate
-        // Cap to inner stroke width (no row wider than rect interior)
-        var maxRowW = sqSideVal - outerSw;
-        var rawRowW = allTspanTexts[ri].length * rowFs * 0.55;
-        var rowW = Math.min(rawRowW, maxRowW);
-        var rowLeft = cx - rowW / 2;
-        var rowRight = cx + rowW / 2;
+      // Row center Y positions and widths (stamped by _applyAutoFitSizing)
+      var rowCentersAttr = svgString.match(/data-row-centers=["']([^"']+)["']/);
+      var rowCenters = rowCentersAttr ? rowCentersAttr[1].split(',').map(parseFloat) : null;
+      var rowWidthsAttr = svgString.match(/data-row-widths=["']([^"']+)["']/);
+      var rowWidths = rowWidthsAttr ? rowWidthsAttr[1].split(',').map(parseFloat) : null;
 
-        // Horizontal void: from inner stroke face to text edge
-        // Use data-sq-side + viewBox center for reliable rect position
-        var sqSideAttr = svgString.match(/data-sq-side=["']([\d.]+)["']/);
-        var sqSideVal = sqSideAttr ? parseFloat(sqSideAttr[1]) : vbW;
-        var rectLeft = cx - sqSideVal / 2;
-        var innerStrokeLeft = rectLeft + outerSw / 2;
-        var innerStrokeRight = rectLeft + sqSideVal - outerSw / 2;
-        // Use viewBox-based calculation as fallback
-        var hVoid = rowLeft - innerStrokeLeft;
-        // Proportional gaps: 25% border gap, 15% text gap, 60% line
-        var borderGap = Math.max(hVoid * 0.25, 8);
-        var textGap = Math.max(hVoid * 0.15, 5);
-        var flankLen = hVoid - textGap - borderGap;
+      // First pass: check if any row has horizontal void (>5% per side)
+      var hasHorizontalVoid = false;
+      var innerW = sqSideVal - outerSw;
+      if (rowWidths) {
+        for (var ri = 0; ri < Math.min(rowWidths.length, numRows); ri++) {
+          var hVoid = (innerW - rowWidths[ri]) / 2;
+          if (hVoid >= innerW * 0.05) { hasHorizontalVoid = true; break; }
+        }
+      }
 
-        // Scale line thickness with void width
-        var rowLineSw = Math.min(outerSw / 2, Math.max(1.5, flankLen * 0.15));
+      if (hasHorizontalVoid && rowCenters && rowWidths) {
+        // HORIZONTAL VOID: lateral flanking lines per row
+        for (var ri = 0; ri < Math.min(numRows, rowCenters.length); ri++) {
+          var rowCenterY = rowCenters[ri];
+          var rowW = rowWidths[ri] || innerW;
+          var rowLeft = cx - rowW / 2;
+          var rowRight = cx + rowW / 2;
 
-        if (flankLen > 5 && rowLineSw > 0.5) {
-          // Left flanking line (starts at borderGap from inner stroke, ends at textGap from text)
-          var lx1 = innerStrokeLeft + borderGap;
-          var lx2 = rowLeft - textGap;
-          lines += '<line x1="' + lx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + lx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
-          // Right flanking line
-          var rx1 = rowRight + textGap;
-          var rx2 = innerStrokeRight - borderGap;
-          lines += '<line x1="' + rx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + rx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
+          var hVoid = rowLeft - innerStrokeLeft;
+          if (hVoid < 10) continue;
+          // Proportional gaps: 15% each for edge and text, 70% for line
+          var borderGap = Math.max(hVoid * 0.15, 4);
+          var textGap = Math.max(hVoid * 0.15, 4);
+          var flankLen = hVoid - textGap - borderGap;
+          if (flankLen < 8) continue;
+          var rowLineSw = Math.min(outerSw * 0.75, Math.max(3, flankLen * 0.3));
+
+          if (rowLineSw > 0.5) {
+            var lx1 = innerStrokeLeft + borderGap;
+            var lx2 = rowLeft - textGap;
+            lines += '<line x1="' + lx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + lx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
+            var rx1 = rowRight + textGap;
+            var rx2 = innerStrokeRight - borderGap;
+            lines += '<line x1="' + rx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + rx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
+          }
+        }
+      } else if (!hasHorizontalVoid) {
+        // VERTICAL VOID: top/bottom horizontal lines
+        if (minVoidSize > vbH * 0.10 && lineSw > 1) {
+          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
         }
       }
     } else {
-      // 1A, 1B, 2A: horizontal lines centered in void above and below text
-      if (minVoidSize > lineSw * 3 && lineSw > 1) {
+      // 1-row: horizontal lines centered in void above and below text
+      // Only draw when void is at least 15% of stamp height
+      if (minVoidSize > vbH * 0.15 && lineSw > 1) {
         lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
         lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + stampColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
       }
