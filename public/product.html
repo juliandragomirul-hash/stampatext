@@ -68,13 +68,13 @@
           <span class="filter-bar-dropdown-value" id="product-shape-value"><span style="display:inline-block;width:24px;height:16px;border:2px solid #555;border-radius:2px;vertical-align:middle;"></span></span>
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
-        <div class="filter-bar-dropdown-list" id="product-shape-list" style="padding:6px;display:none;">
+        <div class="filter-bar-dropdown-list" id="product-shape-list" style="padding:6px;">
           <div class="filter-bar-dropdown-item active" data-value="rectangle" style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:28px;height:18px;border:2px solid #555;border-radius:2px;"></span> Rect</div>
           <div class="filter-bar-dropdown-item" data-value="square" style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:20px;height:20px;border:2px solid #555;border-radius:2px;"></span> Square</div>
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="order:8;display:none;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:8;">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:90px">
           <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:21px;overflow:hidden;">Plain</span>
@@ -98,7 +98,7 @@
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="order:9;display:none;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:9;">
         <label class="filter-bar-label">Corners</label>
         <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:100px;padding:2px 4px;">
           <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:40px;overflow:hidden;display:flex;align-items:center;font-family:'CourierPrime',monospace;">Straight</span>
@@ -161,7 +161,7 @@
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="order:10;display:none;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:10;">
         <label class="filter-bar-label">Texture</label>
         <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-texture-value">No</span>
@@ -170,7 +170,7 @@
         <div class="filter-bar-dropdown-list" id="product-texture-list"></div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="order:11;display:none;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:11;">
         <label class="filter-bar-label">Tilt</label>
         <div class="filter-bar-dropdown-box" id="product-tilt-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-tilt-value">No</span>
@@ -185,8 +185,8 @@
       <!-- "More..." toggle — sits after Color (order 4), becomes "Less" after Tilt (order 9) -->
       <div class="filter-bar-group" id="product-more-toggle" style="order:6;display:flex;align-items:flex-end;cursor:pointer;padding-bottom:8px;" onclick="
         var adv = document.querySelectorAll('.filter-bar-advanced');
-        var show = adv[0] && adv[0].style.display === 'none';
-        adv.forEach(function(el) { el.style.display = show ? '' : 'none'; });
+        var show = adv[0] && adv[0].style.visibility === 'hidden';
+        adv.forEach(function(el) { el.style.visibility = show ? '' : 'hidden'; el.style.pointerEvents = show ? '' : 'none'; });
         this.querySelector('span').textContent = show ? 'Less' : 'More...';
         this.style.order = show ? '12' : '6';
       ">
@@ -194,7 +194,7 @@
       </div>
 
       <!-- Row 3: Font -->
-      <div class="filter-bar-group filter-bar-font-group filter-bar-advanced" style="order:7;display:none;">
+      <div class="filter-bar-group filter-bar-font-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:7;">
         <label class="filter-bar-label">Font</label>
         <div class="filter-bar-font-box" id="product-font-toggle">
           <span class="filter-bar-font-value" id="product-font-value"></span>
