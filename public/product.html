@@ -919,6 +919,11 @@
         swatch.classList.add('active');
         currentColor = swatch.dataset.color;
         document.getElementById('product-color-dot').style.background = currentColor;
+        // Colorize Style + Corners icons with current color
+        var cVal = document.getElementById('product-corner-value');
+        if (cVal) cVal.style.color = currentColor;
+        var bVal = document.getElementById('product-border-value');
+        if (bVal) bVal.style.color = currentColor;
         renderPreview();
       });
       // Close all dropdowns on outside click — swallow the click if any dropdown was open
@@ -1511,6 +1516,12 @@
           grid.appendChild(swatch);
         });
       }
+
+      // Set initial color on Style + Corners icons
+      var initCVal = document.getElementById('product-corner-value');
+      if (initCVal) initCVal.style.color = currentColor;
+      var initBVal = document.getElementById('product-border-value');
+      if (initBVal) initBVal.style.color = currentColor;
 
       // When shape is "lined": force fill to empty, disable fill dropdown
       function updateShapeConstraints() {
