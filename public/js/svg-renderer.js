@@ -1523,19 +1523,37 @@ const SvgRenderer = {
       return [text];
     }
 
-    // Multi-word: distribute words evenly across forced row count
+    // Multi-word: distribute words to minimize character-count difference between rows
     if (forceLines && forceLines > 1) {
       var effectiveLines = Math.min(forceLines, words.length);
-      // Even word-count distribution: floor words per line, remainder goes to last rows
-      var base = Math.floor(words.length / effectiveLines);
-      var extra = words.length % effectiveLines;
+      // Try all possible split points and pick the one with most balanced char counts
+      var totalChars = text.length;
+      var targetPerLine = totalChars / effectiveLines;
+
+      // Greedy char-balanced distribution: assign words to current line until
+      // adding next word would overshoot the target more than not adding it
       var lines = [];
       var wi = 0;
       for (var li = 0; li < effectiveLines; li++) {
-        // Give extra word to LAST rows so early rows are shorter (visually balanced)
-        var count = base + (li >= effectiveLines - extra ? 1 : 0);
-        lines.push(words.slice(wi, wi + count).join(' '));
-        wi += count;
+        var remaining = effectiveLines - li;
+        var wordsLeft = words.length - wi;
+        // Must leave at least 1 word per remaining line
+        var maxWords = wordsLeft - (remaining - 1);
+        var line = words[wi];
+        var count = 1;
+        wi++;
+        while (count < maxWords && wi < words.length) {
+          var candidate = line + ' ' + words[wi];
+          // Would adding this word get us closer to target?
+          if (Math.abs(candidate.length - targetPerLine) <= Math.abs(line.length - targetPerLine)) {
+            line = candidate;
+            count++;
+            wi++;
+          } else {
+            break;
+          }
+        }
+        lines.push(line);
       }
       return lines;
     }
@@ -3473,9 +3491,13 @@ const SvgRenderer = {
 
         if (equalMode) {
           var equalFs = (targetH - numLines * strokeAdd) / (numLines * inkRatio + (numLines - 1) * sqGapFactor);
+          // Cap by the widest row's width constraint so ALL rows get truly equal font
           for (var hi = 0; hi < numLines; hi++) {
             var fsByW = measureFs * (innerW / (heroWidths[hi] || 1));
-            _2fullFontSizes[hi] = Math.min(equalFs, fsByW);
+            if (fsByW < equalFs) equalFs = fsByW;
+          }
+          for (var hi = 0; hi < numLines; hi++) {
+            _2fullFontSizes[hi] = equalFs;
           }
         }
 
@@ -3508,12 +3530,23 @@ const SvgRenderer = {
         newRectWidth = squareSide;
         newRectHeight = squareSide;
 
+        // Count total text chars (used for stretch/boost caps)
+        var _sqTotalChars = 0;
+        result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
+          _sqTotalChars += t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim().length;
+        });
+
         // Part B: Full compensation — scale font sizes to fill square height
         // Boost by 1.08 to compensate for inkRatio systematic underestimation
         if (rowsMode === 'full') {
           var visualH2 = heroBlockHeight(_2fullFontSizes) * (fontScaleY || 1);
           if (visualH2 > 0 && Math.abs(visualH2 - innerH) > 1) {
             var scaleFactor = (innerH / visualH2) * 1.08;
+            // Cap vertical boost for long text — fewer rows can handle more boost
+            if (_sqTotalChars >= 25) {
+              var maxBoost = numLines <= 2 ? 2.0 : 1.5;
+              if (scaleFactor > maxBoost) scaleFactor = maxBoost;
+            }
             for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
               _2fullFontSizes[hi] *= scaleFactor;
             }
@@ -3528,7 +3561,8 @@ const SvgRenderer = {
 
         // Apply per-tspan font-size (always)
         var tspanIdx2f = 0;
-        var maxStretchRatio = numLines >= 4 ? 1.6 : 1.8;
+        // Long text (≥25 chars): lower stretch cap since rows fill width naturally
+        var maxStretchRatio = _sqTotalChars >= 25 ? 1.3 : (numLines >= 4 ? 1.6 : 1.8);
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
           if (tspanIdx2f < _2fullFontSizes.length) {
             var fs = _2fullFontSizes[tspanIdx2f];
@@ -3669,12 +3703,36 @@ const SvgRenderer = {
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             if (_2fullFontSizes[hi] > heroMaxFs) heroMaxFs = _2fullFontSizes[hi];
           }
-          var sqGap2f = numLines <= 2 ? 0.06 : numLines === 3 ? 0.12 : 0.08;
-          var gap2f = heroMaxFs * (stampShape === 'square' ? sqGap2f : 0.08);
+          var baseGapFactor = 0.06; // minimal base gap
+          var gap2f = heroMaxFs * (stampShape === 'square' ? baseGapFactor : 0.08);
+          // Compute text block with base gap
           var total2f = 0;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             total2f += _2fullFontSizes[hi] * inkR;
             if (hi < _2fullFontSizes.length - 1) total2f += gap2f;
+          }
+          // Square: check vertical void and redistribute into gaps if small
+          var _sqUseVoidAsGap = false;
+          if (stampShape === 'square' && numLines >= 2) {
+            var sqAvailH = innerH / (fontScaleY || 1);
+            var voidH = sqAvailH - total2f;
+            var voidRatio = voidH / sqAvailH;
+            if (voidRatio > 0 && voidRatio < 0.30 && numLines > 1) {
+              // Small void: redistribute into line gaps (no flankers needed)
+              var extraGapPerSlot = voidH / (numLines - 1);
+              gap2f += extraGapPerSlot * 0.6; // take 60% of void as extra gap, leave 40% as padding
+              _sqUseVoidAsGap = true;
+              // Recompute total with expanded gaps
+              total2f = 0;
+              for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
+                total2f += _2fullFontSizes[hi] * inkR;
+                if (hi < _2fullFontSizes.length - 1) total2f += gap2f;
+              }
+            }
+          }
+          // Stamp void-as-gap flag for flanker code
+          if (_sqUseVoidAsGap) {
+            result = result.replace(/<svg/, '<svg data-sq-void-gap="1"');
           }
           // Compute per-row dy values: first row positions block, subsequent rows are baseline-to-baseline
           // Account for fontScaleY: visual block height = total2f * fontScaleY
@@ -5179,7 +5237,7 @@ const SvgRenderer = {
       // First pass: check if any row has horizontal void
       // A mode: higher threshold (15%) since text is already stretched, only big gaps matter
       // Normal mode: lower threshold (5%) to catch natural void
-      var voidThreshold = (rowVariant === 'A') ? 0.15 : 0.05;
+      var voidThreshold = (rowVariant === 'A') ? 0.45 : 0.15;
       var hasHorizontalVoid = false;
       var innerW = sqSideVal - outerSw;
       if (rowWidths) {
@@ -5189,8 +5247,8 @@ const SvgRenderer = {
         }
       }
 
+      // HORIZONTAL VOID: lateral flanking lines per row
       if (hasHorizontalVoid && rowCenters && rowWidths) {
-        // HORIZONTAL VOID: lateral flanking lines per row
         for (var ri = 0; ri < Math.min(numRows, rowCenters.length); ri++) {
           var rowCenterY = rowCenters[ri];
           var rowW = rowWidths[ri] || innerW;
@@ -5216,12 +5274,14 @@ const SvgRenderer = {
             lines += '<line x1="' + rx1.toFixed(1) + '" y1="' + rowCenterY.toFixed(1) + '" x2="' + rx2.toFixed(1) + '" y2="' + rowCenterY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + rowLineSw.toFixed(1) + '" stroke-linecap="round"/>';
           }
         }
-      } else if (!hasHorizontalVoid) {
-        // VERTICAL VOID: top/bottom horizontal lines
-        if (minVoidSize > vbH * 0.10 && lineSw > 1) {
-          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
-          lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
-        }
+      }
+      // VERTICAL VOID: top/bottom horizontal lines (independent of horizontal void)
+      // Skip if void was absorbed into line spacing (data-sq-void-gap="1")
+      var voidAbsorbed = /data-sq-void-gap="1"/.test(svgString);
+      var vVoidThreshold = (rowVariant === 'A') ? 0.25 : 0.10;
+      if (!voidAbsorbed && minVoidSize > vbH * vVoidThreshold && lineSw > 1) {
+        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineTopY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineTopY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
+        lines += '<line x1="' + lineX1.toFixed(1) + '" y1="' + lineBotY.toFixed(1) + '" x2="' + lineX2.toFixed(1) + '" y2="' + lineBotY.toFixed(1) + '" stroke="' + lineColor + '" stroke-width="' + lineSw.toFixed(1) + '" stroke-linecap="round"/>';
       }
     } else {
       // 1-row: horizontal lines centered in void above and below text
