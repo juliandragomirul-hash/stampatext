@@ -183,14 +183,13 @@
       </div>
 
       <!-- "More..." toggle — sits after Color (order 4), becomes "Less" after Tilt (order 9) -->
-      <div class="filter-bar-group" id="product-more-toggle" style="order:6;display:flex;align-items:flex-end;cursor:pointer;padding-bottom:8px;" onclick="
+      <div class="filter-bar-group" id="product-more-toggle" style="order:12;display:flex;align-items:flex-end;cursor:pointer;padding-bottom:8px;" onclick="
         var adv = document.querySelectorAll('.filter-bar-advanced');
         var show = adv[0] && adv[0].style.visibility === 'hidden';
         adv.forEach(function(el) { el.style.visibility = show ? '' : 'hidden'; el.style.pointerEvents = show ? '' : 'none'; });
         this.querySelector('span').textContent = show ? 'Less' : 'More...';
-        this.style.order = show ? '12' : '6';
       ">
-        <span style="color:#666;font-size:0.82rem;font-weight:600;white-space:nowrap;">More...</span>
+        <span style="color:#666;font-size:0.82rem;font-weight:600;white-space:nowrap;display:inline-block;min-width:3.2em;">More...</span>
       </div>
 
       <!-- Row 3: Font -->

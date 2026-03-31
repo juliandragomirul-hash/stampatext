@@ -3439,68 +3439,44 @@ const SvgRenderer = {
         // Initialize font sizes array
         for (var hi = 0; hi < numLines; hi++) _2fullFontSizes.push(0);
 
-        // Check if all rows are similar width (within 20%) → equal sizing instead of cascade
-        var widthRatio = heroWidths[sortedIndices[0]] > 0
-          ? heroWidths[sortedIndices[sortedIndices.length - 1]] / heroWidths[sortedIndices[0]] : 1;
-        // Equal mode unless there's exactly ONE outlier row (much narrower than the rest)
-        // Count how many rows are within 50% of the widest
-        var wideCount = 0;
-        for (var wi = 0; wi < numLines; wi++) {
-          if (heroWidths[wi] >= heroWidths[sortedIndices[0]] * 0.5) wideCount++;
+        // Step 1: Cascade — widest row anchors, remaining rows get equal height budgets
+        var anchorIdx = sortedIndices[0]; // widest row
+        var anchorFs = measureFs * (innerW / (heroWidths[anchorIdx] || 1));
+        _2fullFontSizes[anchorIdx] = anchorFs;
+        var anchorH = anchorFs * inkRatio + strokeAdd;
+        // Remaining rows share leftover height equally
+        var remainCount = numLines - 1;
+        if (remainCount > 0) {
+          var gapTotal = anchorFs * sqGapFactor + (remainCount > 1 ? anchorFs * sqGapFactor * (remainCount - 1) : 0);
+          var remainH = targetH - anchorH - gapTotal;
+          var budgetPerRow = Math.max(remainH / remainCount, (targetH * 0.05));
+          for (var si = 1; si < sortedIndices.length; si++) {
+            var idx = sortedIndices[si];
+            var fsByW = measureFs * (innerW / (heroWidths[idx] || 1));
+            var fsByH = Math.max((budgetPerRow - strokeAdd) / inkRatio, measureFs * 0.1);
+            _2fullFontSizes[idx] = Math.min(fsByW, fsByH);
+          }
         }
-        // Cascade only if exactly 1 row is the outlier (narrow), rest are wide
-        var equalMode = (wideCount >= numLines - 1) ? (widthRatio > 0.4) : true;
+
+        // Step 2: Test cascade result — if too many rows are squeezed, fall back to equal
+        var cascadeMaxFs = 0;
+        for (var hi = 0; hi < numLines; hi++) {
+          if (_2fullFontSizes[hi] > cascadeMaxFs) cascadeMaxFs = _2fullFontSizes[hi];
+        }
+        var squeezedCount = 0;
+        for (var hi = 0; hi < numLines; hi++) {
+          if (_2fullFontSizes[hi] < cascadeMaxFs * 0.4) squeezedCount++;
+        }
+        // 4+ rows: always equal (cascade too unpredictable with many short rows)
+        // 2-3 rows: cascade unless 2+ rows are squeezed
+        var equalMode = (numLines >= 4) || (squeezedCount >= 2);
 
         if (equalMode) {
-          // Equal sizing: all rows get same font size, constrained by height
-          // totalH = numLines * (fs * inkRatio + strokeAdd) + (numLines-1) * fs * sqGapFactor
-          //        = fs * (numLines * inkRatio + (numLines-1) * sqGapFactor) + numLines * strokeAdd
           var equalFs = (targetH - numLines * strokeAdd) / (numLines * inkRatio + (numLines - 1) * sqGapFactor);
           for (var hi = 0; hi < numLines; hi++) {
-            // Also cap by width
             var fsByW = measureFs * (innerW / (heroWidths[hi] || 1));
             _2fullFontSizes[hi] = Math.min(equalFs, fsByW);
           }
-        } else {
-          // Cascade: all rows except last fill width freely. Last gets remainder.
-          // Boost targetH by 12% to compensate for inkRatio underestimation (gives last row more room)
-          var cascadeTargetH = targetH * 1.05;
-          // Step 1: All-but-last fill width (no height constraint)
-          var lastIdx = sortedIndices[sortedIndices.length - 1]; // narrowest row
-          var consumedH = 0;
-          for (var si = 0; si < sortedIndices.length - 1; si++) {
-            var idx = sortedIndices[si];
-            var rowW = heroWidths[idx] || 1;
-            var fs = measureFs * (innerW / rowW);
-            _2fullFontSizes[idx] = fs;
-            consumedH += fs * inkRatio + strokeAdd;
-          }
-          // Add gaps between all-but-last rows
-          var maxFsABL = 0;
-          for (var si = 0; si < sortedIndices.length - 1; si++) {
-            if (_2fullFontSizes[sortedIndices[si]] > maxFsABL) maxFsABL = _2fullFontSizes[sortedIndices[si]];
-          }
-          consumedH += maxFsABL * sqGapFactor * Math.max(0, sortedIndices.length - 2);
-
-          // Step 2: If all-but-last overflow, shrink them proportionally
-          var availForLast = cascadeTargetH - consumedH;
-          if (availForLast < cascadeTargetH * 0.1) {
-            // Shrink all-but-last to leave at least 10% for last row
-            var shrinkTarget = cascadeTargetH * 0.9;
-            var shrinkFactor = shrinkTarget / consumedH;
-            for (var si = 0; si < sortedIndices.length - 1; si++) {
-              _2fullFontSizes[sortedIndices[si]] *= shrinkFactor;
-            }
-            availForLast = cascadeTargetH * 0.1;
-          }
-
-          // Step 3: Last row (narrowest) gets remaining height
-          var lastW = heroWidths[lastIdx] || 1;
-          var fsByWidthLast = measureFs * (innerW / lastW);
-          // One gap between last row and the row above it
-          var lastGap = maxFsABL * sqGapFactor;
-          var fsByHeightLast = Math.max((availForLast - strokeAdd - lastGap) / inkRatio, measureFs * 0.1);
-          _2fullFontSizes[lastIdx] = Math.min(fsByWidthLast, fsByHeightLast);
         }
 
         if (numLines === 3) {
@@ -3519,8 +3495,8 @@ const SvgRenderer = {
         }
         var heroH = heroBlockHeight(_2fullFontSizes);
         var visualH = heroH * (fontScaleY || 1);
-        // Only shrink for equal mode — cascade already self-limits via remainingH
-        if (equalMode && visualH > innerH && visualH > 0) {
+        // Uniform shrink: cascade fills width freely, so always shrink to fit height
+        if (visualH > innerH && visualH > 0) {
           var shrink = innerH / visualH;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             _2fullFontSizes[hi] *= shrink;
@@ -3552,7 +3528,7 @@ const SvgRenderer = {
 
         // Apply per-tspan font-size (always)
         var tspanIdx2f = 0;
-        var maxStretchRatio = numLines >= 4 ? 2.0 : 2.5;
+        var maxStretchRatio = numLines >= 4 ? 1.6 : 1.8;
         result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
           if (tspanIdx2f < _2fullFontSizes.length) {
             var fs = _2fullFontSizes[tspanIdx2f];
@@ -3693,7 +3669,8 @@ const SvgRenderer = {
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             if (_2fullFontSizes[hi] > heroMaxFs) heroMaxFs = _2fullFontSizes[hi];
           }
-          var gap2f = heroMaxFs * (stampShape === 'square' ? 0.04 : 0.08);
+          var sqGap2f = numLines <= 2 ? 0.06 : numLines === 3 ? 0.12 : 0.08;
+          var gap2f = heroMaxFs * (stampShape === 'square' ? sqGap2f : 0.08);
           var total2f = 0;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             total2f += _2fullFontSizes[hi] * inkR;
@@ -5224,10 +5201,11 @@ const SvgRenderer = {
           if (hVoid < 10) continue;
           // Fixed edge gap (consistent across all rows), proportional text gap
           var borderGap = outerSw * 0.55;
-          var textGap = Math.max(hVoid * 0.15, 4);
+          var textGap = borderGap * 1.4;
           var flankLen = hVoid - textGap - borderGap;
           if (flankLen < 8) continue;
-          var rowLineSw = Math.min(outerSw * 0.75, Math.max(3, flankLen * 0.3));
+          // Standard thickness for all rows (based on stamp stroke, not per-row length)
+          var rowLineSw = Math.min(outerSw * 0.60, Math.max(5, outerSw * 0.40));
 
           if (rowLineSw > 0.5) {
             var lx1 = innerStrokeLeft + borderGap;
