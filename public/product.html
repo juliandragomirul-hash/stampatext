@@ -832,44 +832,58 @@
       var textWords = userText.trim().split(/\s+/);
       var isSingleWord = textWords.length === 1;
       var totalChars = userText.trim().length;
-      var minRows = isSingleWord ? 1 : Math.max(1, Math.ceil(totalChars / 25));
-      var rowsCap = (currentShape === 'square' && totalChars <= 16) ? 4 : 5;
-      var maxRows = isSingleWord ? 1 : Math.min(textWords.length, rowsCap);
-      if (minRows > maxRows) minRows = maxRows; // safety clamp
-      var rowsList = document.getElementById('product-rows-list');
-      rowsList.innerHTML = '';
-      var validRowCounts = [];
-      for (var ri = minRows; ri <= maxRows; ri++) {
-        validRowCounts.push(ri);
-      }
-      // Build row items: N = normal, NA = fat (stretch shorter rows). No "A" for 1 row.
-      var currentRowMode = currentForceLines + currentRowVariant;
-      for (var vi = 0; vi < validRowCounts.length; vi++) {
-        var rc = validRowCounts[vi];
-        // Normal mode
-        var mode = '' + rc;
-        var label = '' + rc;
-        var isActive = (mode === currentRowMode);
-        rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActive ? ' active' : '') + '" data-value="' + mode + '">' + label + '</div>';
-        // Fat "A" variant: 1A = 2x height, 2A+ = stretch shorter rows
-        if (rc >= 1) {
-          var modeA = rc + 'A';
-          var labelA = rc + 'A';
-          var isActiveA = (modeA === currentRowMode);
-          rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActiveA ? ' active' : '') + '" data-value="' + modeA + '">' + labelA + '</div>';
+      function buildRowsDropdown() {
+        var minRows = isSingleWord ? 1 : Math.max(1, Math.ceil(totalChars / 25));
+        var rowsCap = (currentShape === 'square' && totalChars <= 16) ? 4 : 5;
+        var maxRows = isSingleWord ? 1 : Math.min(textWords.length, rowsCap);
+        if (minRows > maxRows) minRows = maxRows; // safety clamp
+        var rowsList = document.getElementById('product-rows-list');
+        rowsList.innerHTML = '';
+        var validRowCounts = [];
+        for (var ri = minRows; ri <= maxRows; ri++) {
+          validRowCounts.push(ri);
         }
-      }
-      // Clamp currentForceLines to available range
-      if (currentForceLines < minRows) {
-        currentForceLines = minRows;
+        // Build row items: N = normal, NA = fat (stretch shorter rows). No "A" for 1 row.
+        var currentRowMode = currentForceLines + currentRowVariant;
+        for (var vi = 0; vi < validRowCounts.length; vi++) {
+          var rc = validRowCounts[vi];
+          var isLongSquare = (totalChars >= 25 && currentShape === 'square');
+          if (isLongSquare && (rc === 2 || rc === 3 || rc === 4)) {
+            // Long square text: only show "N" which maps to NA internally
+            var modeN = rc + 'A';
+            var isActiveN = (modeN === currentRowMode || '' + rc === currentRowMode);
+            rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActiveN ? ' active' : '') + '" data-value="' + modeN + '">' + rc + '</div>';
+          } else if (isLongSquare && rc === 5) {
+            // Long square 5 rows: keep plain 5, no A variant
+            var isActive5 = ('' + rc === currentRowMode || rc + 'A' === currentRowMode);
+            rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActive5 ? ' active' : '') + '" data-value="' + rc + '">' + rc + '</div>';
+          } else {
+            // Normal mode (short text or rectangle)
+            var mode = '' + rc;
+            var label = '' + rc;
+            var isActive = (mode === currentRowMode);
+            rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActive ? ' active' : '') + '" data-value="' + mode + '">' + label + '</div>';
+            // Fat "A" variant: 1A = 2x height, 2A+ = stretch shorter rows
+            if (rc >= 1) {
+              var modeA = rc + 'A';
+              var labelA = rc + 'A';
+              var isActiveA = (modeA === currentRowMode);
+              rowsList.innerHTML += '<div class="filter-bar-dropdown-item' + (isActiveA ? ' active' : '') + '" data-value="' + modeA + '">' + labelA + '</div>';
+            }
+          }
+        }
+        // Clamp currentForceLines to available range
+        if (currentForceLines < minRows) {
+          currentForceLines = minRows;
+        }
+        if (currentForceLines > maxRows) {
+          currentForceLines = maxRows;
+        }
+        if (currentForceLines === 0) { currentForceLines = minRows; }
         currentRowMode = '' + currentForceLines + currentRowVariant;
+        setDropdownActive('product-rows-list', currentRowMode, 'product-rows-value');
       }
-      if (currentForceLines > maxRows) {
-        currentForceLines = maxRows;
-        currentRowMode = '' + currentForceLines + currentRowVariant;
-      }
-      if (currentForceLines === 0) { currentForceLines = minRows; currentRowMode = '' + minRows; }
-      setDropdownActive('product-rows-list', currentRowMode, 'product-rows-value');
+      buildRowsDropdown();
 
       updateShapeConstraints();
       updateCornerConstraints();
@@ -981,6 +995,7 @@
         currentShape = item.dataset.value;
         var isRect = item.dataset.value === 'rectangle';
         document.getElementById('product-shape-value').innerHTML = '<span style="display:inline-block;width:' + (isRect ? '24px;height:16px' : '18px;height:18px') + ';border:2px solid #555;border-radius:2px;vertical-align:middle;"></span>';
+        buildRowsDropdown();
         updateShapeConstraints();
         rebuildWithFont(currentFont).then(function(svg) {
           baseSvg = svg;

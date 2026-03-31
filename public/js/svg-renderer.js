@@ -3542,9 +3542,9 @@ const SvgRenderer = {
           var visualH2 = heroBlockHeight(_2fullFontSizes) * (fontScaleY || 1);
           if (visualH2 > 0 && Math.abs(visualH2 - innerH) > 1) {
             var scaleFactor = (innerH / visualH2) * 1.08;
-            // Cap vertical boost for long text — fewer rows can handle more boost
+            // Cap vertical boost for long text
             if (_sqTotalChars >= 25) {
-              var maxBoost = numLines <= 2 ? 2.0 : 1.5;
+              var maxBoost = 1.5;
               if (scaleFactor > maxBoost) scaleFactor = maxBoost;
             }
             for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
