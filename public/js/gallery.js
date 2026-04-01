@@ -287,7 +287,7 @@ const Gallery = {
         };
         // Gallery font: random per template
         var fontKeys = Object.keys(fontWeights);
-        var fontKey = fontKeys[Math.floor(Math.random() * fontKeys.length)];
+        var fontKey = 'BebasNeue'; // TEST MODE: locked font
         var cycleFont = { key: fontKey, weight: fontWeights[fontKey] || '500' };
         cleanedSvg = cleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + cycleFont.key + "'\"");
@@ -449,14 +449,18 @@ const Gallery = {
           };
         }
 
-        // For square: iterate over row modes (2up, 2down, 3). Others: single pass.
-      var rowModes = stampShape === 'square' ? ['2up', '2down', '3'] : [null];
+        // Valid row options from shared function (same rules as product page dropdown)
+      var galText = (self.currentText || 'Your text here').toUpperCase();
+      var rowOptions = SvgRenderer.getValidRowOptions(galText, stampShape, base.fontKey);
 
-      for (var rm = 0; rm < rowModes.length; rm++) {
-        var currentRowMode = rowModes[rm];
+      for (var rm = 0; rm < rowOptions.length; rm++) {
+        var rowOpt = rowOptions[rm];
+        var currentRowCount = parseInt(rowOpt.value, 10) || 1;
+        var isFullMode = /A$/i.test(rowOpt.value);
 
-        for (var f = 0; f < allowedFrames.length; f++) {
-          var frameMode = allowedFrames[f];
+        var _testFrames = ['single']; // TEST MODE: single frame only
+        for (var f = 0; f < _testFrames.length; f++) {
+          var frameMode = _testFrames[f];
           // Skip double frame for filled stitch — too visually dense / redundant with single
           if (frameMode === 'double' && bi.stitch && base.fillType === 'full') continue;
           // Skip double frame for outlined torn edge — poor visual result
@@ -466,7 +470,7 @@ const Gallery = {
           var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
 
           // Random fill: 40% chance of filled
-          var variantFill = Math.random() < 0.4 ? 'full' : 'empty';
+          var variantFill = 'empty'; // TEST MODE: no fill
 
           // Random corner: pick from available types (skip mixed for lined)
           var cornerOptions = stampShape === 'lined' ? ['straight'] :
@@ -474,157 +478,52 @@ const Gallery = {
           var variantCorner = cornerOptions[Math.floor(Math.random() * cornerOptions.length)];
 
           // Random tilt: 70% none, 15% slight, 15% moderate
-          var tiltRoll = Math.random();
-          var variantTilt = tiltRoll < 0.7 ? 0 : (tiltRoll < 0.85 ? -7 : -15);
+          var variantTilt = 0; // TEST MODE: no tilt
 
-          // Per-variant font sizing: re-apply autoFit with frame-specific interior
-          var variantSvg = base.svgString;
-
-          // Square: re-replace text with row-mode-specific line splits
-          if (stampShape === 'square') {
-            console.log('[SQ-DEBUG] preAutoFitSvg=' + !!base.preAutoFitSvg + ' rowMode=' + currentRowMode + ' template=' + base.name);
-          }
-          if (stampShape === 'square' && base.preAutoFitSvg) {
-            try {
-              var sqText = (self.currentText || 'Your text here').toUpperCase();
-              var sqResult = SvgRenderer._splitForSquare(sqText, currentRowMode);
-              var sqLines = sqResult.lines;
-              var sqFontScales = sqResult.fontScales;
-              variantSvg = SvgRenderer.replaceTextInString(base.preAutoFitSvg, base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0, sqLines.join('\n'));
-              // Store font scales and row mode for _applyAutoFitSizing
-              variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-scales="' + sqFontScales.join(',') + '" data-sq-rowmode="' + currentRowMode + '"');
-            } catch (sqErr) {
-              console.error('[SQUARE-ERROR] _splitForSquare crashed:', sqErr.message, sqErr.stack);
-            }
-          }
-
-          // Inject rowMode so svg-renderer's inline split knows which mode to use
-          if (stampShape === 'square' && currentRowMode) {
-            variantSvg = variantSvg.replace(/<svg/, '<svg data-sq-rowmode="' + currentRowMode + '"');
-          }
-
-          // Rectangle/Lined: randomly pick a row count from valid range
-          var appliedForceLines = null;
-          if (stampShape !== 'square' && base.preAutoFitSvg) {
-            var rectText = (self.currentText || 'Your text here').toUpperCase();
-            var rectWords = rectText.trim().split(/\s+/);
-            var rectChars = rectText.trim().length;
-            var rectMinRows = rectWords.length <= 1 ? 1 : Math.max(1, Math.ceil(rectChars / 25));
-            var rectMaxRows = rectWords.length <= 1 ? 1 : Math.min(rectWords.length, 5);
-            if (rectMinRows > rectMaxRows) rectMinRows = rectMaxRows;
-            if (rectMaxRows > 1) {
-              // Pick random row count from valid range
-              appliedForceLines = rectMinRows + Math.floor(Math.random() * (rectMaxRows - rectMinRows + 1));
-              if (appliedForceLines > 1) {
-                variantSvg = SvgRenderer.replaceTextInString(
-                  base.preAutoFitSvg,
-                  base.autoFitZoneInfo ? base.autoFitZoneInfo.idx : 0,
-                  rectText,
-                  appliedForceLines
-                );
-              } else {
-                appliedForceLines = null; // 1 row = default, no force needed
-              }
-            }
-          }
-
-          // Forced multi-line: full async autoFit from raw template (same quality as product page)
-          var hasRoundedCorners = base.cornerType && base.cornerType !== 'straight';
-          if (appliedForceLines && base.autoFitZoneInfo) {
-            try {
-              var zi = base.autoFitZoneInfo;
-              var origSx = zi.originalScaleX || 1;
-              variantSvg = await SvgRenderer.autoFitTextInString(
-                variantSvg, zi.idx, zi.boundingWidth, zi.fontSize, origSx,
-                frameMode, variantFill, variantCorner,
-                null, stampShape
-              );
-            } catch (flErr) {
-              console.warn('[GALLERY] forceLines autoFit failed:', flErr.message);
-            }
-          } else if (base.autoFitZoneInfo && base.autoFitMeasurements && (frameMode !== 'single' || hasRoundedCorners || stampShape === 'lined' || stampShape === 'square')) {
-            try {
-              var variantMeasurements = base.autoFitMeasurements;
-              var variantPreSvg = base.preAutoFitSvg;
-              if (stampShape === 'square') {
-                var sqTspanCount = (variantSvg.match(/<tspan/gi) || []).length;
-                if (sqTspanCount > 1) {
-                  variantMeasurements = {};
-                  for (var mk in base.autoFitMeasurements) variantMeasurements[mk] = base.autoFitMeasurements[mk];
-                  variantMeasurements.numTspans = sqTspanCount;
-                }
-                variantPreSvg = variantSvg;
-              }
-              variantSvg = SvgRenderer._applyAutoFitSizing(
-                variantPreSvg,
-                base.autoFitZoneInfo.idx,
-                base.autoFitZoneInfo.boundingWidth,
-                base.autoFitZoneInfo.fontSize,
-                base.autoFitZoneInfo.originalScaleX,
-                frameMode,
-                variantMeasurements,
-                variantFill,
-                variantCorner,
-                base.borderType,
-                null,
-                stampShape
-              );
-            } catch (err) {
-              console.warn('Per-variant sizing failed for', base.name, frameMode, err);
-            }
-          }
-
-          var colorized, cropped;
+          // Unified pipeline — identical to product page
+          var appliedForceLines = currentRowCount > 1 ? currentRowCount : 0;
+          var zi = base.autoFitZoneInfo || {};
+          var variantSvg;
           try {
-            colorized = SvgRenderer.colorize(variantSvg, color);
-            colorized = SvgRenderer.applyThinStroke(colorized);
-            colorized = SvgRenderer.cropViewBoxToStamp(colorized);
-            if (stampShape === 'lined') {
-              colorized = SvgRenderer.convertToLined(colorized);
-            } else {
-              colorized = SvgRenderer.applyCornerRadius(colorized, variantCorner);
-            }
-            // Apply fill conversion
-            if (variantFill === 'full') {
-              var beforeFill = colorized.match(/fill="none"/i);
-              colorized = SvgRenderer.convertFill(colorized, 'full');
-              var afterFill = colorized.match(/fill="none"/i);
-              if (beforeFill && afterFill) console.warn('[FILL-DEBUG] convertFill did NOT change fill="none" for', base.name);
-            }
-            cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
+            variantSvg = await SvgRenderer.renderStamp({
+              svg: base.preAutoFitSvg || base.svgString,
+              text: galText,
+              textZoneIdx: zi.idx || 0,
+              boundingWidth: zi.boundingWidth || 1,
+              fontSize: zi.fontSize || 128,
+              originalScaleX: zi.originalScaleX || 1,
+              font: base.fontKey || 'Oswald',
+              fontWeight: self.FONT_WEIGHTS ? (self.FONT_WEIGHTS[base.fontKey] || '500') : '500',
+              color: color,
+              fill: variantFill,
+              shape: stampShape,
+              corners: variantCorner,
+              frame: frameMode,
+              borderStyle: base.borderType || 'simple',
+              texture: '',
+              tilt: variantTilt,
+              forceLines: appliedForceLines,
+              fullMode: isFullMode,
+              rowVariant: isFullMode ? 'A' : ''
+            });
           } catch (err) {
-            console.warn('Failed to process template:', base.name, err);
-            cropped = SvgRenderer.colorize(variantSvg, color);
+            console.warn('renderStamp failed for', base.name, err);
+            variantSvg = SvgRenderer.colorize(base.svgString, color);
+            variantSvg = SvgRenderer.addWatermark(variantSvg);
           }
 
-          var framed = cropped;
-          // Set variant fill on border info so addDoubleFrame/addSplitBorder detect it
-          bi.fillType = variantFill;
-          try {
-            if (frameMode === 'double') {
-              framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
-            } else if (frameMode === 'split') {
-              framed = SvgRenderer.addSplitBorder(cropped, bi);
+          // Redundancy: skip rect variants with near-square aspect ratio (square shape covers those)
+          if (stampShape === 'rectangle' || stampShape === 'lined') {
+            var vbM = variantSvg.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+            if (vbM) {
+              var vbAspect = parseFloat(vbM[4]) / parseFloat(vbM[3]);
+              if (vbAspect > 0.85) continue; // too square-like for a rect — skip
             }
-          } catch (err) {
-            console.warn('Failed to apply frame "' + frameMode + '" to:', base.name, err);
-            framed = cropped;
-          }
-
-          // Add horizontal filler lines for 3-row square stamps
-          if (stampShape === 'square' && currentRowMode === '3') {
-            framed = SvgRenderer.addSquareFillerLines(framed, currentRowMode);
-          }
-
-          // Apply tilt
-          var tilted = framed;
-          if (variantTilt !== 0) {
-            try { tilted = SvgRenderer.applyTilt(framed, variantTilt); } catch (e) { tilted = framed; }
           }
 
           var result = {
             templateId: base.templateId,
-            svgString: SvgRenderer.addWatermark(tilted),
+            svgString: variantSvg,
             shape: base.shape,
             objectType: base.objectType,
             frameType: base.frameType,
@@ -640,8 +539,8 @@ const Gallery = {
             appliedColor: color,
             appliedFrame: frameMode,
             appliedShape: stampShape,
-            appliedRowMode: currentRowMode,
-            appliedForceLines: appliedForceLines || (variantSvg.match(/<tspan/gi) || []).length || 1,
+            appliedRowMode: '' + currentRowCount,
+            appliedForceLines: appliedForceLines || currentRowCount,
             appliedTilt: variantTilt,
             appliedTexture: null
           };
@@ -1116,7 +1015,7 @@ const Gallery = {
     if (frameSelect) frameSelect.value = frameSelect.value || 'single';
 
     var rowsSelect = document.getElementById('filter-rows');
-    if (rowsSelect) rowsSelect.value = this.activeRows || '2up';
+    if (rowsSelect) rowsSelect.value = this.activeRows || '2';
 
     var fillSelect = document.getElementById('filter-fill');
     var savedFill = this.currentFill || 'empty';
@@ -1954,25 +1853,24 @@ const Gallery = {
   COMBO_LONG: {
     style: ['simple','stitch_line','stitch_square','stitch_circle','sawtooth','perforated','perforated_spaced','wavy','zigzag','torn_edge','chalk','perf_line','perf_line_spaced','saw_line'],
     color: ['#000000','#8B0000','#CC0000','#FF0000','#2D572C','#32CD32','#003366','#1E90FF','#4B0082','#FF6600','#DAA520','#FF1493'],
-    font: ['Oswald','CourierPrime','Montserrat','Yomogi','BlackOpsOne','Nunito','Exo2','Bitter','Comfortaa','FuzzyBubbles','BebasNeue'],
+    font: ['BebasNeue'], // TEST MODE: locked font
     corners: ['straight','soft_round','medium_round','strong_round','mixed_top_straight','mixed_top_round','mixed_diag_down','mixed_diag_up']
   },
 
   // Short pools (<5 items) — balanced repeat
   COMBO_SHORT: {
-    frames: ['single','double','split'],
-    texture: ['','grungy','scratched','noise'],
+    frames: ['single'], // TEST MODE: single frame only
+    texture: [''], // TEST MODE: no texture
     shape: ['rectangle','square','lined']
   },
 
   // Predefined patterns — fixed sequence then restart
   COMBO_PATTERNS: {
-    fill: ['full','empty','full','full','empty','empty','empty','full'],
-    tilt: [-10, 0, -10, -10, 0, 0, 0, -10]
+    fill: ['empty'], // TEST MODE: no fill
+    tilt: [0] // TEST MODE: no tilt
   },
 
   // Rows sub-pool for square shape only
-  COMBO_SQUARE_ROWS: ['2up','2down','3'],
 
   FONT_WEIGHTS: {
     'Oswald': '500', 'CourierPrime': '400', 'Montserrat': '700',
@@ -2019,11 +1917,16 @@ const Gallery = {
       combo[key] = pattern[i % pattern.length];
     });
 
-    // Rows: shape-dependent
-    if (combo.shape === 'square') {
-      combo.rows = this.COMBO_SQUARE_ROWS[i % this.COMBO_SQUARE_ROWS.length];
+    // Rows: pick from valid options (shared rules with product page dropdown)
+    var comboText = (this.currentText || 'Your text here').toUpperCase();
+    var comboRowOpts = SvgRenderer.getValidRowOptions(comboText, combo.shape, combo.font);
+    if (comboRowOpts.length > 0) {
+      var rowOpt = comboRowOpts[i % comboRowOpts.length];
+      combo.rows = parseInt(rowOpt.value, 10) || 0;
+      combo.fullMode = /A$/i.test(rowOpt.value);
     } else {
-      combo.rows = null; // auto-determined by text fitting
+      combo.rows = 0;
+      combo.fullMode = false;
     }
 
     // Base template: deterministic cycle
@@ -2098,67 +2001,44 @@ const Gallery = {
     var fontWeight = this.FONT_WEIGHTS[fontKey] || '500';
 
     try {
-      // Start from raw template SVG
-      var svg = entry.svg;
-
-      // Swap font
-      svg = svg.replace(/font-family=["']'?[^"']*'?["']/g, "font-family=\"'" + fontKey + "'\"");
-      svg = svg.replace(/font-weight=["'][^"']*["']/g, 'font-weight="' + fontWeight + '"');
-
-      // Replace text
       var zone = entry.zones && entry.zones[0];
       var idx = zone ? (zone.svg_element_index || 0) : 0;
-      svg = SvgRenderer.replaceTextInString(svg, idx, self.currentText);
+      var originalScaleX = zone && zone.transform_matrix
+        ? parseFloat((zone.transform_matrix.match(/matrix\(\s*([\d.]+)/) || [])[1]) || 1
+        : 1;
 
-      // Full autoFit (iframe measurement — the key to pixel-perfect rendering)
-      if (zone && zone.bounding_width) {
-        var originalScaleX = zone.transform_matrix
-          ? parseFloat((zone.transform_matrix.match(/matrix\(\s*([\d.]+)/) || [])[1]) || 1
-          : 1;
-        svg = await SvgRenderer.autoFitTextInString(
-          svg, idx, zone.bounding_width, zone.font_size || 128,
-          originalScaleX, combo.frames || 'single',
-          combo.fill || 'empty', combo.corners || 'straight',
-          borderStyle, combo.shape || 'rectangle'
-        );
+      // Unified pipeline — identical to product page
+      var svg = await SvgRenderer.renderStamp({
+        svg: entry.svg,
+        text: self.currentText.toUpperCase(),
+        textZoneIdx: idx,
+        boundingWidth: zone ? zone.bounding_width : 1,
+        fontSize: zone ? (zone.font_size || 128) : 128,
+        originalScaleX: originalScaleX,
+        font: fontKey,
+        fontWeight: fontWeight,
+        color: combo.color,
+        fill: combo.fill || 'empty',
+        shape: combo.shape || 'rectangle',
+        corners: combo.corners || 'straight',
+        frame: combo.frames || 'single',
+        borderStyle: borderStyle,
+        texture: combo.texture || '',
+        tilt: combo.tilt || 0,
+        forceLines: combo.rows || 0,
+        fullMode: combo.fullMode || false,
+        rowVariant: combo.fullMode ? 'A' : ''
+      });
+
+      // Redundancy: skip rect/lined combos with near-square aspect
+      var comboShape = combo.shape || 'rectangle';
+      if (comboShape === 'rectangle' || comboShape === 'lined') {
+        var vbM = svg.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+        if (vbM && parseFloat(vbM[4]) / parseFloat(vbM[3]) > 0.85) return; // too square-like
       }
-
-      // Full pipeline (same as product page renderPreview)
-      svg = SvgRenderer.colorize(svg, combo.color);
-      svg = SvgRenderer.applyThinStroke(svg);
-      svg = SvgRenderer.cropViewBoxToStamp(svg);
-
-      // Shape pipeline: lined → convert, else apply corners
-      if (combo.shape === 'lined') {
-        svg = SvgRenderer.convertToLined(svg);
-      } else if (combo.corners && combo.corners !== 'straight') {
-        svg = SvgRenderer.applyCornerRadius(svg, combo.corners);
-      } else {
-        svg = svg.replace(/\s*rx=["'][\d.]+["']/gi, '').replace(/\s*ry=["'][\d.]+["']/gi, '');
-      }
-
-      // Fill conversion (outlined → filled)
-      if (combo.fill === 'full') {
-        svg = SvgRenderer.convertFill(svg, 'full');
-      }
-
-      var bi = SvgRenderer.detectBorderType(svg);
-      SvgRenderer.supplementBorderInfo(bi, { border_type: borderStyle, fill_type: combo.fill });
-      if (combo.frames === 'double') {
-        svg = SvgRenderer.addDoubleFrame(svg, bi, combo.color, 'double');
-      } else if (combo.frames === 'split') {
-        svg = SvgRenderer.addSplitBorder(svg, bi);
-      }
-
-      if (combo.texture) {
-        try { svg = await SvgRenderer.applyTexture(svg, combo.texture); } catch(e) {}
-      }
-      svg = SvgRenderer.addWatermark(svg);
-      if (combo.tilt !== 0) svg = SvgRenderer.applyTilt(svg, combo.tilt);
 
       // Build product URL with ALL combo params
       var comboRows = combo.rows || (svg.match(/<tspan/gi) || []).length || 1;
-      var comboShape = combo.shape || 'rectangle';
       var productUrl = '/product.html?id=' + encodeURIComponent(entry.tpl.id) +
         '&text=' + encodeURIComponent(self.currentText) +
         '&color=' + encodeURIComponent(combo.color.replace('#', '')) +

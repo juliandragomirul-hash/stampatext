@@ -1,46 +1,46 @@
 {
   "Oswald": {
     "single": {
-      "scaleY": 1,
-      "letterSpacing": 3,
+      "scaleY": 1.1,
+      "letterSpacing": 0,
       "dx": 0,
       "dy": 0,
       "wb": 1,
-      "hb": 1.2,
-      "stroke": 5,
+      "hb": 1.07,
+      "stroke": 10,
       "lineSpacing": 1,
       "ws": 0
     },
     "singleDiacrit": {
-      "scaleY": 1,
-      "letterSpacing": 3,
+      "scaleY": 1.1,
+      "letterSpacing": 0,
       "dx": 0,
       "dy": 0,
-      "wb": 1.02,
-      "hb": 0.96,
-      "stroke": 5,
+      "wb": 0.98,
+      "hb": 0.93,
+      "stroke": 10,
       "lineSpacing": 1,
       "ws": 0
     },
     "multi": {
       "scaleY": 1,
-      "letterSpacing": 3,
+      "letterSpacing": 0,
       "dx": 0,
-      "dy": 0,
-      "wb": 1.02,
-      "hb": 1.1,
-      "stroke": 5,
-      "lineSpacing": 1,
+      "dy": 0.02,
+      "wb": 1,
+      "hb": 1.01,
+      "stroke": 10,
+      "lineSpacing": 0.85,
       "ws": 0
     },
     "multiDiacrit": {
       "scaleY": 1.05,
-      "letterSpacing": 3,
+      "letterSpacing": 0,
       "dx": 0,
       "dy": 0,
       "wb": 1.03,
       "hb": 1,
-      "stroke": 5,
+      "stroke": 10,
       "lineSpacing": 1,
       "ws": 0
     }
@@ -140,45 +140,45 @@
   "Yomogi": {
     "single": {
       "scaleY": 1,
-      "letterSpacing": 3,
+      "letterSpacing": 0,
       "dx": 0,
       "dy": 0,
       "wb": 1.01,
       "hb": 1.1,
-      "stroke": 7,
+      "stroke": 8,
       "lineSpacing": 1,
       "ws": 0
     },
     "singleDiacrit": {
       "scaleY": 1,
-      "letterSpacing": 3,
+      "letterSpacing": 0,
       "dx": 0,
       "dy": 0,
       "wb": 1.01,
       "hb": 1,
-      "stroke": 7,
+      "stroke": 8,
       "lineSpacing": 1,
       "ws": 0
     },
     "multi": {
       "scaleY": 1,
-      "letterSpacing": 3,
+      "letterSpacing": 0,
       "dx": 0.01,
       "dy": -0.015,
       "wb": 1.01,
       "hb": 1.16,
-      "stroke": 7,
+      "stroke": 8,
       "lineSpacing": 0.95,
       "ws": 0
     },
     "multiDiacrit": {
       "scaleY": 1,
-      "letterSpacing": 3,
+      "letterSpacing": 0,
       "dx": 0.005,
       "dy": -0.03,
       "wb": 1,
       "hb": 1,
-      "stroke": 7,
+      "stroke": 8,
       "lineSpacing": 1,
       "ws": 0
     }

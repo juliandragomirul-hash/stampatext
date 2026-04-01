@@ -293,33 +293,7 @@ app.put('/api/admin/font-config', (req, res) => {
   }
 });
 
-// ---- API: Square Font Config (admin) ----
-const SQUARE_CONFIG_PATH = path.join(__dirname, 'public', 'data', 'square-config.json');
 const PARAM_COMPAT_PATH = path.join(__dirname, 'public', 'data', 'param-compat.json');
-
-app.get('/api/admin/square-config', (req, res) => {
-  try {
-    const data = fs.readFileSync(SQUARE_CONFIG_PATH, 'utf8');
-    res.json(JSON.parse(data));
-  } catch (err) {
-    console.error('Failed to read square config:', err);
-    res.status(500).json({ error: 'Failed to read square config' });
-  }
-});
-
-app.put('/api/admin/square-config', (req, res) => {
-  try {
-    const config = req.body;
-    if (!config || typeof config !== 'object' || Array.isArray(config)) {
-      return res.status(400).json({ error: 'Invalid config format' });
-    }
-    fs.writeFileSync(SQUARE_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf8');
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Failed to write square config:', err);
-    res.status(500).json({ error: 'Failed to write square config' });
-  }
-});
 
 // Style Icon Cropping API
 const STYLE_ICON_CONFIG_PATH = path.join(__dirname, 'public', 'data', 'style-icon-config.json');

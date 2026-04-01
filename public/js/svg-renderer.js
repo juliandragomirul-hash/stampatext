@@ -20,7 +20,21 @@ const SvgRenderer = {
 
   // Per-font tuning config loaded from /data/font-config.json
   _fontConfig: null,
-  _sqConfig: null,  // Square tuning config, set by admin or loaded from square-config.json
+
+  // Average character width relative to font size (uppercase). Used for aspect ratio estimation.
+  _charWidthFactors: {
+    'Oswald': 0.42,
+    'BebasNeue': 0.40,
+    'CourierPrime': 0.52,
+    'Montserrat': 0.58,
+    'Yomogi': 0.55,
+    'BlackOpsOne': 0.55,
+    'Nunito': 0.52,
+    'Exo2': 0.50,
+    'Bitter': 0.50,
+    'Comfortaa': 0.55,
+    'FuzzyBubbles': 0.55
+  },
 
   // Load font config from server (called once at page init)
   loadFontConfig: function() {
@@ -77,26 +91,103 @@ const SvgRenderer = {
     return Math.round(Math.max(min, Math.min(max, raw)));
   },
 
-  _getSquareConfig: function(fontName, rowMode) {
-    var defaults = {
-      heroStroke: 8.0, heroSpacing: 2.0, heroScaleY: 1.10, heroScaleX: 1.0,
-      heroDx: 0, heroDy: 0,
-      smallStroke: 5.0, smallSpacing: 2.0, smallScaleY: 1.0, smallScaleX: 1.0,
-      smallDx: 0, smallDy: 0,
-      rowGap: 0
-    };
-    if (!this._sqConfig || !this._sqConfig[fontName]) return defaults;
-    var fontEntry = this._sqConfig[fontName];
-    // Map rowMode to case key: '2up' → 'hero2up', '2down' → 'hero2down', '3' → 'equal3'
-    var caseKey = rowMode === '2up' ? 'hero2up' : rowMode === '2down' ? 'hero2down' : 'equal3';
-    var cfg = fontEntry[caseKey] || {};
-    // Merge with defaults
-    var result = {};
-    for (var k in defaults) {
-      result[k] = cfg[k] !== undefined ? cfg[k] : defaults[k];
+  // Estimate ink ratio between A (proportional) and N (uniform) for a given row count.
+  // If ratio < 1.15, A and N look nearly identical — A wins (more ink).
+  _estimateInkRatio: function(words, rc) {
+    if (rc <= 1 || words.length < rc) return 1;
+    var totalLen = words.reduce(function(s, w) { return s + w.length; }, 0) + words.length - 1;
+    var tgt = totalLen / rc;
+    var rows = [];
+    var wi = 0;
+    for (var r = 0; r < rc; r++) {
+      var row = words[wi++] || '';
+      var remaining = rc - r - 1;
+      while (wi < words.length && (words.length - wi) > remaining) {
+        var next = row + ' ' + words[wi];
+        if (next.length > tgt * 1.5 && row.length >= 2) break;
+        row = next;
+        wi++;
+      }
+      rows.push(row.length || 1);
     }
-    return result;
+    var maxLen = Math.max.apply(null, rows);
+    var inkN = 0, inkA = 0;
+    for (var i = 0; i < rows.length; i++) {
+      inkN += rows[i];
+      var scale = maxLen / rows[i];
+      inkA += scale * scale * rows[i];
+    }
+    return inkA / inkN;
   },
+
+  /**
+   * Single source of truth: which row options are valid for a given text + shape.
+   * Used by both the product page dropdown and gallery variant generation.
+   * @param {string} text - user text
+   * @param {string} shape - 'rectangle', 'square', or 'lined'
+   * @param {string} [fontKey] - font name for aspect ratio estimation (e.g. 'BebasNeue')
+   * @returns {{value:string, label:string}[]} - e.g. [{value:'1',label:'1'}, {value:'2A',label:'2'}]
+   */
+  getValidRowOptions: function(text, shape, fontKey) {
+    var words = text.trim().split(/\s+/);
+    var totalChars = text.trim().length;
+    var isSingleWord = words.length === 1;
+
+    var minRows = isSingleWord ? 1 : Math.max(1, Math.ceil(totalChars / 25));
+    var rowsCap = (shape === 'square' && totalChars <= 16) ? 4 : 5;
+    var maxRows = isSingleWord ? 1 : Math.min(words.length, rowsCap);
+    if (minRows > maxRows) minRows = maxRows;
+
+    // Font-aware character width for aspect estimation
+    var cwf = (fontKey && this._charWidthFactors[fontKey]) || 0.50;
+
+    var options = [];
+
+    for (var rc = minRows; rc <= maxRows; rc++) {
+      var hasA = (rc >= 2 || shape === 'square');
+
+      if (shape === 'square') {
+        if (rc === 1) {
+          // Square 1-row: single option with half-stretch (merge of 1 and 1A)
+          options.push({ value: '1A', label: '1' });
+        } else {
+          // Square 2+: always show both N and A (decorative lines make N distinct from A)
+          options.push({ value: '' + rc, label: '' + rc });
+          options.push({ value: rc + 'A', label: rc + 'A' });
+        }
+        continue;
+      }
+
+      // Rectangle / Lined:
+      var inkRatio = this._estimateInkRatio(words, rc);
+      var inkRedundant = hasA && inkRatio < 1.15; // A ≈ N → hide N, keep A
+
+      // Font-aware aspect check: estimatedHeight / estimatedWidth
+      // height ∝ rc × capHeight(0.72), width ∝ avgCharsPerRow × charWidthFactor
+      var avgCharsPerRow = totalChars / rc;
+      var estAspect = (rc * 0.72) / (avgCharsPerRow * cwf);
+      var nearSquare = estAspect > 0.85 && estAspect < 1.25;
+
+      // A variant's aspect: proportional scaling increases height by ~sqrt(inkRatio)
+      var estAspectA = hasA ? estAspect * Math.sqrt(inkRatio) : estAspect;
+      var nearSquareA = estAspectA > 0.85 && estAspectA < 1.25;
+
+      var showN = !inkRedundant && !nearSquare;
+      var showA = hasA && !nearSquareA;
+
+      if (showN) {
+        options.push({ value: '' + rc, label: '' + rc });
+      }
+      if (showA) {
+        // If N is hidden (ink redundant), label A as just the number
+        var aLabel = (inkRedundant && !nearSquare) ? '' + rc : rc + 'A';
+        options.push({ value: rc + 'A', label: aLabel });
+      }
+    }
+
+    return options;
+  },
+
 
   // Map of font names to local font files and their format
   _fontMap: {
@@ -1870,323 +1961,7 @@ const SvgRenderer = {
     return svgString;
   },
 
-  // Stop words that should never stand alone on a row
-  _STOP_WORDS: ['the','a','an','to','at','in','on','of','for','and','or','but',
-                'is','it','my','no','so','by','up','do','be','we','us','if','as'],
-
-  /**
-   * Split text for square stamp layout.
-   * @param {string} text - uppercased user text
-   * @param {string} rowMode - '2up' (hero top), '2down' (hero bottom), '3' (equal 3-row)
-   * @returns {{ lines: string[], fontScales: number[], rowMode: string }}
-   */
-  _splitForSquare(text, rowMode) {
-    console.log('[SPLIT-SQ] called! text="' + text + '" rowMode=' + rowMode);
-    var words = text.trim().split(/\s+/);
-    rowMode = rowMode || '3'; // default to 3-row equal
-
-    // Single word — split by syllable
-    if (words.length === 1) {
-      var syllables = this._splitSyllables(words[0]);
-      if (syllables.length <= 1) return { lines: [text], fontScales: [1], rowMode: rowMode };
-
-      if (rowMode === '3') {
-        // Try 3-row syllable split
-        if (syllables.length >= 3) {
-          var lines3 = this._distributeSyllables(syllables, 3);
-          return { lines: lines3, fontScales: [1, 1, 1], rowMode: '3' };
-        }
-        var lines2 = this._distributeSyllables(syllables, 2);
-        return { lines: lines2, fontScales: [1, 1], rowMode: '3' };
-      }
-      // 2up/2down: split syllables into 2 rows with hero scaling
-      var lines2 = this._distributeSyllables(syllables, 2);
-      if (rowMode === '2up') {
-        return { lines: lines2, fontScales: [3.0, 1.0], rowMode: '2up' };
-      } else {
-        return { lines: lines2, fontScales: [1.0, 3.0], rowMode: '2down' };
-      }
-    }
-
-    // Multi-word: group stop words with direction based on rowMode
-    var direction = (rowMode === '2down') ? 'backward' : 'forward';
-    var chunks = this._groupStopWords(words, direction);
-    if (chunks.length <= 1) {
-      // All words in one chunk — fall back to word-level split
-      if (words.length >= 2) {
-        chunks = words.slice(); // each word is its own chunk
-      } else {
-        return { lines: [text], fontScales: [1], rowMode: rowMode };
-      }
-    }
-
-    if (rowMode === '3') {
-      return this._splitSquare3Row(chunks, words);
-    }
-
-    return this._splitSquare2Row(chunks, rowMode);
-  },
-
-  /**
-   * 2-row hero split: hero row gets 2x font, other gets 1x.
-   * rowMode '2up' = hero on top, '2down' = hero on bottom.
-   */
-  /**
-   * Deterministic 2-row hero split.
-   * 2up: first chunk = hero (2x), rest = small (1x)
-   * 2down: last chunk = hero (2x), rest = small (1x)
-   */
-  _splitSquare2Row(chunks, rowMode) {
-    if (chunks.length < 2) {
-      // Can't split into 2 — return as single line
-      return { lines: [chunks.join(' ')], fontScales: [1], rowMode: rowMode };
-    }
-
-    var line1, line2, scales;
-    if (rowMode === '2up') {
-      // Hero = first chunk, small = rest joined
-      line1 = chunks[0];
-      line2 = chunks.slice(1).join(' ');
-      scales = [3.0, 1.0];
-    } else {
-      // Hero = last chunk, small = rest joined
-      line1 = chunks.slice(0, -1).join(' ');
-      line2 = chunks[chunks.length - 1];
-      scales = [1.0, 3.0];
-    }
-
-    return { lines: [line1, line2], fontScales: scales, rowMode: rowMode };
-  },
-
-  /**
-   * 3-row equal-font split. All rows get scale 1.0.
-   * Tries to balance row lengths from chunks; falls back to word-level split.
-   */
-  _splitSquare3Row(chunks, words) {
-    // If we have exactly 3 chunks, use them directly
-    if (chunks.length === 3) {
-      return { lines: [chunks[0], chunks[1], chunks[2]], fontScales: [1, 1, 1], rowMode: '3' };
-    }
-
-    // If 2 chunks, split the longer one by words to get 3 rows
-    if (chunks.length === 2) {
-      // Try splitting each chunk
-      var best = null;
-      var bestDiff = Infinity;
-      for (var c = 0; c < 2; c++) {
-        var cWords = chunks[c].split(/\s+/);
-        if (cWords.length >= 2) {
-          for (var w = 1; w < cWords.length; w++) {
-            var part1 = cWords.slice(0, w).join(' ');
-            var part2 = cWords.slice(w).join(' ');
-            var lines = c === 0 ? [part1, part2, chunks[1]] : [chunks[0], part1, part2];
-            var maxL = Math.max(lines[0].length, lines[1].length, lines[2].length);
-            var minL = Math.min(lines[0].length, lines[1].length, lines[2].length);
-            var diff = maxL - minL;
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              best = lines;
-            }
-          }
-        }
-      }
-      if (best) return { lines: best, fontScales: [1, 1, 1], rowMode: '3' };
-      // Can't split into 3 — use 2 rows with equal scaling
-      return { lines: [chunks[0], chunks[1]], fontScales: [1, 1], rowMode: '3' };
-    }
-
-    // 4+ chunks: distribute into 3 groups
-    var bestResult = null;
-    var bestDiff = Infinity;
-    for (var i = 1; i < chunks.length - 1; i++) {
-      for (var j = i + 1; j < chunks.length; j++) {
-        var lines = [
-          chunks.slice(0, i).join(' '),
-          chunks.slice(i, j).join(' '),
-          chunks.slice(j).join(' ')
-        ];
-        var maxL = Math.max(lines[0].length, lines[1].length, lines[2].length);
-        var minL = Math.min(lines[0].length, lines[1].length, lines[2].length);
-        var diff = maxL - minL;
-        if (diff < bestDiff) {
-          bestDiff = diff;
-          bestResult = { lines: lines, fontScales: [1, 1, 1], rowMode: '3' };
-        }
-      }
-    }
-    if (bestResult) return bestResult;
-
-    // Final fallback: word-level distribution into 3
-    if (words.length >= 3) {
-      var lines = this._distributeSyllables(words, 3);
-      return { lines: lines.map(function(l) { return l; }), fontScales: [1, 1, 1], rowMode: '3' };
-    }
-    return { lines: [words.join(' ')], fontScales: [1], rowMode: '3' };
-  },
-
-  /**
-   * Group stop words with their nearest content word.
-   * Stop words attach to the NEXT content word; trailing stop words attach to previous chunk.
-   * Returns array of chunk strings.
-   */
-  /**
-   * Group stop words with content words.
-   * @param {string[]} words
-   * @param {string} direction - 'forward' (stop→next content) or 'backward' (stop→prev content)
-   */
-  _groupStopWords(words, direction) {
-    var stopSet = {};
-    for (var i = 0; i < this._STOP_WORDS.length; i++) {
-      stopSet[this._STOP_WORDS[i]] = true;
-    }
-
-    if (direction === 'backward') {
-      // Backward: stop words attach to PREVIOUS content word
-      var chunks = [];
-      for (var i = 0; i < words.length; i++) {
-        if (stopSet[words[i].toLowerCase()]) {
-          // Attach to previous chunk if exists, otherwise start new pending
-          if (chunks.length > 0) {
-            chunks[chunks.length - 1] += ' ' + words[i];
-          } else {
-            chunks.push(words[i]); // leading stop word, will merge later
-          }
-        } else {
-          chunks.push(words[i]);
-        }
-      }
-      return chunks;
-    }
-
-    // Forward (default): stop words attach to NEXT content word
-    var chunks = [];
-    var pending = [];
-
-    for (var i = 0; i < words.length; i++) {
-      if (stopSet[words[i].toLowerCase()]) {
-        pending.push(words[i]);
-      } else {
-        pending.push(words[i]);
-        chunks.push(pending.join(' '));
-        pending = [];
-      }
-    }
-
-    // Trailing stop words: attach to last chunk
-    if (pending.length > 0) {
-      if (chunks.length > 0) {
-        chunks[chunks.length - 1] += ' ' + pending.join(' ');
-      } else {
-        chunks.push(pending.join(' '));
-      }
-    }
-
-    return chunks;
-  },
-
-  /**
-   * Score a line grouping for square-ness with hero-word scaling.
-   * Hero row (most characters) gets scale 2.0, others get 1.0.
-   * If all rows are similar length (<20% difference), equal sizing.
-   * Returns { lines, fontScales, score }.
-   */
-  _scoreSquareLayout(lines) {
-    var maxChars = 0;
-    var minChars = Infinity;
-    lines.forEach(function(l) {
-      if (l.length > maxChars) maxChars = l.length;
-      if (l.length < minChars) minChars = l.length;
-    });
-    if (maxChars === 0) return { lines: lines, fontScales: lines.map(function() { return 1; }), score: Infinity };
-
-    // If all rows are similar length (within 20%), use equal sizing
-    var charRatio = minChars / maxChars;
-    var useHero = charRatio < 0.8;
-
-    var heroScale = useHero ? 2.0 : 1.0;
-    var fontScales = lines.map(function(l) {
-      return (useHero && l.length === maxChars) ? heroScale : 1.0;
-    });
-
-    // Total height: sum of row heights (scale × base line height factor)
-    var totalHeight = 0;
-    for (var i = 0; i < fontScales.length; i++) {
-      totalHeight += fontScales[i] * 0.85;
-    }
-    var width = maxChars;
-
-    // Aspect ratio — target ~1.4 for typical font proportions
-    var aspect = width / totalHeight;
-    var targetAspect = 1.4;
-    var score = Math.abs(aspect - targetAspect);
-
-    return { lines: lines, fontScales: fontScales, score: score };
-  },
-
-  /**
-   * Distribute syllables across N rows, balancing line lengths.
-   */
-  _distributeSyllables(syllables, rows) {
-    var totalLen = syllables.reduce(function(s, syl) { return s + syl.length; }, 0);
-    var targetPerRow = totalLen / rows;
-    var lines = [];
-    var currentLine = '';
-    var lineIdx = 0;
-
-    for (var i = 0; i < syllables.length; i++) {
-      var remaining = rows - lineIdx - 1;
-      var syllablesLeft = syllables.length - i;
-      // Force split if we need to save syllables for remaining rows
-      if (remaining > 0 && syllablesLeft <= remaining) {
-        if (currentLine) lines.push(currentLine);
-        currentLine = syllables[i];
-        lineIdx++;
-        continue;
-      }
-      var newLine = currentLine + syllables[i];
-      if (currentLine.length >= targetPerRow && lineIdx < rows - 1) {
-        lines.push(currentLine);
-        currentLine = syllables[i];
-        lineIdx++;
-      } else {
-        currentLine = newLine;
-      }
-    }
-    if (currentLine) lines.push(currentLine);
-    return lines;
-  },
-
-  /**
-   * Distribute words across N rows, balancing line lengths.
-   */
-  _distributeWords(words, rows) {
-    var totalLen = words.reduce(function(s, w) { return s + w.length; }, 0) + words.length - 1;
-    var targetPerRow = totalLen / rows;
-    var lines = [];
-    var currentLine = '';
-    var lineIdx = 0;
-
-    for (var i = 0; i < words.length; i++) {
-      var remaining = rows - lineIdx - 1;
-      var wordsLeft = words.length - i;
-      if (remaining > 0 && wordsLeft <= remaining) {
-        if (currentLine) lines.push(currentLine);
-        currentLine = words[i];
-        lineIdx++;
-        continue;
-      }
-      var newLine = currentLine ? currentLine + ' ' + words[i] : words[i];
-      if (currentLine.length >= targetPerRow && lineIdx < rows - 1) {
-        lines.push(currentLine);
-        currentLine = words[i];
-        lineIdx++;
-      } else {
-        currentLine = newLine;
-      }
-    }
-    if (currentLine) lines.push(currentLine);
-    return lines;
-  },
+  // (hero split functions removed — unified to cascade sizing)
 
   /**
    * @param {string} svgString - cleaned SVG string
@@ -2878,14 +2653,6 @@ const SvgRenderer = {
     var fc = SvgRenderer._getFontConfig(detectedFont, textCase);
     var fontScaleY = fc.scaleY;
     var fontLetterSpacing = fc.letterSpacing;
-    // Square stamps: read per-font tuning from square config
-    var sqCfg = null;
-    if (stampShape === 'square') {
-      var sqRowModeMatch = svgString.match(/data-sq-rowmode=["']([^"']+)["']/);
-      var sqRowMode = sqRowModeMatch ? sqRowModeMatch[1] : 'hero2up';
-      sqCfg = SvgRenderer._getSquareConfig(detectedFont, sqRowMode);
-      fontLetterSpacing = sqCfg.heroSpacing;
-    }
     var fontTune = { dx: fc.dx, dy: fc.dy, wb: fc.wb, hb: fc.hb, ws: fc.ws || 0, lineSpacing: fc.lineSpacing || 1.0, stroke: fc.stroke || 0 };
     // Letter-spacing is absolute in SVG (doesn't scale with font size).
     // Track it separately so the ratio calculation only scales char widths.
@@ -2958,7 +2725,9 @@ const SvgRenderer = {
       // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
       var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
       var rowBoost = 1 + (Math.max(1, numTspans) - 1) * 0.4; // more rows = bigger stamp = thicker border
-      var proportionalSw = fontRatioForProportional * 20 * rowBoost;  // unclamped; per-family min/max below
+      var proportionalSw = fontRatioForProportional * 20 * rowBoost;
+      // Floor: 1-row long text gets low fontRatio (0.89) → thin border. Minimum ensures consistency.
+      proportionalSw = Math.max(proportionalSw, 40);
       // Square stamps: 2.85x thicker border (compensates lower base to match original 30*1.9)
       if (stampShape === 'square') proportionalSw *= 2.85;
 
@@ -3180,188 +2949,10 @@ const SvgRenderer = {
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
 
-      // Square shape enforcement: if text is still single-line, split it now
-      // Skip when rowsMode='1' (explicit 1 row) or 'full' with forceLines=1 (Full + 1 row = Hi-style, not split)
-      var sqSkipSplit = (rowsMode === '1') || (rowsMode === 'full' && numLines <= 1);
-      if (stampShape === 'square' && numLines <= 1 && !sqSkipSplit) {
-        console.log('[SQ-INLINE-ENTER] numLines=' + numLines + ' numTspans=' + numTspans);
-        // Read rowMode from data attribute (set by gallery.js), default to '2up'
-        var rmMatch = result.match(/data-sq-rowmode="([^"]+)"/);
-        var sqRowMode = rmMatch ? rmMatch[1] : '2up';
-        // Extract current text from tspans or text element
-        var sqTextMatch = result.match(/<tspan[^>]*>([^<]*)<\/tspan>/i);
-        var sqRawText = sqTextMatch ? sqTextMatch[1] : '';
-        if (!sqRawText) {
-          // Try bare text content
-          var bareMatch = result.match(/<text[^>]*>([^<]+)<\/text>/i);
-          sqRawText = bareMatch ? bareMatch[1] : '';
-        }
-        sqRawText = sqRawText.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-        console.log('[SQ-INLINE-TEXT] extracted="' + sqRawText + '" len=' + sqRawText.trim().length);
-        if (sqRawText.trim().length > 1) {
-          var sqSplitResult = SvgRenderer._splitForSquare(sqRawText.trim(), sqRowMode);
-          if (sqSplitResult.lines.length > 1) {
-            // Rebuild text element with multi-line tspans
-            var sqNewContent = '';
-            for (var sli = 0; sli < sqSplitResult.lines.length; sli++) {
-              var sqLineEsc = sqSplitResult.lines[sli].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              sqNewContent += '<tspan x="0" dy="0">' + sqLineEsc + '</tspan>';
-            }
-            // Replace text content (between <text...> and </text>)
-            result = result.replace(/(<text[^>]*>)([\s\S]*?)(<\/text>)/i, '$1' + sqNewContent + '$3');
-            // Add data attributes for scales
-            if (!result.match(/data-sq-scales=/)) {
-              result = result.replace(/<svg/, '<svg data-sq-scales="' + sqSplitResult.fontScales.join(',') + '"');
-            }
-            // Recount lines and tspans
-            numLines = sqSplitResult.lines.length;
-            numTspans = sqSplitResult.lines.length;
-            console.log('[SQ-SPLIT-INLINE] split "' + sqRawText + '" into ' + numLines + ' lines, mode=' + sqRowMode);
-          }
-        }
-      }
-
       // Full Hi scale: 2x vertical stretch for 1-row full mode (square or rect 1A)
       var _sqFullHiScale = 1;
 
-      // Square shape enforcement (old gallery path): only for gallery-injected sq-scales
-      // Product page uses the Hero block in the 2Full section instead
-      var _sqComputedFontSizes = null;
-      var _sqHeroIdx = 0;
-      if (stampShape === 'square' && numLines > 1 && result.match(/data-sq-scales=/)) {
-        // Extract per-row text
-        var sqTspanTexts = [];
-        result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
-          sqTspanTexts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
-        });
-
-        // Find hero row from scales
-        var sqScalesMatch = result.match(/data-sq-scales="([^"]+)"/);
-        var sqScales = sqScalesMatch ? sqScalesMatch[1].split(',').map(Number) : null;
-        var maxScale = 1;
-        if (sqScales) {
-          for (var si = 0; si < sqScales.length; si++) {
-            if (sqScales[si] > maxScale) { maxScale = sqScales[si]; _sqHeroIdx = si; }
-          }
-        }
-        var smallIdx = (_sqHeroIdx === 0) ? 1 : 0;
-
-        // Admin config values (visual transforms only — don't affect layout math)
-        var _hScY = sqCfg ? sqCfg.heroScaleY : 1.10;
-        var _hScX = sqCfg ? (sqCfg.heroScaleX || 1.0) : 1.0;
-        var _sScY = sqCfg ? (sqCfg.smallScaleY || 1.0) : 1.0;
-        var _sScX = sqCfg ? (sqCfg.smallScaleX || 1.0) : 1.0;
-        var _lineSp = sqCfg ? sqCfg.rowGap : 0;
-
-        // Character width estimation from measured single-line width
-        var allChars = sqTspanTexts.join('');
-        var avgCharWidth = measuredWidth / (allChars.length || 1);
-        var smallChars = sqTspanTexts[smallIdx] ? sqTspanTexts[smallIdx].length : 1;
-        var heroChars = sqTspanTexts[_sqHeroIdx] ? sqTspanTexts[_sqHeroIdx].length : 1;
-
-        // Square side = max of current rect dimensions
-        var squareSide = Math.max(newRectWidth, newRectHeight);
-        var capH = 0.72; // base cap height for layout math (no scaleY!)
-        var pad = squareSide * 0.01; // 1% padding each side
-        var innerSize = squareSide - pad * 2; // available inner space (both W and H)
-
-        // === HERO IS MASTER ===
-        // Step 1: Size hero to fill available height
-        // Hero gets 40% of inner height at default (user scales up with scaleY)
-        var heroFontSize = (innerSize * 0.40) / capH;
-        var heroBaseWidth = heroChars * avgCharWidth * (heroFontSize / newFontSize);
-        var heroVisH = heroFontSize * capH; // layout height (no scaleY!)
-
-        // Step 2: Small row matches hero's visual width
-        // small font = heroVisualWidth / (smallChars × avgCharWidth) × newFontSize
-        var heroVisualWidth = heroBaseWidth; // hero width at heroFontSize
-        var smallFontSize = (heroVisualWidth / (smallChars * avgCharWidth)) * newFontSize;
-        smallFontSize = Math.max(smallFontSize, heroFontSize * 0.1); // min 10%
-        var smallVisH = smallFontSize * capH; // layout height (no scaleY!)
-
-        // Step 3: Line gap
-        var lineGap = _lineSp;
-
-        // Step 4: Total block height (layout only, no scaleY)
-        var totalBlockH = heroVisH + lineGap + smallVisH;
-
-        // Step 5: If block too tall, shrink hero proportionally
-        if (totalBlockH > innerSize) {
-          var shrink = innerSize / totalBlockH;
-          heroFontSize *= shrink;
-          heroVisH = heroFontSize * capH;
-          heroBaseWidth = heroChars * avgCharWidth * (heroFontSize / newFontSize);
-          heroVisualWidth = heroBaseWidth;
-          smallFontSize = (heroVisualWidth / (smallChars * avgCharWidth)) * newFontSize;
-          smallFontSize = Math.max(smallFontSize, heroFontSize * 0.1);
-          smallVisH = smallFontSize * capH;
-          totalBlockH = heroVisH + lineGap + smallVisH;
-        }
-
-        // Step 6: Build font sizes array
-        _sqComputedFontSizes = [];
-        for (var si = 0; si < numLines; si++) {
-          _sqComputedFontSizes.push(si === _sqHeroIdx ? heroFontSize : smallFontSize);
-        }
-        // Store for dy section
-        var _sqTotalBlockH = totalBlockH;
-        var _sqHeroVisH = heroVisH;
-        var _sqSmallVisH = smallVisH;
-        var _sqLineGap = lineGap;
-
-        newRectWidth = squareSide;
-        newRectHeight = squareSide;
-        newFontSize = heroFontSize;
-        textBlockWidth = innerWidth;
-        textBlockHeight = totalBlockH;
-        lineHeight = heroFontSize * 1.15;
-
-        // Apply per-tspan font-size, stroke-width, letter-spacing
-        // Apply per-tspan: font-size × scaleY, stroke, spacing, scaleX via textLength
-        // ScaleY multiplied into font-size (makes text taller)
-        // Stroke scaled inversely so it doesn't thicken with font size
-        var _propStroke = SvgRenderer._computeProportionalStroke(fc.stroke || 0, newFontSize);
-        var _hSpace = sqCfg ? sqCfg.heroSpacing : 2;
-        var _sSpace = sqCfg ? sqCfg.smallSpacing : 2;
-        var tspanFontIdx = 0;
-        result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
-          if (tspanFontIdx < _sqComputedFontSizes.length) {
-            var fs = _sqComputedFontSizes[tspanFontIdx];
-            var isHero = (tspanFontIdx === _sqHeroIdx);
-            tspanFontIdx++;
-            attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
-            attrs = attrs.replace(/\s*stroke-width=["'][^"']*["']/gi, '');
-            attrs = attrs.replace(/\s*letter-spacing=["'][^"']*["']/gi, '');
-            attrs = attrs.replace(/\s*stroke=["'][^"']*["']/gi, '');
-            attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
-            attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
-            var scX = isHero ? _hScX : _sScX;
-            var scY = isHero ? _hScY : _sScY;
-            var strokeW = _propStroke;
-            var spacing = isHero ? _hSpace : _sSpace;
-            // ScaleY: multiply into font-size (taller text)
-            var effectiveFs = fs * scY;
-            // ScaleX: use textLength to stretch/compress horizontally
-            var rowText = sqTspanTexts[isHero ? _sqHeroIdx : smallIdx] || '';
-            var naturalWidth = rowText.length * avgCharWidth * (fs / newFontSize);
-            var stretchedWidth = naturalWidth * scX;
-            var extra = '';
-            if (scX !== 1.0) {
-              extra += ' textLength="' + stretchedWidth.toFixed(1) + '" lengthAdjust="spacingAndGlyphs"';
-            }
-            if (strokeW > 0) {
-              extra += ' stroke-width="' + strokeW.toFixed(1) + '"';
-            }
-            if (spacing !== 0) {
-              extra += ' letter-spacing="' + spacing.toFixed(1) + '"';
-            }
-            return '<tspan' + attrs + ' font-size="' + effectiveFs.toFixed(2) + '"' + extra + '>';
-          }
-          return match;
-        });
-
-        result = SvgRenderer._setTextAttribute(result, textIndex, 'font-size', heroFontSize.toFixed(2));
-      } else if (stampShape === 'square') {
+      if (stampShape === 'square') {
         // Single line square: force square rect
         var squareSide = Math.max(newRectWidth, newRectHeight);
         newRectWidth = squareSide;
@@ -3369,9 +2960,10 @@ const SvgRenderer = {
         // Full + 1 row: Hi-style — extra scaleY for taller text, textLength fills width
         if (rowsMode === 'full' && numLines <= 1) {
           var sqInner = squareSide - Math.max(hPadding + squareSide * 0.02, squareSide * 0.08) * 2;
-          // Dynamic scaleY: fill available inner height, cap at 2.0
+          // Half-stretch: midpoint between natural height and full fill (merged 1/1A)
           var currentTextH = textBlockHeight * (fontScaleY || 1);
-          _sqFullHiScale = currentTextH > 0 ? Math.min(sqInner / currentTextH, 2.0) : 2.0;
+          var fullScale = currentTextH > 0 ? Math.min(sqInner / currentTextH, 2.0) : 2.0;
+          _sqFullHiScale = 1.0 + (fullScale - 1.0) / 2;
           // textLength forces width to fill square
           result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
             attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
@@ -3387,11 +2979,7 @@ const SvgRenderer = {
         }
       }
 
-      // Rectangle 1A: double text height via scaleY (same concept as square Hi-style)
-      if (stampShape !== 'square' && rowsMode === 'full' && numLines <= 1) {
-        _sqFullHiScale = 2.0;
-        newRectHeight = textBlockHeight * 2 + vPadding * 2;
-      }
+      // (Rect 1A removed — scaleY stretch was ugly. Square 1A still handled above.)
 
       // Square hero: ALWAYS equalize row widths via per-row font sizes
       var _2fullFontSizes = null;
@@ -3585,39 +3173,68 @@ const SvgRenderer = {
         });
       }
 
-      // "Fat" mode: stretch shorter rows horizontally to match longest row width.
-      // Same font-size for all rows — only textLength changes (letters look wider/fatter).
+      // Rect "A" mode: proportional font scaling — shorter rows get bigger font
+      // so all rows match the longest row's width. Letters stay proportional (no textLength distortion).
+      // Same algorithm concept as square cascade, but rect height grows freely.
       var _fatMode = (rowsMode === 'full' && numLines >= 2 && stampShape !== 'square');
       if (_fatMode) {
         var perWidths = measurements.perTspanWidths;
         if (perWidths && perWidths.length >= numLines && measurements.canvasMeasureFontSize > 0) {
-          // Find longest row width (at measured font size), scale to target font size
-          var fatScale = newFontSize / measurements.canvasMeasureFontSize;
+          var fatMeasureFs = measurements.canvasMeasureFontSize;
+          // Collect per-row measured widths
           var fatWidths = [];
           var fatMaxW = 0;
           for (var fi = 0; fi < numLines; fi++) {
-            var fw = (perWidths[fi] || 0) * fatScale;
+            var fw = perWidths[fi] || 0;
             fatWidths.push(fw);
             if (fw > fatMaxW) fatMaxW = fw;
           }
-          // Apply textLength to each tspan, capping stretch at 2.5×
-          var fatIdx = 0;
-          result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
-            var ci = fatIdx++;
-            if (ci < fatWidths.length && fatMaxW > 0) {
-              var ratio = fatMaxW / (fatWidths[ci] || fatMaxW);
-              if (ratio > 1.05) { // only stretch if meaningfully shorter
-                if (ratio > 2.5) ratio = 2.5; // cap distortion
-                var tl = (fatWidths[ci] * ratio).toFixed(2);
-                // Strip any existing textLength/lengthAdjust
+          // Compute per-row font size: scale each row so its width matches longest
+          _2fullFontSizes = [];
+          var fatCharCounts = [];
+          result.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
+            fatCharCounts.push(t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim().length);
+          });
+          for (var fi = 0; fi < numLines; fi++) {
+            var rowW = fatWidths[fi] || fatMaxW;
+            var rowFs = newFontSize * (fatMaxW / (rowW || 1));
+            // No cap — let short rows grow as big as needed to match longest row width
+            _2fullFontSizes.push(rowFs);
+          }
+          // Apply proportional sizing
+          if (_2fullFontSizes) {
+            // Compute ink ratio for height calculation
+            var fatInkRatio = 0.72;
+            if (measurements.canvasAscent > 0 && fatMeasureFs > 0) {
+              fatInkRatio = (symAscent + symDescent) / fatMeasureFs;
+            }
+            var fatStrokeAdd = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize) * 2;
+            // Recompute rect height from per-row ink heights + gaps
+            var fatMaxFs = 0;
+            for (var fi = 0; fi < _2fullFontSizes.length; fi++) {
+              if (_2fullFontSizes[fi] > fatMaxFs) fatMaxFs = _2fullFontSizes[fi];
+            }
+            var fatGap = fatMaxFs * 0.08;
+            var fatTotalH = 0;
+            for (var fi = 0; fi < _2fullFontSizes.length; fi++) {
+              fatTotalH += _2fullFontSizes[fi] * fatInkRatio + fatStrokeAdd;
+              if (fi < _2fullFontSizes.length - 1) fatTotalH += fatGap;
+            }
+            textBlockHeight = fatTotalH;
+            newRectHeight = fatTotalH + vPadding * 2;
+            // Apply per-tspan font-size (no textLength — letters stay proportional)
+            var fatTspanIdx = 0;
+            result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
+              if (fatTspanIdx < _2fullFontSizes.length) {
+                var fs = _2fullFontSizes[fatTspanIdx++];
+                attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
                 attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
                 attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
-                return '<tspan' + attrs + ' textLength="' + tl + '" lengthAdjust="spacingAndGlyphs">';
+                return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '">';
               }
-            }
-            return match;
-          });
-          // Rect width based on longest row (textBlockWidth stays as-is from normal sizing)
+              return match;
+            });
+          }
         }
       }
 
@@ -3647,51 +3264,8 @@ const SvgRenderer = {
 
       // For multi-line text with tspans
       if (numTspans > 1) {
-        if (_sqComputedFontSizes && _sqComputedFontSizes.length > 1) {
-          // Square: center the 2-row block as a whole
-          // Layout uses base capH=0.72 — NO scaleY (scaleY is visual only)
-          var sqCapH = 0.72;
-          var sqBlockH = _sqTotalBlockH; // already computed without scaleY
-
-          // First row cap height in px (layout, no scaleY)
-          var firstCapPx = _sqComputedFontSizes[0] * sqCapH;
-
-          // Center: first baseline dy = -(totalBlockH/2) + firstCapH
-          var sqFirstDy = -(sqBlockH / 2) + firstCapPx;
-
-          // Second row dy = baseline-to-baseline distance
-          var firstDescPx = _sqComputedFontSizes[0] * 0.05;
-          var secondCapPx = _sqComputedFontSizes[1] * sqCapH;
-          var sqSecondDy = firstDescPx + (_sqLineGap || 0) + secondCapPx;
-
-          // Apply admin dX/dY offsets per row
-          var _heroDx = sqCfg ? (sqCfg.heroDx || 0) : 0;
-          var _heroDy = sqCfg ? (sqCfg.heroDy || 0) : 0;
-          var _smallDx = sqCfg ? (sqCfg.smallDx || 0) : 0;
-          var _smallDy = sqCfg ? (sqCfg.smallDy || 0) : 0;
-
-          var sqLineIdx = 0;
-          result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
-            var before = arguments[1];
-            var isHeroRow = (sqLineIdx === _sqHeroIdx);
-            var dyOffset = isHeroRow ? _heroDy : _smallDy;
-            var dyVal = ((sqLineIdx === 0) ? sqFirstDy : sqSecondDy) + dyOffset;
-            sqLineIdx++;
-            return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
-          });
-
-          // Apply dX offsets to tspan x attributes
-          if (_heroDx !== 0 || _smallDx !== 0) {
-            var sqXIdx = 0;
-            result = result.replace(/<tspan([^>]*?)\bx=["']([\d.\-]+)["']/gi, function (_match, before, xVal) {
-              var isHeroRow = (sqXIdx === _sqHeroIdx);
-              var dxOffset = isHeroRow ? _heroDx : _smallDx;
-              sqXIdx++;
-              return '<tspan' + before + 'x="' + (parseFloat(xVal) + dxOffset).toFixed(2) + '"';
-            });
-          }
-        } else if (_2fullFontSizes && _2fullFontSizes.length >= 2) {
-          // Hero mode: N rows with per-row font sizes, center the block vertically
+        if (_2fullFontSizes && _2fullFontSizes.length >= 2) {
+          // Per-row font sizes (square cascade or rect proportional): center the block vertically
           var inkR = 0.72;
           if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
             inkR = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
@@ -3874,8 +3448,11 @@ const SvgRenderer = {
         result.replace(/<tspan[^>]*?textLength=["']([\d.]+)["']/gi, function(m, tl) {
           _tlWidths.push(parseFloat(tl));
         });
+        // heroWidths/measureFs only exist for square cascade; fall back to perTspanWidths for rect
+        var _rwHeroWidths = (typeof heroWidths !== 'undefined') ? heroWidths : (measurements.perTspanWidths || []);
+        var _rwMeasureFs = (typeof measureFs !== 'undefined') ? measureFs : (measurements.canvasMeasureFontSize || newFontSize);
         for (var rwi = 0; rwi < _2fullFontSizes.length; rwi++) {
-          var rw = (_tlWidths[rwi] > 0) ? _tlWidths[rwi] : (heroWidths[rwi] || 0) * (_2fullFontSizes[rwi] / measureFs);
+          var rw = (_tlWidths[rwi] > 0) ? _tlWidths[rwi] : (_rwHeroWidths[rwi] || 0) * (_2fullFontSizes[rwi] / _rwMeasureFs);
           rowWidths.push(rw);
         }
         result = result.replace(/<svg/, '<svg data-row-centers="' + rowCenters.map(function(v){return v.toFixed(1)}).join(',') + '" data-row-widths="' + rowWidths.map(function(v){return v.toFixed(1)}).join(',') + '"');
@@ -6698,5 +6275,103 @@ const SvgRenderer = {
 
     // Replace the outer rect with the lined path
     return svgString.replace(outer.full, linedPath);
+  },
+
+  /**
+   * Single rendering pipeline for stamps. Used by both gallery and product page.
+   * Guarantees identical output for identical params.
+   */
+  async renderStamp(params) {
+    var svg = params.svg;
+
+    // Steps 1-4 can be skipped if caller already did font/fill/text/autofit
+    // (product page caches the autofit result for responsiveness)
+    if (!params.skipTextSetup) {
+      // 1. Font
+      svg = svg.replace(/font-family=["']'?[^"']*'?["']/g,
+        "font-family=\"'" + params.font + "'\"");
+      svg = svg.replace(/font-weight=["'][^"']*["']/g,
+        'font-weight="' + params.fontWeight + '"');
+
+      // 2. Fill conversion (before text replacement)
+      if (params.fill) {
+        svg = SvgRenderer.convertFill(svg, params.fill);
+      }
+
+      // 3. Replace text
+      svg = SvgRenderer.replaceTextInString(svg, params.textZoneIdx || 0, params.text,
+        params.forceLines > 0 ? params.forceLines : undefined);
+
+      // 4. AutoFit
+      var rowsMode = params.fullMode ? 'full' : (params.forceLines === 1 ? '1' : null);
+      svg = await SvgRenderer.autoFitTextInString(svg, params.textZoneIdx || 0,
+        params.boundingWidth, params.fontSize, params.originalScaleX || 1,
+        params.frame, params.fill || 'empty', params.corners || 'straight',
+        params.borderStyle || null, params.shape || 'rectangle', rowsMode, params.rowVariant || '');
+    }
+
+    // 5. Colorize
+    svg = SvgRenderer.colorize(svg, params.color);
+
+    // 6. Thin stroke
+    svg = SvgRenderer.applyThinStroke(svg);
+
+    // 7. Crop viewBox
+    svg = SvgRenderer.cropViewBoxToStamp(svg);
+
+    // 8. Shape handling
+    if (params.shape === 'lined') {
+      svg = SvgRenderer.convertToLined(svg);
+    } else if (params.corners && params.corners !== 'straight') {
+      svg = SvgRenderer.applyCornerRadius(svg, params.corners);
+    } else {
+      // Strip rx/ry for straight corners
+      svg = svg.replace(/<rect([^>]*)\s+rx=["'][^"']*["']/gi, '<rect$1');
+      svg = svg.replace(/<rect([^>]*)\s+ry=["'][^"']*["']/gi, '<rect$1');
+    }
+
+    // 9. Fixed frame crop (cat2)
+    svg = await SvgRenderer.cropViewBoxFixedFrame(svg);
+
+    // 10. Border detection + frame
+    var bi = SvgRenderer.detectBorderType(svg);
+    SvgRenderer.supplementBorderInfo(bi, {
+      border_type: params.borderStyle || 'simple',
+      fill_type: params.fill || 'empty'
+    });
+    if (params.frame === 'double') {
+      svg = SvgRenderer.addDoubleFrame(svg, bi, params.color, 'double');
+    } else if (params.frame === 'split') {
+      svg = SvgRenderer.addSplitBorder(svg, bi);
+    }
+
+    // 11. Texture
+    if (params.texture) {
+      try {
+        if (params.texture === 'grungy') {
+          svg = await SvgRenderer.applyTexture(svg, 'grungy');
+          svg = await SvgRenderer.applyTexture(svg, 'worn');
+          svg = await SvgRenderer.applyTexture(svg, 'speckled');
+        } else {
+          svg = await SvgRenderer.applyTexture(svg, params.texture);
+        }
+      } catch (e) { /* texture failure non-fatal */ }
+    }
+
+    // 12. Decorative lines (square only)
+    if (params.shape === 'square') {
+      var dlRows = (svg.match(/<tspan/gi) || []).length || 1;
+      svg = SvgRenderer.addDecorativeLines(svg, params.fullMode ? 'A' : '', dlRows);
+    }
+
+    // 13. Watermark
+    svg = SvgRenderer.addWatermark(svg);
+
+    // 14. Tilt
+    if (params.tilt && params.tilt !== 0) {
+      svg = SvgRenderer.applyTilt(svg, params.tilt);
+    }
+
+    return svg;
   }
 };
