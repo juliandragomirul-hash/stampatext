@@ -2720,16 +2720,20 @@ const SvgRenderer = {
       }
 
 
-      // Proportional stroke: thick for short text (small stamp), thin for long text (large stamp)
-      // Short text → high fontRatio (font scales up) → thick border (visual weight on compact stamp)
-      // Long text → low fontRatio (font stays small) → thin border (doesn't overwhelm wide stamp)
-      var fontRatioForProportional = newFontSize / originalFontSize;  // 0.4 to 3.0
-      var rowBoost = 1 + (Math.max(1, numTspans) - 1) * 0.4; // more rows = bigger stamp = thicker border
-      var proportionalSw = fontRatioForProportional * 20 * rowBoost;
-      // Floor: 1-row long text gets low fontRatio (0.89) → thin border. Minimum ensures consistency.
-      proportionalSw = Math.max(proportionalSw, 40);
-      // Square stamps: 2.85x thicker border (compensates lower base to match original 30*1.9)
-      if (stampShape === 'square') proportionalSw *= 2.85;
+      // Proportional stroke: based on TEXT LENGTH (not font size or row count).
+      // Same text = same stroke regardless of how rows are arranged.
+      // INVERSE: fewer chars = bigger stamp = thicker border.
+      var textChars = 0;
+      svgString.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
+        textChars += t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim().length;
+      });
+      if (textChars === 0) textChars = 10;
+      var proportionalSw = Math.sqrt(10 / textChars) * 50;
+      proportionalSw = Math.max(40, Math.min(80, proportionalSw));
+      // Square: thicker border to match visual weight of square frame
+      if (stampShape === 'square') proportionalSw *= 2.0;
+      // fontRatioForProportional still used for inner gap calculation
+      var fontRatioForProportional = newFontSize / originalFontSize;
 
       // Apply font-size change in the string
       var result = svgString;
@@ -2885,14 +2889,15 @@ const SvgRenderer = {
       var vInnerGap = stampShape === 'square' ? baseGap : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
 
       // Recompute text zone with actual stroke for rect padding (clamped per-family)
-      var swMin = (stampShape === 'square') ? 20 : Math.round(20 * rowBoost);
-      var swMax = (stampShape === 'square') ? 80 : Math.round(60 * rowBoost);
+      // Clamp ranges are fixed (not row-dependent) since proportionalSw is text-length-based
+      var swMin = (stampShape === 'square') ? 40 : 30;
+      var swMax = (stampShape === 'square') ? 160 : 80;
       var actualSw = capStroke ? Math.max(swMin, Math.min(swMax, proportionalSw)) : estStrokeW;
-      // Border (sawtooth/perforated): match actual outerRectSw formula
-      var bFloor2 = stampShape === 'square' ? 60 : Math.round(35 * rowBoost);
+      // Border (sawtooth/perforated): thicker to contain shapes
+      var bFloor2 = stampShape === 'square' ? 80 : 45;
       if (borderFlags.border) actualSw = Math.max(bFloor2, Math.min(swMax, proportionalSw * 1.4));
-      // Perf_line: match its outerRectSw formula
-      var plFloor2 = stampShape === 'square' ? 60 : Math.round(35 * rowBoost);
+      // Perf_line: thicker to contain perforations
+      var plFloor2 = stampShape === 'square' ? 80 : 45;
       if (borderFlags.perfLine) actualSw = Math.max(plFloor2, Math.min(swMax, proportionalSw * 1.5));
       var actualInset;
       if (frameMode === 'double') {
@@ -3513,23 +3518,21 @@ const SvgRenderer = {
       //   Wavy:      outerRectSw raw     (wavy path handles visual weight)
       //   Brush:     outerRectSw raw     (brush group handles visual weight)
       var outerRectSw;
-      var rectRowBoost = stampShape === 'square' ? 1 : rowBoost;
-      var swMin = stampShape === 'square' ? 20 : Math.round(20 * rectRowBoost);
-      var swMax = stampShape === 'square' ? 80 : Math.round(60 * rectRowBoost);
+      // Fixed clamp ranges (text-length-based proportionalSw is already row-independent)
+      var swMin = stampShape === 'square' ? 40 : 30;
+      var swMax = stampShape === 'square' ? 160 : 80;
       if (borderFlags.perfLine) {
-        // Perf_line: stroke must contain perforations, higher minimum
-        var plFloor = stampShape === 'square' ? 65 : Math.round(35 * rectRowBoost);
+        var plFloor = stampShape === 'square' ? 80 : 45;
         outerRectSw = rawOuterSw > 0 ? Math.max(plFloor, Math.min(swMax, proportionalSw * 1.5)) : 0;
       } else if (!hasDecorativeBorder || borderFlags.filter) {
-        // Plain + Torn edge
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
       } else if (borderFlags.border) {
-        // Sawtooth/perforated: thicker stroke to contain white shapes
-        var bFloor = stampShape === 'square' ? 60 : Math.round(35 * rectRowBoost);
+        var bFloor = stampShape === 'square' ? 80 : 45;
         outerRectSw = rawOuterSw > 0 ? Math.max(bFloor, Math.min(swMax, proportionalSw * 1.4)) : 0;
       } else {
-        // Stitch, wavy, brush: keep raw stroke, boost with row count for rectangles
-        outerRectSw = rawOuterSw * rectRowBoost;
+        // Stitch, wavy, brush: scale with text-length ratio instead of rowBoost
+        var decorScale = rawOuterSw > 0 ? proportionalSw / rawOuterSw : 1;
+        outerRectSw = rawOuterSw * Math.max(0.6, Math.min(1.5, decorScale));
       }
       // Weight ratio for decorative element sizing (clamped 0.5-1.3 for brush; others clamp per-item)
       var decorWeightRatio = rawOuterSw > 0
