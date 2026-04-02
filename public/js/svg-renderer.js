@@ -2721,17 +2721,17 @@ const SvgRenderer = {
 
 
       // Proportional stroke: based on TEXT LENGTH (not font size or row count).
-      // Same text = same stroke regardless of how rows are arranged.
-      // INVERSE: fewer chars = bigger stamp = thicker border.
+      // Provisional stroke estimate (char-count based) for padding calculation.
+      // Final proportionalSw is recomputed from actual dimensions after layout.
       var textChars = 0;
       svgString.replace(/<tspan[^>]*>([^<]*)<\/tspan>/gi, function(m, t) {
         textChars += t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim().length;
       });
       if (textChars === 0) textChars = 10;
-      var proportionalSw = Math.sqrt(10 / textChars) * 50;
-      proportionalSw = Math.max(40, Math.min(80, proportionalSw));
+      var provisionalSw = Math.sqrt(10 / textChars) * 50;
+      provisionalSw = Math.max(40, Math.min(80, provisionalSw));
       // Square: thicker border to match visual weight of square frame
-      if (stampShape === 'square') proportionalSw *= 2.0;
+      if (stampShape === 'square') provisionalSw *= 2.0;
       // fontRatioForProportional still used for inner gap calculation
       var fontRatioForProportional = newFontSize / originalFontSize;
 
@@ -2888,23 +2888,22 @@ const SvgRenderer = {
       var hInnerGap = stampShape === 'square' ? baseGap : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
       var vInnerGap = stampShape === 'square' ? baseGap : Math.max(baseGap, Math.round(fontRatioForProportional * 10));
 
-      // Recompute text zone with actual stroke for rect padding (clamped per-family)
-      // Clamp ranges are fixed (not row-dependent) since proportionalSw is text-length-based
+      // Provisional padding estimation using char-count stroke (before final dimensions known)
       var swMin = (stampShape === 'square') ? 40 : 30;
       var swMax = (stampShape === 'square') ? 160 : 80;
-      var actualSw = capStroke ? Math.max(swMin, Math.min(swMax, proportionalSw)) : estStrokeW;
+      var actualSw = capStroke ? Math.max(swMin, Math.min(swMax, provisionalSw)) : estStrokeW;
       // Border (sawtooth/perforated): thicker to contain shapes
       var bFloor2 = stampShape === 'square' ? 80 : 45;
-      if (borderFlags.border) actualSw = Math.max(bFloor2, Math.min(swMax, proportionalSw * 1.4));
+      if (borderFlags.border) actualSw = Math.max(bFloor2, Math.min(swMax, provisionalSw * 1.4));
       // Perf_line: thicker to contain perforations
       var plFloor2 = stampShape === 'square' ? 80 : 45;
-      if (borderFlags.perfLine) actualSw = Math.max(plFloor2, Math.min(swMax, proportionalSw * 1.5));
+      if (borderFlags.perfLine) actualSw = Math.max(plFloor2, Math.min(swMax, provisionalSw * 1.5));
       var actualInset;
       if (frameMode === 'double') {
         // Inline double-frame inset: mirrors addDoubleFrame exactly using clampedPropSw
         // (same value addDoubleFrame reads from data-prop-sw), eliminating prediction errors
         var isFull = fillType === 'full';
-        var dfSw = Math.max(swMin, Math.min(swMax, proportionalSw));
+        var dfSw = Math.max(swMin, Math.min(swMax, provisionalSw));
         var dfInnerSw = Math.max(6, Math.round(dfSw * (isFull ? 0.24 : 0.36)));
         var dfWhiteGap = isFull ? 2 : dfInnerSw;
         var dfInnerEdge;
@@ -3263,6 +3262,49 @@ const SvgRenderer = {
         }
       }
 
+      // Dimension-based border stroke: computed after ALL rect dimension modifications
+      // (initial sizing, square override, fat mode height, aspect compression).
+      // Average dimension as base, with gentle aspect-ratio dampening:
+      // extreme ratios (1-row wide, 4A tall) get thinner; near-square barely affected.
+      var avgDim = (newRectWidth + newRectHeight) / 2;
+      var arForStroke = Math.max(newRectWidth, newRectHeight) / Math.min(newRectWidth, newRectHeight);
+      var STROKE_RATIO = 0.045;
+      var proportionalSw = avgDim * STROKE_RATIO / Math.pow(arForStroke, 0.40);
+      if (stampShape === 'square') {
+        proportionalSw = Math.max(40, Math.min(200, proportionalSw));
+      } else {
+        proportionalSw = Math.max(20, Math.min(250, proportionalSw));
+      }
+
+      // Padding correction (Frame A): provisionalSw was used for padding, actual stroke differs.
+      // Recompute inset from actual proportionalSw and adjust padding/rect dims.
+      if (frameMode !== 'double') {
+        var finalSwMin = stampShape === 'square' ? 40 : 20;
+        var finalSwMax = stampShape === 'square' ? 200 : 250;
+        var correctedSw = capStroke ? Math.max(finalSwMin, Math.min(finalSwMax, proportionalSw)) : estStrokeW;
+        if (borderFlags.border) correctedSw = Math.max(bFloor2, Math.min(finalSwMax, proportionalSw * 1.1));
+        if (borderFlags.perfLine) correctedSw = Math.max(plFloor2, Math.min(finalSwMax, proportionalSw * 1.2));
+        var correctedInset = SvgRenderer.computeTextZone(correctedSw, borderFlags, frameMode, cornerType, fillType || 'full');
+        if (borderFlags.filter && numTspans > 1) {
+          correctedInset *= 1 + (numTspans - 1) * 1.0;
+        }
+        // Recompute padding from scratch with corrected inset, re-apply vPad cap
+        var correctedHPad = textGap + correctedInset;
+        var correctedVPad = textGap + correctedInset;
+        if (numLines > 1 && rowsMode !== '2full') {
+          correctedVPad = Math.min(correctedVPad, lineHeight * 0.5);
+        }
+        // Equal padding on all sides: use same corrected value for h and v.
+        // The vPad cap above handles multi-line limits; no further asymmetry needed.
+        var padDelta = correctedHPad - hPadding;
+        if (Math.abs(padDelta) > 1) {
+          hPadding = correctedHPad;
+          vPadding = correctedHPad; // force equal to horizontal
+          newRectWidth += padDelta * 2;
+          newRectHeight += padDelta * 2;
+        }
+      }
+
       // STEP 3: Position text at viewBox center (FIXED reference point)
       var viewBoxCenterX = vbX + vbW / 2;
       var viewBoxCenterY = vbY + vbH / 2;
@@ -3518,25 +3560,25 @@ const SvgRenderer = {
       //   Wavy:      outerRectSw raw     (wavy path handles visual weight)
       //   Brush:     outerRectSw raw     (brush group handles visual weight)
       var outerRectSw;
-      // Fixed clamp ranges (text-length-based proportionalSw is already row-independent)
-      var swMin = stampShape === 'square' ? 40 : 30;
-      var swMax = stampShape === 'square' ? 160 : 80;
+      // Clamp ranges widened for dimension-based proportionalSw (tall stamps produce larger values)
+      var swMin = stampShape === 'square' ? 40 : 20;
+      var swMax = stampShape === 'square' ? 200 : 250;
       if (borderFlags.perfLine) {
         var plFloor = stampShape === 'square' ? 80 : 45;
-        outerRectSw = rawOuterSw > 0 ? Math.max(plFloor, Math.min(swMax, proportionalSw * 1.5)) : 0;
+        outerRectSw = rawOuterSw > 0 ? Math.max(plFloor, Math.min(swMax, proportionalSw * 1.2)) : 0;
       } else if (!hasDecorativeBorder || borderFlags.filter) {
         outerRectSw = rawOuterSw > 0 ? Math.max(swMin, Math.min(swMax, proportionalSw)) : 0;
       } else if (borderFlags.border) {
         var bFloor = stampShape === 'square' ? 80 : 45;
-        outerRectSw = rawOuterSw > 0 ? Math.max(bFloor, Math.min(swMax, proportionalSw * 1.4)) : 0;
+        outerRectSw = rawOuterSw > 0 ? Math.max(bFloor, Math.min(swMax, proportionalSw * 1.1)) : 0;
       } else {
-        // Stitch, wavy, brush: scale with text-length ratio instead of rowBoost
+        // Stitch, wavy, brush: scale with dimension-based ratio
         var decorScale = rawOuterSw > 0 ? proportionalSw / rawOuterSw : 1;
-        outerRectSw = rawOuterSw * Math.max(0.6, Math.min(1.5, decorScale));
+        outerRectSw = rawOuterSw * Math.max(0.6, Math.min(2.0, decorScale));
       }
-      // Weight ratio for decorative element sizing (clamped 0.5-1.3 for brush; others clamp per-item)
+      // Weight ratio for decorative element sizing (widened for tall stamps)
       var decorWeightRatio = rawOuterSw > 0
-        ? Math.max(0.5, Math.min(1.3, proportionalSw / rawOuterSw))
+        ? Math.max(0.5, Math.min(1.8, proportionalSw / rawOuterSw))
         : 1;
       // Multi-row rectangles: stamp grows with more rows, decorative elements
       // must not shrink. Guarantee at least 1.0 (template-designed size).
