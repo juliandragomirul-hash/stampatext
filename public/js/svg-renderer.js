@@ -2782,12 +2782,20 @@ const SvgRenderer = {
       var inkRowHeight; // ink bounds of a single row (ascent + descent)
       if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
         var lhScale = newFontSize / measurements.canvasMeasureFontSize;
-        inkRowHeight = (measurements.canvasAscent + measurements.canvasDescent) * lhScale * 1.05;
+        // Use ref (no-diacritic) values for actual visible ink bounds
+        var refAsc = measurements.canvasRefAscent || measurements.canvasAscent;
+        var refDesc = measurements.canvasRefDescent || measurements.canvasDescent;
+        inkRowHeight = (refAsc + refDesc) * lhScale;
       } else {
         inkRowHeight = newFontSize * 0.72; // fallback: estimated ink
       }
-      // lineHeight = baseline-to-baseline distance (ink + gap), used for dy positioning
-      var lineHeight = (inkRowHeight + FIXED_LINE_GAP) * (fontTune.lineSpacing || 1);
+      // Text stroke compensation: stroke extends beyond ink by strokeWidth/2 per side,
+      // eating into the gap between rows. Add full strokeWidth to gap so VISUAL gap stays fixed.
+      var effectiveStroke = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize);
+      if (effectiveStroke === 0 && fillType === 'empty') effectiveStroke = 2;
+      var visualGap = FIXED_LINE_GAP + (effectiveStroke > 0 ? effectiveStroke : 0);
+      // lineHeight = baseline-to-baseline distance (ink + visual gap), used for dy positioning
+      var lineHeight = (inkRowHeight + visualGap) * (fontTune.lineSpacing || 1);
       var fontRatioCalc = newFontSize / originalFontSize;
       // STEP 1b: textBlockHeight from canvas ink measurements (accurate per-font, per-text)
       var hasCanvasMetrics = measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0;
@@ -2816,8 +2824,8 @@ const SvgRenderer = {
           textBlockHeight = newFontSize * 0.85;
         }
       } else {
-        // Decoupled: n rows of ink + (n-1) * fixed gap, using inkRowHeight (matches lineHeight/dy)
-        textBlockHeight = numLines * inkRowHeight + (numLines - 1) * FIXED_LINE_GAP;
+        // Decoupled: n rows of ink + (n-1) * visual gap (includes stroke compensation)
+        textBlockHeight = numLines * inkRowHeight + (numLines - 1) * visualGap;
       }
       // Exact text width via remeasureFn (measures at target font size in live iframe)
       // Falls back to linear estimation when iframe is gone (gallery variants)
@@ -2866,14 +2874,10 @@ const SvgRenderer = {
       }
       textBlockHeight *= fontScaleY * fontTune.hb;  // stretch rect for vertically scaled fonts + per-font height bias
 
-      // Text stroke extends visually beyond glyph bounds by strokeWidth/2 per side.
-      // Thick stroke (positive) expands text; thin stroke (negative) contracts — no compensation needed.
-      // Outlined variants with stroke=0 get auto +2 from applyThinStroke.
-      var effectiveStroke = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize);
-      if (effectiveStroke === 0 && fillType === 'empty') effectiveStroke = 2;
+      // Text stroke horizontal: extends width by strokeWidth (half per side).
+      // Vertical stroke is already baked into visualGap (computed earlier).
       if (effectiveStroke > 0) {
         textBlockWidth += effectiveStroke;
-        textBlockHeight += effectiveStroke;
       }
 
       // STEP 2: Inside-out rect wrapping
@@ -2931,18 +2935,9 @@ const SvgRenderer = {
         if (borderFlags.border) textGap = 35; // perforated, sawtooth
         if (borderFlags.stitch) textGap = 20; // stitch stays tight
       }
-      var hPadding = textGap + actualInset;
-      var vPadding = textGap + actualInset;
-      // For multi-line: cap vertical padding to match visible inter-line whitespace.
-      // lineHeight includes ink, so the visible gap between lines ≈ lineHeight * 0.5.
-      // Skip cap for "2 Full" — rows are tall, needs full padding like single-line.
-      if (numLines > 1 && rowsMode !== '2full') {
-        var maxVPad = lineHeight * 0.5;
-        if (vPadding > maxVPad) {
-          vInnerGap = Math.max(0, maxVPad - actualInset);
-          vPadding = vInnerGap + actualInset;
-        }
-      }
+      var edgePadding = textGap + actualInset;
+      var hPadding = edgePadding;
+      var vPadding = edgePadding;
       // 1-row square: boost horizontal padding so text doesn't touch edges
       if (stampShape === 'square' && numLines <= 1 && rowsMode !== 'full') {
         hPadding = Math.max(hPadding, textBlockWidth * 0.06);
@@ -3314,8 +3309,11 @@ const SvgRenderer = {
           if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
             inkR = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
           }
-          var ascentR = hasCanvasMetrics ? symAscent / measurements.canvasMeasureFontSize : inkR * 0.9;
-          var descentR = hasCanvasMetrics ? symDescent / measurements.canvasMeasureFontSize : inkR * 0.1;
+          // Ref (no-diacritic) ascent/descent for actual visible ink centering
+          var refAscA = measurements.canvasRefAscent || measurements.canvasAscent;
+          var refDescA = measurements.canvasRefDescent || measurements.canvasDescent;
+          var ascentR = hasCanvasMetrics ? refAscA / measurements.canvasMeasureFontSize : inkR * 0.9;
+          var descentR = hasCanvasMetrics ? refDescA / measurements.canvasMeasureFontSize : inkR * 0.1;
           // Compute total block height: sum of ink heights + gaps
           var heroMaxFs = 0;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
@@ -3406,11 +3404,16 @@ const SvgRenderer = {
         } else {
           // Explicit gap between ink bounds (same formula as A mode)
           // dy = prev_descent + FIXED_LINE_GAP + curr_ascent → gap is always exactly FIXED_LINE_GAP
-          var nAscentR = hasCanvasMetrics ? symAscent / measurements.canvasMeasureFontSize : 0.65;
-          var nDescentR = hasCanvasMetrics ? symDescent / measurements.canvasMeasureFontSize : 0.07;
-          var nDyStep = newFontSize * nDescentR + FIXED_LINE_GAP + newFontSize * nAscentR;
-          var nTotalSpan = (numLines - 1) * nDyStep;
-          var nFirstDy = -(nTotalSpan / 2) + newFontSize * nAscentR;
+          // Ref (no-diacritic) ascent/descent for actual visible ink centering
+          var refAscN = measurements.canvasRefAscent || measurements.canvasAscent;
+          var refDescN = measurements.canvasRefDescent || measurements.canvasDescent;
+          var nAscentR = hasCanvasMetrics ? refAscN / measurements.canvasMeasureFontSize : 0.65;
+          var nDescentR = hasCanvasMetrics ? refDescN / measurements.canvasMeasureFontSize : 0.07;
+          var nInkR = nAscentR + nDescentR;
+          var nDyStep = newFontSize * nDescentR + visualGap + newFontSize * nAscentR;
+          // Center full text block (n*ink + (n-1)*visualGap), same as A mode
+          var nTotalBlock = numLines * newFontSize * nInkR + (numLines - 1) * visualGap;
+          var nFirstDy = -(nTotalBlock / 2) + newFontSize * nAscentR;
 
           var lineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
@@ -3466,8 +3469,8 @@ const SvgRenderer = {
           // Square Full: textLength handles width exactly, skip ink/dx corrections that shift text off-center
           var hNudge = (_2fullFontSizes && stampShape === 'square' && rowsMode === 'full') ? 0 : inkHorizCorrection + fontTune.dx * newFontSize;
           var newTx = viewBoxCenterX + hNudge;
-          // Square hero: dy positioning is self-centering, skip fontTune.dy nudge
-          var dyNudge = (_2fullFontSizes && stampShape === 'square') ? 0 : fontTune.dy * newFontSize;
+          // Multi-line & square hero: dy positioning is self-centering, skip fontTune.dy nudge
+          var dyNudge = (numTspans > 1 || (_2fullFontSizes && stampShape === 'square')) ? 0 : fontTune.dy * newFontSize;
           var effectiveSy = fontScaleY * (_sqFullHiScale || 1);
           var newTy = viewBoxCenterY + baselineOffset * effectiveSy + dyNudge;
           var finalSx = (parseFloat(mMatch[1]) * aspectCompressX).toFixed(4);
