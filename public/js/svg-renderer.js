@@ -2776,17 +2776,18 @@ const SvgRenderer = {
 
       // STEP 1: Calculate text dimensions
       var numLines = numTspans > 1 ? numTspans : 1;
-      // Line height: use actual ink bounds (ascent+descent) when available,
-      // so diacritics (cedilla ș/ț, accents) don't overlap between rows
-      var lineHeight;
+      // Line spacing: fixed gap between ink bounds (consistent across font sizes).
+      // One gap value for all modes — normal and fat use the same FIXED_LINE_GAP.
+      var FIXED_LINE_GAP = 25;
+      var inkRowHeight; // ink bounds of a single row (ascent + descent)
       if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
         var lhScale = newFontSize / measurements.canvasMeasureFontSize;
-        var inkLineHeight = (measurements.canvasAscent + measurements.canvasDescent) * lhScale * 1.05;
-        lineHeight = Math.max(inkLineHeight, newFontSize * 1.15);
+        inkRowHeight = (measurements.canvasAscent + measurements.canvasDescent) * lhScale * 1.05;
       } else {
-        lineHeight = newFontSize * 1.15;
+        inkRowHeight = newFontSize * 0.72; // fallback: estimated ink
       }
-      lineHeight *= fontTune.lineSpacing;
+      // lineHeight = baseline-to-baseline distance (ink + gap), used for dy positioning
+      var lineHeight = (inkRowHeight + FIXED_LINE_GAP) * (fontTune.lineSpacing || 1);
       var fontRatioCalc = newFontSize / originalFontSize;
       // STEP 1b: textBlockHeight from canvas ink measurements (accurate per-font, per-text)
       var hasCanvasMetrics = measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0;
@@ -2804,23 +2805,19 @@ const SvgRenderer = {
         symDescent = measurements.canvasRefDescent + maxDiac;
       }
 
+      // textBlockHeight: uses same inkRowHeight as lineHeight for multi-line consistency.
+      // Single-line keeps symInkHeight (diacritic centering matters for 1 row).
       var textBlockHeight;
       if (numLines === 1) {
         if (hasCanvasMetrics) {
           var canvasScale = newFontSize / measurements.canvasMeasureFontSize;
           textBlockHeight = (symAscent + symDescent) * canvasScale;
         } else {
-          // Fallback: generous fontSize ratio
           textBlockHeight = newFontSize * 0.85;
         }
       } else {
-        if (hasCanvasMetrics) {
-          var canvasScale = newFontSize / measurements.canvasMeasureFontSize;
-          var singleH = (symAscent + symDescent) * canvasScale;
-          textBlockHeight = (numLines - 1) * lineHeight + singleH;
-        } else {
-          textBlockHeight = (numLines - 1) * lineHeight + newFontSize * 0.85;
-        }
+        // Decoupled: n rows of ink + (n-1) * fixed gap, using inkRowHeight (matches lineHeight/dy)
+        textBlockHeight = numLines * inkRowHeight + (numLines - 1) * FIXED_LINE_GAP;
       }
       // Exact text width via remeasureFn (measures at target font size in live iframe)
       // Falls back to linear estimation when iframe is gone (gallery variants)
@@ -3218,7 +3215,7 @@ const SvgRenderer = {
             for (var fi = 0; fi < _2fullFontSizes.length; fi++) {
               if (_2fullFontSizes[fi] > fatMaxFs) fatMaxFs = _2fullFontSizes[fi];
             }
-            var fatGap = fatMaxFs * 0.08;
+            var fatGap = FIXED_LINE_GAP;
             var fatTotalH = 0;
             for (var fi = 0; fi < _2fullFontSizes.length; fi++) {
               fatTotalH += _2fullFontSizes[fi] * fatInkRatio + fatStrokeAdd;
@@ -3324,8 +3321,8 @@ const SvgRenderer = {
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             if (_2fullFontSizes[hi] > heroMaxFs) heroMaxFs = _2fullFontSizes[hi];
           }
-          var baseGapFactor = 0.06; // minimal base gap
-          var gap2f = heroMaxFs * (stampShape === 'square' ? baseGapFactor : 0.08);
+          var baseGapFactor = 0.06; // minimal base gap (square only)
+          var gap2f = stampShape === 'square' ? heroMaxFs * baseGapFactor : FIXED_LINE_GAP;
           // Compute text block with base gap
           var total2f = 0;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
@@ -3407,14 +3404,18 @@ const SvgRenderer = {
             return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
           });
         } else {
-          // Standard uniform dy for rectangles/lined
-          var totalSpan = (numLines - 1) * lineHeight;
-          var firstDy = -totalSpan / 2 + newFontSize * 0.39;
+          // Explicit gap between ink bounds (same formula as A mode)
+          // dy = prev_descent + FIXED_LINE_GAP + curr_ascent → gap is always exactly FIXED_LINE_GAP
+          var nAscentR = hasCanvasMetrics ? symAscent / measurements.canvasMeasureFontSize : 0.65;
+          var nDescentR = hasCanvasMetrics ? symDescent / measurements.canvasMeasureFontSize : 0.07;
+          var nDyStep = newFontSize * nDescentR + FIXED_LINE_GAP + newFontSize * nAscentR;
+          var nTotalSpan = (numLines - 1) * nDyStep;
+          var nFirstDy = -(nTotalSpan / 2) + newFontSize * nAscentR;
 
           var lineIdx = 0;
           result = result.replace(/<tspan([^>]*?)dy=["']([\d.\-]+)["']/gi, function () {
             var before = arguments[1];
-            var dyVal = (lineIdx === 0) ? firstDy : lineHeight;
+            var dyVal = (lineIdx === 0) ? nFirstDy : nDyStep;
             lineIdx++;
             return '<tspan' + before + 'dy="' + dyVal.toFixed(2) + '"';
           });
