@@ -3305,22 +3305,20 @@ const SvgRenderer = {
       if (numTspans > 1) {
         if (_2fullFontSizes && _2fullFontSizes.length >= 2) {
           // Per-row font sizes (square cascade or rect proportional): center the block vertically
-          var inkR = 0.72;
-          if (measurements.canvasAscent > 0 && measurements.canvasMeasureFontSize > 0) {
-            inkR = (symAscent + symDescent) / measurements.canvasMeasureFontSize;
-          }
           // Ref (no-diacritic) ascent/descent for actual visible ink centering
           var refAscA = measurements.canvasRefAscent || measurements.canvasAscent;
           var refDescA = measurements.canvasRefDescent || measurements.canvasDescent;
-          var ascentR = hasCanvasMetrics ? refAscA / measurements.canvasMeasureFontSize : inkR * 0.9;
-          var descentR = hasCanvasMetrics ? refDescA / measurements.canvasMeasureFontSize : inkR * 0.1;
+          var ascentR = hasCanvasMetrics ? refAscA / measurements.canvasMeasureFontSize : 0.65;
+          var descentR = hasCanvasMetrics ? refDescA / measurements.canvasMeasureFontSize : 0.07;
+          // inkR must match ascentR + descentR so total2f centering is consistent
+          var inkR = ascentR + descentR;
           // Compute total block height: sum of ink heights + gaps
           var heroMaxFs = 0;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
             if (_2fullFontSizes[hi] > heroMaxFs) heroMaxFs = _2fullFontSizes[hi];
           }
           var baseGapFactor = 0.06; // minimal base gap (square only)
-          var gap2f = stampShape === 'square' ? heroMaxFs * baseGapFactor : FIXED_LINE_GAP;
+          var gap2f = stampShape === 'square' ? heroMaxFs * baseGapFactor : visualGap;
           // Compute text block with base gap
           var total2f = 0;
           for (var hi = 0; hi < _2fullFontSizes.length; hi++) {
