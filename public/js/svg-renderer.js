@@ -120,6 +120,32 @@ const SvgRenderer = {
     return inkA / inkN;
   },
 
+  // Estimate how much taller the A variant is vs uniform rows.
+  // Each row's font scales as maxLen/rowLen → row height scales the same.
+  // Returns mean of per-row scale factors (1.0 = no change).
+  _estimateHeightMultiplier: function(words, rc) {
+    if (rc <= 1 || words.length < rc) return 1;
+    var totalLen = words.reduce(function(s, w) { return s + w.length; }, 0) + words.length - 1;
+    var tgt = totalLen / rc;
+    var rows = [];
+    var wi = 0;
+    for (var r = 0; r < rc; r++) {
+      var row = words[wi++] || '';
+      var remaining = rc - r - 1;
+      while (wi < words.length && (words.length - wi) > remaining) {
+        var next = row + ' ' + words[wi];
+        if (next.length > tgt * 1.5 && row.length >= 2) break;
+        row = next;
+        wi++;
+      }
+      rows.push(row.length || 1);
+    }
+    var maxLen = Math.max.apply(null, rows);
+    var sumScales = 0;
+    for (var i = 0; i < rows.length; i++) sumScales += maxLen / rows[i];
+    return sumScales / rc;
+  },
+
   /**
    * Single source of truth: which row options are valid for a given text + shape.
    * Used by both the product page dropdown and gallery variant generation.
@@ -160,17 +186,26 @@ const SvgRenderer = {
 
       // Rectangle / Lined:
       var inkRatio = this._estimateInkRatio(words, rc);
-      var inkRedundant = hasA && inkRatio < 1.15; // A ≈ N → hide N, keep A
 
       // Font-aware aspect check: estimatedHeight / estimatedWidth
       // height ∝ rc × capHeight(0.72), width ∝ avgCharsPerRow × charWidthFactor
       var avgCharsPerRow = totalChars / rc;
       var estAspect = (rc * 0.72) / (avgCharsPerRow * cwf);
-      var nearSquare = estAspect > 0.85 && estAspect < 1.25;
+      var nearSquare = estAspect > 0.90 && estAspect < 1.25;
 
-      // A variant's aspect: proportional scaling increases height by ~sqrt(inkRatio)
-      var estAspectA = hasA ? estAspect * Math.sqrt(inkRatio) : estAspect;
-      var nearSquareA = estAspectA > 0.85 && estAspectA < 1.25;
+      // A variant's aspect: proportional scaling makes short rows taller.
+      // Use accurate height multiplier (mean of per-row scale factors) instead of sqrt(inkRatio).
+      var heightMult = hasA ? this._estimateHeightMultiplier(words, rc) : 1;
+      var estAspectA = estAspect * heightMult;
+      // A variants create more dramatic shapes — only hide when truly square (tight range)
+      var nearSquareA = estAspectA > 0.95 && estAspectA < 1.05;
+
+      // Hide N when A exists and both variants stay in the same shape zone.
+      // If proportional scaling would push A into near-square or portrait, they're
+      // meaningfully different → show both. E.g. "I combobulate" 2A = skyscraper vs 2 = landscape.
+      var bothLandscape = estAspect < 0.90 && estAspectA < 0.90;
+      var bothPortrait = estAspect > 1.25 && estAspectA > 1.25;
+      var inkRedundant = hasA && (inkRatio < 1.15 || bothLandscape || bothPortrait);
 
       var showN = !inkRedundant && !nearSquare;
       var showA = hasA && !nearSquareA;
@@ -2839,17 +2874,29 @@ const SvgRenderer = {
         exactWidth = measurements.remeasuredWidth * (newFontSize / measurements.remeasuredFontSize);
       }
 
+      // Ink-width correction (single-line only): exactWidth uses advance width
+      // (getComputedTextLength) which includes side-bearings, but textBlockHeight
+      // uses actual ink bounds. Apply ink/advance ratio so both axes measure ink extent.
+      // Multi-line: skip — canvas metrics are for full text, not per-tspan, so ratio is wrong.
+      var inkWidthCorrection = 1;
+      if (numLines === 1 && hasCanvasMetrics && measurements.canvasAdvanceWidth > 0) {
+        var canvasInkW = (measurements.canvasInkLeft || 0) + (measurements.canvasInkRight || 0);
+        if (canvasInkW > 0 && canvasInkW < measurements.canvasAdvanceWidth) {
+          inkWidthCorrection = canvasInkW / measurements.canvasAdvanceWidth;
+        }
+      }
+
       var textBlockWidth;
       var estimatedWidth = (measuredWidth * fontRatioCalc + lsExtra) * newScaleX;
       if (exactWidth !== null) {
         // Exact: remeasured width already includes letter-spacing
-        textBlockWidth = exactWidth * newScaleX;
+        textBlockWidth = exactWidth * newScaleX * inkWidthCorrection;
         // Cache for gallery variant reuse
         measurements.remeasuredWidth = exactWidth;
         measurements.remeasuredFontSize = newFontSize;
       } else {
         // Estimation fallback (no iframe, no cached re-measurement)
-        textBlockWidth = estimatedWidth;
+        textBlockWidth = estimatedWidth * inkWidthCorrection;
       }
       // wb: breathing room multiplier (per-font, calibrated via admin tuning).
       // No floor — each font's wb is trusted as-is for full admin control.
@@ -2874,10 +2921,11 @@ const SvgRenderer = {
       }
       textBlockHeight *= fontScaleY * fontTune.hb;  // stretch rect for vertically scaled fonts + per-font height bias
 
-      // Text stroke horizontal: extends width by strokeWidth (half per side).
-      // Vertical stroke is already baked into visualGap (computed earlier).
+      // Text stroke: extends ink by strokeWidth/2 per side in all directions.
+      // Add to both width and height for equal padding on all 4 sides.
       if (effectiveStroke > 0) {
         textBlockWidth += effectiveStroke;
+        textBlockHeight += effectiveStroke;
       }
 
       // STEP 2: Inside-out rect wrapping
@@ -3204,18 +3252,20 @@ const SvgRenderer = {
             if (measurements.canvasAscent > 0 && fatMeasureFs > 0) {
               fatInkRatio = (symAscent + symDescent) / fatMeasureFs;
             }
-            var fatStrokeAdd = SvgRenderer._computeProportionalStroke(fontTune.stroke, newFontSize) * 2;
-            // Recompute rect height from per-row ink heights + gaps
+            // Recompute rect height from per-row ink heights + gaps.
+            // Must match centering code (total2f): uses visualGap between rows,
+            // plus effectiveStroke once for top/bottom stroke overshoot.
             var fatMaxFs = 0;
             for (var fi = 0; fi < _2fullFontSizes.length; fi++) {
               if (_2fullFontSizes[fi] > fatMaxFs) fatMaxFs = _2fullFontSizes[fi];
             }
-            var fatGap = FIXED_LINE_GAP;
+            var fatGap = visualGap; // match centering code's gap2f (= FIXED_LINE_GAP + effectiveStroke)
             var fatTotalH = 0;
             for (var fi = 0; fi < _2fullFontSizes.length; fi++) {
-              fatTotalH += _2fullFontSizes[fi] * fatInkRatio + fatStrokeAdd;
+              fatTotalH += _2fullFontSizes[fi] * fatInkRatio;
               if (fi < _2fullFontSizes.length - 1) fatTotalH += fatGap;
             }
+            fatTotalH += effectiveStroke; // stroke extends above first row + below last row
             textBlockHeight = fatTotalH;
             newRectHeight = fatTotalH + vPadding * 2;
             // Apply per-tspan font-size (no textLength — letters stay proportional)
@@ -3256,12 +3306,12 @@ const SvgRenderer = {
 
       // Dimension-based border stroke: computed after ALL rect dimension modifications
       // (initial sizing, square override, fat mode height, aspect compression).
-      // Average dimension as base, with gentle aspect-ratio dampening:
-      // extreme ratios (1-row wide, 4A tall) get thinner; near-square barely affected.
-      var avgDim = (newRectWidth + newRectHeight) / 2;
-      var arForStroke = Math.max(newRectWidth, newRectHeight) / Math.min(newRectWidth, newRectHeight);
+      // Stroke = percentage of largest dimension with mild AR dampening (0.25 power):
+      // near-square stamps barely affected, extreme wide 1-row stamps tamed.
+      var maxDim = Math.max(newRectWidth, newRectHeight);
+      var arForStroke = maxDim / Math.min(newRectWidth, newRectHeight);
       var STROKE_RATIO = 0.045;
-      var proportionalSw = avgDim * STROKE_RATIO / Math.pow(arForStroke, 0.40);
+      var proportionalSw = maxDim * STROKE_RATIO / Math.pow(arForStroke, 0.35);
       if (stampShape === 'square') {
         proportionalSw = Math.max(40, Math.min(200, proportionalSw));
       } else {
