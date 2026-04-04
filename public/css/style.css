@@ -141,7 +141,7 @@ a:hover {
 
 /* ========== MAIN CONTENT ========== */
 .main-content {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 2rem;
 }
@@ -1077,9 +1077,8 @@ body.gallery-active .stamp-hero-input-wrapper {
 }
 
 .stamp-results-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem 0.4rem;
+  columns: 5;
+  column-gap: 0.4rem;
   margin-bottom: 0.5rem;
   padding-top: 0.5rem;
 }
@@ -1096,6 +1095,8 @@ body.gallery-active .stamp-hero-input-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
+  break-inside: avoid;
+  margin-bottom: 0.4rem;
 }
 
 .stamp-card-preview {
@@ -1112,6 +1113,8 @@ body.gallery-active .stamp-hero-input-wrapper {
   width: 100%;
   height: auto;
   display: block;
+  max-height: 400px;
+  object-fit: contain;
 }
 
 /* Zoom overlay — styles are in the second block below (line ~1160) */
@@ -1334,7 +1337,7 @@ body.gallery-active .stamp-hero-input-wrapper {
   }
 
   .stamp-results-grid {
-    grid-template-columns: repeat(2, 1fr);
+    columns: 2;
   }
 
   .stamp-filter-bar {

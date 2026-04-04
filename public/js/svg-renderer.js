@@ -159,7 +159,7 @@ const SvgRenderer = {
     var totalChars = text.trim().length;
     var isSingleWord = words.length === 1;
 
-    var minRows = isSingleWord ? 1 : Math.max(1, Math.ceil(totalChars / 25));
+    var minRows = isSingleWord ? 1 : Math.max(1, Math.ceil(totalChars / 20));
     var rowsCap = (shape === 'square' && totalChars <= 16) ? 4 : 5;
     var maxRows = isSingleWord ? 1 : Math.min(words.length, rowsCap);
     if (minRows > maxRows) minRows = maxRows;

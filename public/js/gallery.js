@@ -1917,11 +1917,14 @@ const Gallery = {
       combo[key] = pattern[i % pattern.length];
     });
 
-    // Rows: pick from valid options (shared rules with product page dropdown)
+    // Rows: pick from valid options (shared rules with product page dropdown).
+    // Use per-shape cycle index (not global i) so each shape gets even row coverage.
     var comboText = (this.currentText || 'Your text here').toUpperCase();
     var comboRowOpts = SvgRenderer.getValidRowOptions(comboText, combo.shape, combo.font);
     if (comboRowOpts.length > 0) {
-      var rowOpt = comboRowOpts[i % comboRowOpts.length];
+      var shapePoolLen = (this.COMBO_SHORT.shape || []).length || 3;
+      var shapeCycle = Math.floor(i / shapePoolLen); // how many times this shape has appeared
+      var rowOpt = comboRowOpts[shapeCycle % comboRowOpts.length];
       combo.rows = parseInt(rowOpt.value, 10) || 0;
       combo.fullMode = /A$/i.test(rowOpt.value);
     } else {
@@ -1965,7 +1968,7 @@ const Gallery = {
     }
 
     var generated = 0;
-    var maxAttempts = actualCount * 5;
+    var maxAttempts = actualCount * 20;
     while (generated < actualCount && maxAttempts-- > 0) {
       var combo = this.drawCombo(this.comboIndex++);
       // Skip invalid combos
@@ -1975,8 +1978,8 @@ const Gallery = {
       loadPill.style.display = '';
       this.generatedCount++;
       this.generatedCombos.push(combo);
-      await this._renderComboCard(combo, grid);
-      generated++;
+      var rendered = await this._renderComboCard(combo, grid);
+      if (rendered) generated++;
     }
     loadPill.style.display = 'none';
 
@@ -1995,7 +1998,7 @@ const Gallery = {
       // Perf_line styles use the plain template — keep borderStyle for supplementBorderInfo
       entry = this.templatesByBorder['simple'];
     }
-    if (!entry) return;
+    if (!entry) return false;
 
     var fontKey = combo.font || 'Oswald';
     var fontWeight = this.FONT_WEIGHTS[fontKey] || '500';
@@ -2030,12 +2033,7 @@ const Gallery = {
         rowVariant: combo.fullMode ? 'A' : ''
       });
 
-      // Redundancy: skip rect/lined combos with near-square aspect
       var comboShape = combo.shape || 'rectangle';
-      if (comboShape === 'rectangle' || comboShape === 'lined') {
-        var vbM = svg.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
-        if (vbM && parseFloat(vbM[4]) / parseFloat(vbM[3]) > 0.85) return; // too square-like
-      }
 
       // Build product URL with ALL combo params
       var comboRows = combo.rows || (svg.match(/<tspan/gi) || []).length || 1;
@@ -2069,8 +2067,10 @@ const Gallery = {
       previewLink.appendChild(SvgRenderer.createSvgImage(svg));
       card.appendChild(previewLink);
       grid.appendChild(card);
+      return true;
     } catch (err) {
       console.warn('[Gallery] Combo render failed:', err.message);
+      return false;
     }
   },
 

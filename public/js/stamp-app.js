@@ -4,7 +4,7 @@
  */
 (function () {
   // ---- Constants ----
-  var DEFAULT_PAGE_SIZE = 30;
+  var DEFAULT_PAGE_SIZE = 75;
 
   // ---- Custom color palette ----
   var PALETTE_COLORS = [
@@ -305,7 +305,7 @@
     try {
       await Gallery.processAll(text);
       Gallery.resetBags();
-      await Gallery.generateBatch(12);
+      await Gallery.generateBatch(30);
 
       // Update URL
       var newUrl = '/?text=' + encodeURIComponent(text);
