@@ -2650,12 +2650,11 @@ const SvgRenderer = {
         actualRectWidth = foundWidth;
       }
     }
-    // Frame B normalization: use viewBox width + fixed font size so ALL templates
-    // produce identical inner rect sizing. The inner rect wraps text (inside-out),
-    // so template-specific rect width is irrelevant. Only the font size matters.
+    // Frame B normalization: use viewBox width so ALL templates produce identical
+    // effectiveMaxWidth. The inner rect wraps text (inside-out), so the template's
+    // rect width is irrelevant. Keep originalFontSize from template (matches measuredWidth).
     if (frameMode === 'double') {
       actualRectWidth = vbWidth;
-      originalFontSize = 128;
     }
 
     // Detect border type from SVG attributes (single source of truth)
@@ -2741,7 +2740,11 @@ const SvgRenderer = {
     // Zigzag: ensure minimum sw for initial sizing (Supabase SVGs may lack stroke-width)
     if (borderFlags.border && refSw < 30) refSw = 30;
     var refInnerGap = 10; // base breathing room for effectiveMaxWidth computation
-    var refInset = SvgRenderer.computeTextZone(refSw, borderFlags, frameMode, cornerType, fillType || 'full');
+    // Frame B normalization: use plain border flags + fixed stroke for refInset,
+    // making effectiveMaxWidth identical for all border styles.
+    var refBorderFlags = (frameMode === 'double') ? {} : borderFlags;
+    var refSwNorm = (frameMode === 'double') ? 30 : refSw; // 30 = standard plain stroke cap
+    var refInset = SvgRenderer.computeTextZone(refSwNorm, refBorderFlags, frameMode, cornerType, fillType || 'full');
     var effectiveMaxWidth = actualRectWidth - 2 * (refInset + refInnerGap);
 
     // Calculate ratio based on measured width vs effective max width
@@ -2908,11 +2911,22 @@ const SvgRenderer = {
         }
       }
 
+      // Frame B: strip template text-stroke from exactWidth so all templates measure the same.
+      // The text element retains template's stroke-width during iframe measurement, which inflates
+      // getComputedTextLength differently per template. effectiveStroke adds it back standardized.
+      // SVG stroke-width is absolute (not relative to font-size), so subtract raw value.
+      var textStrokeCompensation = 0;
+      if (frameMode === 'double' && exactWidth !== null) {
+        var textSwMatch = svgString.match(/<text[^>]*stroke-width=["']([\d.]+)["']/i);
+        var templateTextSw = textSwMatch ? parseFloat(textSwMatch[1]) : 0;
+        textStrokeCompensation = templateTextSw;
+      }
+
       var textBlockWidth;
       var estimatedWidth = (measuredWidth * fontRatioCalc + lsExtra) * newScaleX;
       if (exactWidth !== null) {
         // Exact: remeasured width already includes letter-spacing
-        textBlockWidth = exactWidth * newScaleX * inkWidthCorrection;
+        textBlockWidth = (exactWidth - textStrokeCompensation) * newScaleX * inkWidthCorrection;
         // Cache for gallery variant reuse
         measurements.remeasuredWidth = exactWidth;
         measurements.remeasuredFontSize = newFontSize;
@@ -3003,6 +3017,10 @@ const SvgRenderer = {
       }
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
+
+      if (false && frameMode === 'double') {
+        console.log('[FRAME-B-DEBUG] actualRectWidth=' + actualRectWidth.toFixed(1) + ' effectiveMaxWidth=' + effectiveMaxWidth.toFixed(1) + ' origFS=' + originalFontSize + ' newFS=' + newFontSize.toFixed(1) + ' measW=' + measuredWidth.toFixed(1) + ' textBlockW=' + textBlockWidth.toFixed(1) + ' textBlockH=' + textBlockHeight.toFixed(1) + ' hPad=' + hPadding.toFixed(1) + ' vPad=' + vPadding.toFixed(1) + ' rectW=' + newRectWidth.toFixed(1) + ' rectH=' + newRectHeight.toFixed(1) + ' textGap=' + textGap + ' actualInset=' + actualInset + ' estSW=' + estStrokeW + ' refSw=' + refSwNorm);
+      }
 
       // Full Hi scale: 2x vertical stretch for 1-row full mode (square or rect 1A)
       var _sqFullHiScale = 1;
