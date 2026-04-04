@@ -2975,8 +2975,11 @@ const SvgRenderer = {
           actualInset *= 1 + (numTspans - 1) * 1.0;
         }
       }
-      // Per-border text gap override for square + double
+      // Per-border text gap override for double frames (inner rect needs breathing room)
       var textGap = hInnerGap;
+      if (stampShape !== 'square' && frameMode === 'double') {
+        textGap = Math.max(textGap, 25);
+      }
       if (stampShape === 'square' && frameMode === 'double') {
         textGap = 30; // default for square+double (plain, perf line, zigzag, torn edge, chalk)
         if (borderFlags.wavy && !borderFlags.wavyZigzag) textGap = 35; // wavy gentle/strong
@@ -3318,9 +3321,37 @@ const SvgRenderer = {
         proportionalSw = Math.max(20, Math.min(250, proportionalSw));
       }
 
-      // Padding correction (Frame A): provisionalSw was used for padding, actual stroke differs.
+      // Padding correction: provisionalSw was used for padding, actual stroke differs.
       // Recompute inset from actual proportionalSw and adjust padding/rect dims.
-      if (frameMode !== 'double') {
+      if (frameMode === 'double') {
+        // Frame B: recompute double-frame inset with actual proportionalSw
+        var dfSwMin2 = stampShape === 'square' ? 40 : 20;
+        var dfSwMax2 = stampShape === 'square' ? 200 : 250;
+        var corrDfSw = Math.max(dfSwMin2, Math.min(dfSwMax2, proportionalSw));
+        var isFull2 = fillType === 'full';
+        var corrDfInnerSw = Math.max(6, Math.round(corrDfSw * (isFull2 ? 0.24 : 0.36)));
+        var corrDfWhiteGap = isFull2 ? 2 : corrDfInnerSw;
+        var corrDfInnerEdge;
+        if (borderFlags.stitch) corrDfInnerEdge = -10;
+        else if (borderFlags.wavy) {
+          var wD2 = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 7;
+          corrDfInnerEdge = wD2 + 20;
+        } else if (borderFlags.border) {
+          corrDfInnerEdge = 25;
+        } else {
+          corrDfInnerEdge = corrDfSw / 2;
+        }
+        if (isFull2) corrDfInnerEdge = Math.max(corrDfInnerEdge, corrDfSw * 0.3);
+        var correctedInset = corrDfInnerEdge + corrDfWhiteGap + corrDfInnerSw * 0.5;
+        var correctedHPad = textGap + correctedInset;
+        var padDelta = correctedHPad - hPadding;
+        if (Math.abs(padDelta) > 1) {
+          hPadding = correctedHPad;
+          vPadding = correctedHPad;
+          newRectWidth += padDelta * 2;
+          newRectHeight += padDelta * 2;
+        }
+      } else {
         var finalSwMin = stampShape === 'square' ? 40 : 20;
         var finalSwMax = stampShape === 'square' ? 200 : 250;
         var correctedSw = capStroke ? Math.max(finalSwMin, Math.min(finalSwMax, proportionalSw)) : estStrokeW;

@@ -287,7 +287,7 @@ const Gallery = {
         };
         // Gallery font: random per template
         var fontKeys = Object.keys(fontWeights);
-        var fontKey = 'BebasNeue'; // TEST MODE: locked font
+        var fontKey = fontKeys[Math.floor(Math.random() * fontKeys.length)];
         var cycleFont = { key: fontKey, weight: fontWeights[fontKey] || '500' };
         cleanedSvg = cleanedSvg.replace(/font-family=["']'?[^"']*'?["']/g,
           "font-family=\"'" + cycleFont.key + "'\"");
@@ -1853,7 +1853,7 @@ const Gallery = {
   COMBO_LONG: {
     style: ['simple','stitch_line','stitch_square','stitch_circle','sawtooth','perforated','perforated_spaced','wavy','zigzag','torn_edge','chalk','perf_line','perf_line_spaced','saw_line'],
     color: ['#000000','#8B0000','#CC0000','#FF0000','#2D572C','#32CD32','#003366','#1E90FF','#4B0082','#FF6600','#DAA520','#FF1493'],
-    font: ['BebasNeue'], // TEST MODE: locked font
+    font: ['BebasNeue','Oswald','Montserrat','CourierPrime','Yomogi','BlackOpsOne','Nunito','Exo2','Bitter','Comfortaa','FuzzyBubbles']
     corners: ['straight','soft_round','medium_round','strong_round','mixed_top_straight','mixed_top_round','mixed_diag_down','mixed_diag_up']
   },
 
