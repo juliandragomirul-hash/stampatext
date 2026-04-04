@@ -906,6 +906,22 @@ const SvgRenderer = {
         outerRect = tag;
       }
     }
+    // Also check mixed-corner paths (rect converted to path by applyCornerRadius or addDoubleFrame)
+    var mixedPathM = svgString.match(/<path[^>]*data-rect-w="([\d.]+)"[^>]*/gi);
+    if (mixedPathM) {
+      for (var i = 0; i < mixedPathM.length; i++) {
+        var pw = parseFloat((mixedPathM[i].match(/data-rect-w="([\d.]+)"/) || [])[1]) || 0;
+        if (pw > outerW) {
+          // Build a synthetic rect tag from data attributes for geometry extraction
+          var px = (mixedPathM[i].match(/data-rect-x="([\d.\-]+)"/) || [])[1] || '0';
+          var py = (mixedPathM[i].match(/data-rect-y="([\d.\-]+)"/) || [])[1] || '0';
+          var ph = (mixedPathM[i].match(/data-rect-h="([\d.]+)"/) || [])[1] || '0';
+          var psw = (mixedPathM[i].match(/stroke-width="([\d.]+)"/) || [])[1] || '0';
+          outerRect = '<rect x="' + px + '" y="' + py + '" width="' + pw + '" height="' + ph + '" stroke-width="' + psw + '"/>';
+          outerW = pw;
+        }
+      }
+    }
     if (!outerRect) return svgString; // no stamp rect found
 
     // Extract rect geometry
@@ -2949,24 +2965,13 @@ const SvgRenderer = {
       if (borderFlags.perfLine) actualSw = Math.max(plFloor2, Math.min(swMax, provisionalSw * 1.5));
       var actualInset;
       if (frameMode === 'double') {
-        // Inline double-frame inset: mirrors addDoubleFrame exactly using clampedPropSw
-        // (same value addDoubleFrame reads from data-prop-sw), eliminating prediction errors
+        // Inside-out: size the rect as the INNER frame (same approach as Frame A).
+        // The inner rect has a thin stroke; text just needs clearance from that.
+        // addDoubleFrame will later wrap the outer rect + decorations around this.
         var isFull = fillType === 'full';
         var dfSw = Math.max(swMin, Math.min(swMax, provisionalSw));
         var dfInnerSw = Math.max(6, Math.round(dfSw * (isFull ? 0.24 : 0.36)));
-        var dfWhiteGap = isFull ? 2 : dfInnerSw;
-        var dfInnerEdge;
-        if (borderFlags.stitch) dfInnerEdge = -10;
-        else if (borderFlags.wavy) {
-          var wDepth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 7;
-          dfInnerEdge = wDepth + 20; // depth + wavySw/2 (~40/2)
-        } else if (borderFlags.border) {
-          dfInnerEdge = 25; // perforated/sawtooth inner-to-outer rect gap
-        } else {
-          dfInnerEdge = dfSw / 2; // plain, filter, perfLine — matches addDoubleFrame fallback
-        }
-        if (isFull) dfInnerEdge = Math.max(dfInnerEdge, dfSw * 0.3);
-        actualInset = dfInnerEdge + dfWhiteGap + dfInnerSw * 0.5;
+        actualInset = dfInnerSw / 2;
       } else {
         // Single/split: use computeTextZone prediction (already accurate for Frame A)
         actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, fillType || 'full');
@@ -3324,25 +3329,13 @@ const SvgRenderer = {
       // Padding correction: provisionalSw was used for padding, actual stroke differs.
       // Recompute inset from actual proportionalSw and adjust padding/rect dims.
       if (frameMode === 'double') {
-        // Frame B: recompute double-frame inset with actual proportionalSw
+        // Frame B inside-out: correct using inner stroke (same as initial computation)
         var dfSwMin2 = stampShape === 'square' ? 40 : 20;
         var dfSwMax2 = stampShape === 'square' ? 200 : 250;
         var corrDfSw = Math.max(dfSwMin2, Math.min(dfSwMax2, proportionalSw));
         var isFull2 = fillType === 'full';
-        var corrDfInnerSw = Math.max(6, Math.round(corrDfSw * (isFull2 ? 0.24 : 0.36)));
-        var corrDfWhiteGap = isFull2 ? 2 : corrDfInnerSw;
-        var corrDfInnerEdge;
-        if (borderFlags.stitch) corrDfInnerEdge = -10;
-        else if (borderFlags.wavy) {
-          var wD2 = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 7;
-          corrDfInnerEdge = wD2 + 20;
-        } else if (borderFlags.border) {
-          corrDfInnerEdge = 25;
-        } else {
-          corrDfInnerEdge = corrDfSw / 2;
-        }
-        if (isFull2) corrDfInnerEdge = Math.max(corrDfInnerEdge, corrDfSw * 0.3);
-        var correctedInset = corrDfInnerEdge + corrDfWhiteGap + corrDfInnerSw * 0.5;
+        var corrInnerSw = Math.max(6, Math.round(corrDfSw * (isFull2 ? 0.24 : 0.36)));
+        var correctedInset = corrInnerSw / 2;
         var correctedHPad = textGap + correctedInset;
         var padDelta = correctedHPad - hPadding;
         if (Math.abs(padDelta) > 1) {
@@ -6105,39 +6098,48 @@ const SvgRenderer = {
         if (wswM) wavySw = parseFloat(wswM[1]);
       }
     }
-    // Multi-pass inner frame: use measured innerEdge from border generators
-    // Use proportional stroke (stored by autoFit) for consistent innerSw across all styles
+    // Inside-out Frame B: the rect from autoFit IS the inner frame.
+    // Compute outset to create a larger outer rect around it.
     var propSwAttr = svgStr.match(/data-prop-sw="([\d.]+)"/);
     var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
     var innerSw = Math.max(6, Math.round(effectiveOsw * (isFull ? 0.24 : 0.36)));
-    // Unified inner edge: read from data attribute (set by border generators), fallback to half stroke
+    // Inner edge: distance from outer rect stroke center to inner rect stroke center
     var edgeAttr = svgStr.match(/data-border-inner-edge="(-?[\d.]+)"/);
     var measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : effectiveOsw / 2;
-    // White gap: outlined = innerSw (visual rhythm), filled = minimal (no white band needed)
+    // Ensure minimum outset matches plain border look — all styles get the same
+    // inner↔outer gap so switching border style doesn't change the frame proportions.
+    // Use effectiveOsw/2 as floor, with absolute minimum of 15 (for styles where osw=0, e.g. stitch)
+    measuredInnerEdge = Math.max(measuredInnerEdge, effectiveOsw / 2, 15);
     var whiteGap = isFull ? 2 : innerSw;
-    // Filled stamps: ensure minimum inset so inner rect is visible
     if (isFull) measuredInnerEdge = Math.max(measuredInnerEdge, effectiveOsw * 0.3);
-    var inset = measuredInnerEdge + whiteGap + innerSw * 0.5;
-    var ix = ox + inset, iy = oy + inset;
-    var iw = ow - inset * 2, ih = oh - inset * 2;
+    // Outset = how much to expand from inner rect to outer rect
+    var outset = measuredInnerEdge + whiteGap + innerSw * 0.5;
+    // The existing rect (ox, oy, ow, oh) is now the INNER frame
+    var ix = ox, iy = oy, iw = ow, ih = oh;
+    // Compute outer rect by expanding outward
+    var outerX = ox - outset, outerY = oy - outset;
+    var outerW = ow + outset * 2, outerH = oh + outset * 2;
 
-    // Helper: build inner shape (path for mixed corners, rect for uniform)
+    // Helper: build a rect/path shape with corner radius adjustment
     var self = this;
-    var _shape = function(sx, sy, sw2, sh2, fill, stroke, strokeW, shapeInset) {
+    var _shape = function(sx, sy, sw2, sh2, fill, stroke, strokeW, cornerOffset) {
       if (mixedType) {
         var mc = self._getMixedCorners(mixedType);
-        var maxR = Math.max(0, (Math.min(ow, oh) - 10) / 2);
-        var stl = Math.max(0, Math.min(mc.tl, maxR) - shapeInset);
-        var str = Math.max(0, Math.min(mc.tr, maxR) - shapeInset);
-        var sbr = Math.max(0, Math.min(mc.br, maxR) - shapeInset);
-        var sbl = Math.max(0, Math.min(mc.bl, maxR) - shapeInset);
+        var maxR = Math.max(0, (Math.min(outerW, outerH) - 10) / 2);
+        var stl = mc.tl > 0 ? Math.max(0, Math.min(mc.tl, maxR) + cornerOffset) : 0;
+        var str = mc.tr > 0 ? Math.max(0, Math.min(mc.tr, maxR) + cornerOffset) : 0;
+        var sbr = mc.br > 0 ? Math.max(0, Math.min(mc.br, maxR) + cornerOffset) : 0;
+        var sbl = mc.bl > 0 ? Math.max(0, Math.min(mc.bl, maxR) + cornerOffset) : 0;
         var d = self._rectToPath(sx, sy, sw2, sh2, stl, str, sbr, sbl);
         var tag = '<path d="' + d + '" fill="' + fill + '" stroke="' + stroke + '"';
         if (strokeW > 0) tag += ' stroke-width="' + strokeW + '" stroke-miterlimit="10"';
+        tag += ' data-rect-x="' + sx.toFixed(2) + '" data-rect-y="' + sy.toFixed(2) +
+          '" data-rect-w="' + sw2.toFixed(2) + '" data-rect-h="' + sh2.toFixed(2) +
+          '" data-mixed-type="' + mixedType + '"';
         return tag + '/>';
       }
-      var srx = Math.max(0, orx - shapeInset);
-      var sry = Math.max(0, ory - shapeInset);
+      var srx = orx > 0 ? Math.max(0, orx + cornerOffset) : 0;
+      var sry = ory > 0 ? Math.max(0, ory + cornerOffset) : 0;
       var tag = '<rect x="' + sx.toFixed(2) + '" y="' + sy.toFixed(2) +
         '" width="' + sw2.toFixed(2) + '" height="' + sh2.toFixed(2) +
         '" fill="' + fill + '" stroke="' + stroke + '"';
@@ -6147,24 +6149,28 @@ const SvgRenderer = {
       return tag + '/>';
     };
 
-    var innerRect = _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, inset);
-    // Outlined sawtooth/perforated: white gap + colored inner rect
+    // Build inner rect element (positioned at original rect location — the text wrapper)
+    var innerRectEl = _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, 0);
+
+    // Build outer rect element (expanded outward from inner)
+    var outerFillVal = isFull ? outerFill : 'none';
+    var outerStrokeVal = outerStroke || innerColor;
+    var outerRectEl = _shape(outerX, outerY, outerW, outerH, outerFillVal, outerStrokeVal, osw, outset);
+
+    // Outlined sawtooth/perforated: white gap + colored inner rect (special handling)
     if (bi.border && !isFull) {
-      var whiteGapSw = Math.max(8, Math.round(osw * 0.15)); // proportional white gap
-      var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteGapSw, inset);
-      var colorInset = inset + whiteGapSw;
-      var cix = ox + colorInset, ciy = oy + colorInset;
-      var ciw = ow - colorInset * 2, cih = oh - colorInset * 2;
-      var colorRect = _shape(cix, ciy, ciw, cih, 'none', innerColor, innerSw, colorInset);
-      if (frameMode === 'double') {
-        innerRect = whiteRect + colorRect;
-      } else {
-        innerRect = _shape(ix, iy, iw, ih, '#FFFFFF', 'none', 0, inset);
-      }
+      var whiteGapSw = Math.max(8, Math.round(osw * 0.15));
+      var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteGapSw, 0);
+      innerRectEl = whiteRect + _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, 0);
     }
+
+    // Replace the existing rect (which was the inner) with the new outer rect,
+    // and insert inner rect before text
+    svgStr = svgStr.replace(outer.full, outerRectEl);
+    // Insert inner rect before text
     var textPos = svgStr.search(/<text[\s>]/i);
-    if (textPos !== -1) return svgStr.slice(0, textPos) + innerRect + svgStr.slice(textPos);
-    return svgStr.replace(/<\/svg>/, innerRect + '</svg>');
+    if (textPos !== -1) return svgStr.slice(0, textPos) + innerRectEl + svgStr.slice(textPos);
+    return svgStr.replace(/<\/svg>/, innerRectEl + '</svg>');
   },
 
   /**
@@ -6469,6 +6475,8 @@ const SvgRenderer = {
     });
     if (params.frame === 'double') {
       svg = SvgRenderer.addDoubleFrame(svg, bi, params.color, 'double');
+      // Re-crop viewBox: inside-out Frame B creates a larger outer rect
+      svg = SvgRenderer.cropViewBoxToStamp(svg);
     } else if (params.frame === 'split') {
       svg = SvgRenderer.addSplitBorder(svg, bi);
     }
