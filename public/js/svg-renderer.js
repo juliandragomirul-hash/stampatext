@@ -2642,14 +2642,20 @@ const SvgRenderer = {
     // Get actual rect width from SVG (more reliable than maxWidth from DB)
     var actualRectWidth = maxWidth;
     var rectWidthMatch = svgString.match(/<rect[^>]*\swidth=["']([\d.]+)["']/i);
+    var vbWidthMatch = svgString.match(/viewBox=["'][^"']*\s([\d.]+)\s[\d.]+["']/);
+    var vbWidth = vbWidthMatch ? parseFloat(vbWidthMatch[1]) : 1000;
     if (rectWidthMatch) {
       var foundWidth = parseFloat(rectWidthMatch[1]);
-      // Use the rect width if it's reasonable (not a huge background rect)
-      var vbWidthMatch = svgString.match(/viewBox=["'][^"']*\s([\d.]+)\s[\d.]+["']/);
-      var vbWidth = vbWidthMatch ? parseFloat(vbWidthMatch[1]) : 1000;
       if (foundWidth < vbWidth * 0.95) {
         actualRectWidth = foundWidth;
       }
+    }
+    // Frame B normalization: use viewBox width + fixed font size so ALL templates
+    // produce identical inner rect sizing. The inner rect wraps text (inside-out),
+    // so template-specific rect width is irrelevant. Only the font size matters.
+    if (frameMode === 'double') {
+      actualRectWidth = vbWidth;
+      originalFontSize = 128;
     }
 
     // Detect border type from SVG attributes (single source of truth)
@@ -2965,13 +2971,10 @@ const SvgRenderer = {
       if (borderFlags.perfLine) actualSw = Math.max(plFloor2, Math.min(swMax, provisionalSw * 1.5));
       var actualInset;
       if (frameMode === 'double') {
-        // Inside-out: size the rect as the INNER frame (same approach as Frame A).
-        // The inner rect has a thin stroke; text just needs clearance from that.
-        // addDoubleFrame will later wrap the outer rect + decorations around this.
-        var isFull = fillType === 'full';
-        var dfSw = Math.max(swMin, Math.min(swMax, provisionalSw));
-        var dfInnerSw = Math.max(6, Math.round(dfSw * (isFull ? 0.24 : 0.36)));
-        actualInset = dfInnerSw / 2;
+        // Inside-out: fixed placeholder inset (style-independent).
+        // The correction step will replace this with the accurate innerSw/2
+        // computed from proportionalSw (dimension-based, same for all styles).
+        actualInset = 5;
       } else {
         // Single/split: use computeTextZone prediction (already accurate for Frame A)
         actualInset = SvgRenderer.computeTextZone(actualSw, borderFlags, frameMode, cornerType, fillType || 'full');
@@ -2983,7 +2986,7 @@ const SvgRenderer = {
       // Per-border text gap override for double frames (inner rect needs breathing room)
       var textGap = hInnerGap;
       if (stampShape !== 'square' && frameMode === 'double') {
-        textGap = Math.max(textGap, 25);
+        textGap = 25; // Fixed — style-independent for inside-out Frame B
       }
       if (stampShape === 'square' && frameMode === 'double') {
         textGap = 30; // default for square+double (plain, perf line, zigzag, torn edge, chalk)
@@ -6103,17 +6106,12 @@ const SvgRenderer = {
     var propSwAttr = svgStr.match(/data-prop-sw="([\d.]+)"/);
     var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
     var innerSw = Math.max(6, Math.round(effectiveOsw * (isFull ? 0.24 : 0.36)));
-    // Inner edge: distance from outer rect stroke center to inner rect stroke center
-    var edgeAttr = svgStr.match(/data-border-inner-edge="(-?[\d.]+)"/);
-    var measuredInnerEdge = edgeAttr ? parseFloat(edgeAttr[1]) : effectiveOsw / 2;
-    // Ensure minimum outset matches plain border look — all styles get the same
-    // inner↔outer gap so switching border style doesn't change the frame proportions.
-    // Use effectiveOsw/2 as floor, with absolute minimum of 15 (for styles where osw=0, e.g. stitch)
-    measuredInnerEdge = Math.max(measuredInnerEdge, effectiveOsw / 2, 15);
+    // Fixed outset formula — style-independent. All border styles get the same
+    // inner↔outer gap: half outer stroke + white gap + half inner stroke.
+    // Decorative elements (stitch, wavy, sawtooth) sit on the outer rect edge,
+    // extending outward — they don't affect the inner-outer relationship.
     var whiteGap = isFull ? 2 : innerSw;
-    if (isFull) measuredInnerEdge = Math.max(measuredInnerEdge, effectiveOsw * 0.3);
-    // Outset = how much to expand from inner rect to outer rect
-    var outset = measuredInnerEdge + whiteGap + innerSw * 0.5;
+    var outset = effectiveOsw / 2 + whiteGap + innerSw / 2;
     // The existing rect (ox, oy, ow, oh) is now the INNER frame
     var ix = ox, iy = oy, iw = ow, ih = oh;
     // Compute outer rect by expanding outward
@@ -6154,12 +6152,18 @@ const SvgRenderer = {
 
     // Build outer rect element (expanded outward from inner)
     var outerFillVal = isFull ? outerFill : 'none';
-    var outerStrokeVal = outerStroke || innerColor;
-    var outerRectEl = _shape(outerX, outerY, outerW, outerH, outerFillVal, outerStrokeVal, osw, outset);
+    // Outer rect stroke: use effectiveOsw for styles that have a visible rect stroke (plain, filter).
+    // For decorative styles (stitch, wavy, brush), the outer rect stroke is hidden —
+    // the decorative elements provide the visual border. Keep original osw (0 or none).
+    var hasVisibleOuterStroke = !bi.stitch && !bi.wavy && !bi.brush;
+    var outerSwVal = hasVisibleOuterStroke ? effectiveOsw : osw;
+    var outerStrokeVal = (outerStroke && outerStroke !== 'none') ? outerStroke : innerColor;
+    if (!hasVisibleOuterStroke) outerStrokeVal = outerStroke || 'none';
+    var outerRectEl = _shape(outerX, outerY, outerW, outerH, outerFillVal, outerStrokeVal, outerSwVal, outset);
 
     // Outlined sawtooth/perforated: white gap + colored inner rect (special handling)
     if (bi.border && !isFull) {
-      var whiteGapSw = Math.max(8, Math.round(osw * 0.15));
+      var whiteGapSw = Math.max(8, Math.round(effectiveOsw * 0.15));
       var whiteRect = _shape(ix, iy, iw, ih, 'none', '#FFFFFF', whiteGapSw, 0);
       innerRectEl = whiteRect + _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, 0);
     }
