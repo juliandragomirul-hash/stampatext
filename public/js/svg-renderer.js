@@ -964,7 +964,23 @@ const SvgRenderer = {
     // Compute cropped viewBox: rect bounds + stroke/2 + decorative + breathing margin
     var margin = 10; // breathing room
     var strokeMargin = sw / 2;
-    var totalMargin = margin + strokeMargin + decoMargin;
+    var totalMargin;
+    // Frame B: anchor viewBox on INNER rect (style-independent) instead of outer rect.
+    // The outer rect size varies by style (plain outset ~99, stitch ~51), so anchoring
+    // on it produces different viewBox scaling per style. Inner rect is identical for all.
+    var innerRectM = svgString.match(/data-inner-rect="([\d.\-]+),([\d.\-]+),([\d.]+),([\d.]+)"/);
+    if (innerRectM) {
+      rX = parseFloat(innerRectM[1]);
+      rY = parseFloat(innerRectM[2]);
+      rW = parseFloat(innerRectM[3]);
+      rH = parseFloat(innerRectM[4]);
+      sw = 0;
+      totalMargin = 200; // fixed: innerSw/2 + outset + outer decoration + breathing
+    } else if (/data-frame-b="1"/.test(svgString)) {
+      totalMargin = 100; // fallback for Frame B without inner rect data
+    } else {
+      totalMargin = margin + strokeMargin + decoMargin;
+    }
     var newVbX = rX - totalMargin;
     var newVbY = rY - totalMargin;
     var newVbW = rW + totalMargin * 2;
@@ -2762,7 +2778,10 @@ const SvgRenderer = {
       if (heightAtNewFont > effectiveMaxWidth) {
         newFontSize = newFontSize * (effectiveMaxWidth / heightAtNewFont);
       }
-      var newScaleX = originalScaleX;
+      // Frame B: ignore template's original scaleX — inside-out sizing builds the
+      // rect from scratch, so the template transform is irrelevant. Using it causes
+      // different templates to produce different textBlockWidths for the same text.
+      var newScaleX = (frameMode === 'double') ? 1 : originalScaleX;
 
       if (newFontSize < minFontSize) {
         newFontSize = minFontSize;
@@ -2775,7 +2794,7 @@ const SvgRenderer = {
           widthAtMinFont = measuredWidth * (minFontSize / originalFontSize) + lsExtra;
         }
         if (widthAtMinFont > effectiveMaxWidth) {
-          newScaleX = originalScaleX * (effectiveMaxWidth / widthAtMinFont);
+          newScaleX = (frameMode === 'double' ? 1 : originalScaleX) * (effectiveMaxWidth / widthAtMinFont);
         }
       }
 
@@ -3017,10 +3036,6 @@ const SvgRenderer = {
       }
       var newRectWidth = textBlockWidth + hPadding * 2;
       var newRectHeight = textBlockHeight + vPadding * 2;
-
-      if (false && frameMode === 'double') {
-        console.log('[FRAME-B-DEBUG] actualRectWidth=' + actualRectWidth.toFixed(1) + ' effectiveMaxWidth=' + effectiveMaxWidth.toFixed(1) + ' origFS=' + originalFontSize + ' newFS=' + newFontSize.toFixed(1) + ' measW=' + measuredWidth.toFixed(1) + ' textBlockW=' + textBlockWidth.toFixed(1) + ' textBlockH=' + textBlockHeight.toFixed(1) + ' hPad=' + hPadding.toFixed(1) + ' vPad=' + vPadding.toFixed(1) + ' rectW=' + newRectWidth.toFixed(1) + ' rectH=' + newRectHeight.toFixed(1) + ' textGap=' + textGap + ' actualInset=' + actualInset + ' estSW=' + estStrokeW + ' refSw=' + refSwNorm);
-      }
 
       // Full Hi scale: 2x vertical stretch for 1-row full mode (square or rect 1A)
       var _sqFullHiScale = 1;
@@ -3337,8 +3352,17 @@ const SvgRenderer = {
       // (initial sizing, square override, fat mode height, aspect compression).
       // Stroke = percentage of largest dimension with mild AR dampening (0.25 power):
       // near-square stamps barely affected, extreme wide 1-row stamps tamed.
-      var maxDim = Math.max(newRectWidth, newRectHeight);
-      var arForStroke = maxDim / Math.min(newRectWidth, newRectHeight);
+      // Frame B: compute from style-independent base dimensions so all border styles
+      // get the same stroke width and outset (prevents cascading size differences).
+      var swRefW = newRectWidth, swRefH = newRectHeight;
+      if (frameMode === 'double') {
+        var baseTextGap = 25;
+        var gapDelta = textGap - baseTextGap;
+        swRefW -= gapDelta * 2;
+        swRefH -= gapDelta * 2;
+      }
+      var maxDim = Math.max(swRefW, swRefH);
+      var arForStroke = maxDim / Math.min(swRefW, swRefH);
       var STROKE_RATIO = 0.045;
       var proportionalSw = maxDim * STROKE_RATIO / Math.pow(arForStroke, 0.35);
       if (stampShape === 'square') {
@@ -3556,7 +3580,7 @@ const SvgRenderer = {
             var canvasScale = newFontSize / measurements.canvasMeasureFontSize;
             // Offset = how far ink center is LEFT of advance center (positive = shift right)
             var inkOffset = (measurements.canvasAdvanceWidth + measurements.canvasInkLeft - measurements.canvasInkRight) / 2;
-            var matrixScaleX = parseFloat(mMatch[1]) || 1;
+            var matrixScaleX = (frameMode === 'double') ? newScaleX : (parseFloat(mMatch[1]) || 1);
             inkHorizCorrection = inkOffset * canvasScale * matrixScaleX * aspectCompressX;
           }
           // Square Full: textLength handles width exactly, skip ink/dx corrections that shift text off-center
@@ -3566,7 +3590,10 @@ const SvgRenderer = {
           var dyNudge = (numTspans > 1 || (_2fullFontSizes && stampShape === 'square')) ? 0 : fontTune.dy * newFontSize;
           var effectiveSy = fontScaleY * (_sqFullHiScale || 1);
           var newTy = viewBoxCenterY + baselineOffset * effectiveSy + dyNudge;
-          var finalSx = (parseFloat(mMatch[1]) * aspectCompressX).toFixed(4);
+          // Frame B: use normalized newScaleX (1.0) instead of template's original matrix scaleX,
+          // so all templates produce identical text width regardless of their transform_matrix.
+          var baseSx = (frameMode === 'double') ? newScaleX : parseFloat(mMatch[1]);
+          var finalSx = (baseSx * aspectCompressX).toFixed(4);
           var effectiveScaleY = fontScaleY * (_sqFullHiScale || 1);
           var sy = effectiveScaleY !== 1 ? effectiveScaleY.toFixed(4) : mMatch[4];
           var newMat = 'matrix(' + finalSx + ' ' + mMatch[2] + ' ' + mMatch[3] + ' ' + sy + ' ' + newTx.toFixed(4) + ' ' + newTy.toFixed(4) + ')';
@@ -6124,10 +6151,9 @@ const SvgRenderer = {
     var propSwAttr = svgStr.match(/data-prop-sw="([\d.]+)"/);
     var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
     var innerSw = Math.max(6, Math.round(effectiveOsw * (isFull ? 0.24 : 0.36)));
-    // Fixed outset formula — style-independent. All border styles get the same
-    // inner↔outer gap: half outer stroke + white gap + half inner stroke.
-    // Decorative elements (stitch, wavy, sawtooth) sit on the outer rect edge,
-    // extending outward — they don't affect the inner-outer relationship.
+    // Outset: distance from inner rect to outer rect center line.
+    // Same formula for ALL styles — viewBox anchors on inner rect, so outset
+    // differences don't affect visual scaling.
     var whiteGap = isFull ? 2 : innerSw;
     var outset = effectiveOsw / 2 + whiteGap + innerSw / 2;
     // The existing rect (ox, oy, ow, oh) is now the INNER frame
@@ -6167,6 +6193,9 @@ const SvgRenderer = {
 
     // Build inner rect element (positioned at original rect location — the text wrapper)
     var innerRectEl = _shape(ix, iy, iw, ih, 'none', innerColor, innerSw, 0);
+    // Stamp inner rect geometry for cropViewBoxToStamp to anchor on (style-independent)
+    svgStr = svgStr.replace(/<svg\b/, '<svg data-inner-rect="' +
+      ix.toFixed(2) + ',' + iy.toFixed(2) + ',' + iw.toFixed(2) + ',' + ih.toFixed(2) + '"');
 
     // Build outer rect element (expanded outward from inner)
     var outerFillVal = isFull ? outerFill : 'none';
@@ -6191,8 +6220,51 @@ const SvgRenderer = {
     svgStr = svgStr.replace(outer.full, outerRectEl);
     // Insert inner rect before text
     var textPos = svgStr.search(/<text[\s>]/i);
-    if (textPos !== -1) return svgStr.slice(0, textPos) + innerRectEl + svgStr.slice(textPos);
-    return svgStr.replace(/<\/svg>/, innerRectEl + '</svg>');
+    if (textPos !== -1) {
+      svgStr = svgStr.slice(0, textPos) + innerRectEl + svgStr.slice(textPos);
+    } else {
+      svgStr = svgStr.replace(/<\/svg>/, innerRectEl + '</svg>');
+    }
+
+    // --- Regenerate decorative borders at OUTER rect position ---
+    // Stitch: read generation params from data attributes, remove old shapes, regenerate at outer rect
+    var stitchGenM = svgStr.match(/data-stitch-gen="([^"]+)"/);
+    if (stitchGenM && bi.stitch) {
+      var stitchSizeM = svgStr.match(/data-stitch-size="([\d.]+)"/);
+      var stitchCornerM = svgStr.match(/data-stitch-corner="([^"]+)"/);
+      var stitchOffsetM = svgStr.match(/data-stitch-offset="([\d.]+)"/);
+      var sType = stitchGenM[1]; // 'circle', 'square', 'line'
+      var sSize = stitchSizeM ? parseFloat(stitchSizeM[1]) : 30;
+      var sCorner = stitchCornerM ? stitchCornerM[1] : 'straight';
+      var sOff = stitchOffsetM ? parseFloat(stitchOffsetM[1]) : sSize * 0.75;
+      // Derive spacing (same formula as autofit)
+      var sSpacing = Math.max(10, Math.min(50, Math.round(
+        ((sType === 'circle') ? 20 : (sType === 'line') ? 50 : 20) * (sSize / 30)
+      )));
+      var isLined = /data-lined="1"/.test(svgStr);
+      var stampShape2 = isLined ? 'lined' : 'rectangle';
+      // Remove old stitch shapes (circles, rects, polygons after </switch>)
+      svgStr = svgStr.replace(/<circle[^>]*fill="#[0-9A-Fa-f]+"[^>]*\/>/gi, '');
+      svgStr = svgStr.replace(/<rect[^>]*width="([\d.]+)"[^>]*fill="#[0-9A-Fa-f]+"[^>]*\/>/gi, function(m, w) {
+        return parseFloat(w) <= 120 ? '' : m; // only remove small stitch rects, keep frame rects
+      });
+      svgStr = svgStr.replace(/<polygon[^>]*fill="#[0-9A-Fa-f]+"[^>]*\/>/gi, '');
+      // Frame B: scale up stitch shapes to match the visual weight of plain's thick outer stroke
+      sSize = Math.round(sSize * 1.4);
+      sOff = sSize * 0.75;
+      sSpacing = Math.max(10, Math.min(60, Math.round(sSpacing * 1.2)));
+      // Regenerate stitch shapes at outer rect position
+      var newStitchResult = SvgRenderer._generateStitchShapes(
+        outerX - sOff, outerY - sOff,
+        outerW + sOff * 2, outerH + sOff * 2,
+        sType, sSize, sSpacing, innerColor, stampShape2, sCorner, sOff
+      );
+      svgStr = svgStr.replace(/<\/svg>/, newStitchResult.svg + '</svg>');
+    }
+
+    // Mark SVG as Frame B for cropViewBoxToStamp margin normalization
+    svgStr = svgStr.replace(/<svg\b/, '<svg data-frame-b="1"');
+    return svgStr;
   },
 
   /**
