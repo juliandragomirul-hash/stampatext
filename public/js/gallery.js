@@ -678,12 +678,8 @@ const Gallery = {
           colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
           var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
 
-          var framed = cropped;
-          if (frameMode === 'double') {
-            framed = SvgRenderer.addDoubleFrame(cropped, bi, color, 'double');
-          } else if (frameMode === 'split') {
-            framed = SvgRenderer.addSplitBorder(cropped, bi);
-          }
+          // Unified: all frame modes go through addDoubleFrame
+          var framed = SvgRenderer.addDoubleFrame(cropped, bi, color, frameMode);
 
           for (var k = 0; k < tiltsToApply.length; k++) {
             var tilt = tiltsToApply[k];
@@ -1682,12 +1678,8 @@ const Gallery = {
           colorized = SvgRenderer.applyCornerRadius(colorized, base.cornerType);
         }
         var cropped = await SvgRenderer.cropViewBoxFixedFrame(colorized);
-        var framed = cropped;
-        if (vp.f === 'double') {
-          framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c, 'double');
-        } else if (vp.f === 'split') {
-          framed = SvgRenderer.addSplitBorder(cropped, rbi);
-        }
+        // Unified: all frame modes go through addDoubleFrame
+        var framed = SvgRenderer.addDoubleFrame(cropped, rbi, vp.c, vp.f);
         var textured = vp.x ? await SvgRenderer.applyTexture(framed, vp.x) : framed;
         if (!textured || textured.indexOf('<svg') === -1) textured = framed;
         textured = SvgRenderer.addWatermark(textured);
