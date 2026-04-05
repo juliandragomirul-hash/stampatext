@@ -2662,7 +2662,7 @@ const SvgRenderer = {
    * @param {string} fillType - 'full' or 'empty'
    * @returns {number} per-side inset in SVG units
    */
-  computeTextZone: function(sw, borderFlags, frameMode, cornerType, fillType) {
+  computeTextZone: function(sw, borderFlags, frameMode, cornerType, fillType, numLines) {
     var isFull = fillType === 'full';
     var totalInset;
 
@@ -2723,7 +2723,9 @@ const SvgRenderer = {
       };
       var outerRx = CORNER_RX[cornerType] || 0;
       var innerRx = Math.max(0, outerRx - totalInset);
-      totalInset += Math.max(0, innerRx * 0.45);
+      // 1-liners: less aggressive compensation (wide landscape, corners less visible)
+      var cornerFactor = (numLines || 1) <= 1 ? 0.25 : 0.45;
+      totalInset += Math.max(0, innerRx * cornerFactor);
     }
 
     return totalInset;
@@ -2838,7 +2840,7 @@ const SvgRenderer = {
     // making effectiveMaxWidth identical for all border styles and frame modes.
     var refBorderFlags = {};
     var refSwNorm = 30; // standard plain stroke cap
-    var refInset = SvgRenderer.computeTextZone(refSwNorm, refBorderFlags, 'double', cornerType, fillType || 'full');
+    var refInset = SvgRenderer.computeTextZone(refSwNorm, refBorderFlags, 'double', cornerType, fillType || 'full', numTspans);
     var effectiveMaxWidth = actualRectWidth - 2 * (refInset + refInnerGap);
 
     // Calculate ratio based on measured width vs effective max width
@@ -3383,15 +3385,18 @@ const SvgRenderer = {
             // Note: hb is NOT applied here — fatInkRatio already uses accurate canvas
             // measurements, so hb calibration would double-inflate the height.
             newRectHeight = fatTotalH * (fontScaleY || 1) + vPadding * 2;
-            // Apply per-tspan font-size (no textLength — letters stay proportional)
+            // Apply per-tspan font-size + stroke-width (no textLength — letters stay proportional)
+            // Per-row stroke ensures stroke scales with each row's font size (not the base font).
             var fatTspanIdx = 0;
             result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
               if (fatTspanIdx < _2fullFontSizes.length) {
                 var fs = _2fullFontSizes[fatTspanIdx++];
                 attrs = attrs.replace(/\s*font-size=["'][^"']*["']/gi, '');
+                attrs = attrs.replace(/\s*stroke-width=["'][^"']*["']/gi, '');
                 attrs = attrs.replace(/\s*textLength=["'][^"']*["']/gi, '');
                 attrs = attrs.replace(/\s*lengthAdjust=["'][^"']*["']/gi, '');
-                return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '">';
+                var rowSw = SvgRenderer._computeProportionalStroke(fontTune.stroke, fs);
+                return '<tspan' + attrs + ' font-size="' + fs.toFixed(2) + '" stroke-width="' + rowSw + '">';
               }
               return match;
             });
@@ -6231,6 +6236,11 @@ const SvgRenderer = {
     // the decorative elements provide the visual border. Keep original osw (0 or none).
     var hasVisibleOuterStroke = !bi.stitch && !bi.wavy && !bi.brush;
     var outerSwVal = hasVisibleOuterStroke ? effectiveOsw : osw;
+    // Frame A: inner rect is hidden, so absorb inner stroke gap into outer stroke
+    // for a beefier visual border. Doesn't apply to stitch/wavy/brush (no visible rect stroke).
+    if (frameMode === 'single' && hasVisibleOuterStroke) {
+      outerSwVal += innerSw;
+    }
     var outerStrokeVal = (outerStroke && outerStroke !== 'none') ? outerStroke : innerColor;
     if (!hasVisibleOuterStroke) outerStrokeVal = outerStroke || 'none';
     var outerRectEl = _shape(outerX, outerY, outerW, outerH, outerFillVal, outerStrokeVal, outerSwVal, outset);

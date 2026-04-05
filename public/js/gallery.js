@@ -478,7 +478,7 @@ const Gallery = {
 
           // Random tilt: 70% none, 15% slight, 15% moderate
           var _tiltRoll = Math.random();
-          var variantTilt = _tiltRoll < 0.7 ? 0 : (_tiltRoll < 0.85 ? 3 : -3);
+          var variantTilt = _tiltRoll < 0.7 ? 0 : -10;
 
           // Unified pipeline — identical to product page
           var appliedForceLines = currentRowCount > 1 ? currentRowCount : 0;
@@ -1859,7 +1859,7 @@ const Gallery = {
   // Predefined patterns — fixed sequence then restart
   COMBO_PATTERNS: {
     fill: ['empty', 'full'],
-    tilt: [0, 0, 0, 3, -3]
+    tilt: [0, 0, 0, -10, -10]
   },
 
   // Rows sub-pool for square shape only
