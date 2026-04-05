@@ -2502,12 +2502,6 @@ const SvgRenderer = {
           // Measure actual ink bounding box for precise height and centering
           var bbox = textEl.getBBox();
 
-          // DEBUG: font measurement diagnostic
-          var _dbgFont = (textEl.getAttribute('font-family') || '').replace(/['"]/g, '');
-          var _dbgWeight = textEl.getAttribute('font-weight') || '?';
-          var _dbgFontLoaded = svgDoc.fonts ? svgDoc.fonts.check(_dbgWeight + ' 100px "' + _dbgFont + '"') : 'n/a';
-          console.log('[autoFit] font=' + _dbgFont + ' weight=' + _dbgWeight + ' measuredWidth=' + measuredWidth.toFixed(1) + ' bboxW=' + bbox.width.toFixed(1) + ' fontLoaded=' + _dbgFontLoaded);
-
           // Canvas measureText for actual ink bounds (per-font, per-text accurate)
           var canvasAscent = 0;
           var canvasDescent = 0;
@@ -2846,9 +2840,6 @@ const SvgRenderer = {
     var refSwNorm = 30; // standard plain stroke cap
     var refInset = SvgRenderer.computeTextZone(refSwNorm, refBorderFlags, 'double', cornerType, fillType || 'full');
     var effectiveMaxWidth = actualRectWidth - 2 * (refInset + refInnerGap);
-
-    // DEBUG: sizing pipeline diagnostic
-    console.log('[autoFit-sizing] actualRectW=' + actualRectWidth.toFixed(0) + ' maxWidth=' + maxWidth + ' vbWidth=' + vbWidth.toFixed(0) + ' refInset=' + refInset.toFixed(1) + ' effectiveMaxW=' + effectiveMaxWidth.toFixed(0) + ' measuredW=' + measuredWidth.toFixed(0));
 
     // Calculate ratio based on measured width vs effective max width
     // Subtract absolute letter-spacing from available width (LS doesn't scale with font)
@@ -3387,7 +3378,11 @@ const SvgRenderer = {
             }
             fatTotalH += effectiveStroke; // stroke extends above first row + below last row
             textBlockHeight = fatTotalH;
-            newRectHeight = fatTotalH + vPadding * 2;
+            // Account for fontScaleY: the text transform stretches glyphs vertically,
+            // so the rect must be tall enough to contain the visually stretched text.
+            // Note: hb is NOT applied here — fatInkRatio already uses accurate canvas
+            // measurements, so hb calibration would double-inflate the height.
+            newRectHeight = fatTotalH * (fontScaleY || 1) + vPadding * 2;
             // Apply per-tspan font-size (no textLength — letters stay proportional)
             var fatTspanIdx = 0;
             result = result.replace(/<tspan([^>]*)>/gi, function(match, attrs) {
@@ -6184,6 +6179,12 @@ const SvgRenderer = {
     }
     // The existing rect (ox, oy, ow, oh) is now the INNER frame
     var ix = ox, iy = oy, iw = ow, ih = oh;
+    // Corner compensation: with large corner radii the outer frame looks thin at curves.
+    // Boost outset proportional to corner radius for uniform visual weight.
+    var CORNER_RX_FB = { soft_round: 35, medium_round: 80, strong_round: 120,
+        mixed_top_straight: 120, mixed_top_round: 120, mixed_diag_down: 120, mixed_diag_up: 120 };
+    var cornerBoost = CORNER_RX_FB[frameCornerType] || 0;
+    if (cornerBoost > 0) outset += cornerBoost * 0.15;
     // Compute outer rect by expanding outward
     var outerX = ox - outset, outerY = oy - outset;
     var outerW = ow + outset * 2, outerH = oh + outset * 2;
@@ -6423,7 +6424,10 @@ const SvgRenderer = {
           splitOx += borderInset2; splitOy += borderInset2;
           splitOw -= borderInset2 * 2; splitOh -= borderInset2 * 2;
         }
-        splitHtml = _shape(splitOx, splitOy, splitOw, splitOh, 'none', '#FFFFFF', splitSw, 0);
+        // cornerOffset must match outer rect so split curve follows outer curve concentrically.
+        // For border (perf/sawtooth) the split is inset, so reduce cornerOffset proportionally.
+        var splitCornerOff = bi.border ? Math.max(0, outset - borderInset2) : outset;
+        splitHtml = _shape(splitOx, splitOy, splitOw, splitOh, 'none', '#FFFFFF', splitSw, splitCornerOff);
         // Transfer filter to split stroke (torn edge, chalk visual on split)
         if (bi.filter) {
           var filterOnOuter = svgStr.match(/filter="(url\([^)]+\))"/);
