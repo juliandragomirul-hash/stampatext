@@ -2502,6 +2502,12 @@ const SvgRenderer = {
           // Measure actual ink bounding box for precise height and centering
           var bbox = textEl.getBBox();
 
+          // DEBUG: font measurement diagnostic
+          var _dbgFont = (textEl.getAttribute('font-family') || '').replace(/['"]/g, '');
+          var _dbgWeight = textEl.getAttribute('font-weight') || '?';
+          var _dbgFontLoaded = svgDoc.fonts ? svgDoc.fonts.check(_dbgWeight + ' 100px "' + _dbgFont + '"') : 'n/a';
+          console.log('[autoFit] font=' + _dbgFont + ' weight=' + _dbgWeight + ' measuredWidth=' + measuredWidth.toFixed(1) + ' bboxW=' + bbox.width.toFixed(1) + ' fontLoaded=' + _dbgFontLoaded);
+
           // Canvas measureText for actual ink bounds (per-font, per-text accurate)
           var canvasAscent = 0;
           var canvasDescent = 0;
@@ -2750,22 +2756,11 @@ const SvgRenderer = {
     var bbox = measurements.bbox;
     // Use actual tspan count from SVG (not cached) — cache may be stale after row changes
     var numTspans = (svgString.match(/<tspan/gi) || []).length || 1;
-    // Get actual rect width from SVG (more reliable than maxWidth from DB)
+    // Use bounding_width from DB as the text zone reference (calibrated per template).
+    // Not vbWidth (too large, includes stroke/padding) or template rect (varies with original font).
     var actualRectWidth = maxWidth;
-    var rectWidthMatch = svgString.match(/<rect[^>]*\swidth=["']([\d.]+)["']/i);
     var vbWidthMatch = svgString.match(/viewBox=["'][^"']*\s([\d.]+)\s[\d.]+["']/);
     var vbWidth = vbWidthMatch ? parseFloat(vbWidthMatch[1]) : 1000;
-    if (rectWidthMatch) {
-      var foundWidth = parseFloat(rectWidthMatch[1]);
-      if (foundWidth < vbWidth * 0.95) {
-        actualRectWidth = foundWidth;
-      }
-    }
-    // Frame B normalization: use viewBox width so ALL templates produce identical
-    // effectiveMaxWidth. The inner rect wraps text (inside-out), so the template's
-    // rect width is irrelevant. Keep originalFontSize from template (matches measuredWidth).
-    // Unified: use viewBox width as reference (inside-out sizing).
-    actualRectWidth = vbWidth;
 
     // Detect border type from SVG attributes (single source of truth)
     var borderFlags = {
@@ -2851,6 +2846,9 @@ const SvgRenderer = {
     var refSwNorm = 30; // standard plain stroke cap
     var refInset = SvgRenderer.computeTextZone(refSwNorm, refBorderFlags, 'double', cornerType, fillType || 'full');
     var effectiveMaxWidth = actualRectWidth - 2 * (refInset + refInnerGap);
+
+    // DEBUG: sizing pipeline diagnostic
+    console.log('[autoFit-sizing] actualRectW=' + actualRectWidth.toFixed(0) + ' maxWidth=' + maxWidth + ' vbWidth=' + vbWidth.toFixed(0) + ' refInset=' + refInset.toFixed(1) + ' effectiveMaxW=' + effectiveMaxWidth.toFixed(0) + ' measuredW=' + measuredWidth.toFixed(0));
 
     // Calculate ratio based on measured width vs effective max width
     // Subtract absolute letter-spacing from available width (LS doesn't scale with font)
