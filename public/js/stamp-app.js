@@ -305,7 +305,7 @@
     try {
       await Gallery.processAll(text);
       Gallery.resetBags();
-      await Gallery.generateBatch(30);
+      await Gallery.generateBatch(50);
 
       // Update URL
       var newUrl = '/?text=' + encodeURIComponent(text);

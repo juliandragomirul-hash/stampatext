@@ -430,8 +430,7 @@ const Gallery = {
 
       // Generate shape × border count variants
       var allowedFrames = this.FRAME_COMPAT[base.borderType || 'simple'] || this.FRAME_ORDER;
-      var shapes = ['rectangle', 'square', 'lined'];
-      console.log('[GALLERY] Processing shapes: ' + shapes.join(', ') + ' for template: ' + base.name);
+      var shapes = ['rectangle'];  // square + lined not yet ported to new font/frame fixes
 
       for (var s = 0; s < shapes.length; s++) {
         var stampShape = shapes[s];
@@ -458,9 +457,9 @@ const Gallery = {
         var currentRowCount = parseInt(rowOpt.value, 10) || 1;
         var isFullMode = /A$/i.test(rowOpt.value);
 
-        var _testFrames = ['single']; // TEST MODE: single frame only
-        for (var f = 0; f < _testFrames.length; f++) {
-          var frameMode = _testFrames[f];
+        var _varFrames = ['single', 'double', 'split'];
+        for (var f = 0; f < _varFrames.length; f++) {
+          var frameMode = _varFrames[f];
           // Skip double frame for filled stitch — too visually dense / redundant with single
           if (frameMode === 'double' && bi.stitch && base.fillType === 'full') continue;
           // Skip double frame for outlined torn edge — poor visual result
@@ -470,7 +469,7 @@ const Gallery = {
           var color = this.PALETTE_COLORS[Math.floor(Math.random() * this.PALETTE_COLORS.length)];
 
           // Random fill: 40% chance of filled
-          var variantFill = 'empty'; // TEST MODE: no fill
+          var variantFill = Math.random() < 0.4 ? 'full' : 'empty';
 
           // Random corner: pick from available types (skip mixed for lined)
           var cornerOptions = stampShape === 'lined' ? ['straight'] :
@@ -478,7 +477,8 @@ const Gallery = {
           var variantCorner = cornerOptions[Math.floor(Math.random() * cornerOptions.length)];
 
           // Random tilt: 70% none, 15% slight, 15% moderate
-          var variantTilt = 0; // TEST MODE: no tilt
+          var _tiltRoll = Math.random();
+          var variantTilt = _tiltRoll < 0.7 ? 0 : (_tiltRoll < 0.85 ? 3 : -3);
 
           // Unified pipeline — identical to product page
           var appliedForceLines = currentRowCount > 1 ? currentRowCount : 0;
@@ -517,7 +517,7 @@ const Gallery = {
             var vbM = variantSvg.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
             if (vbM) {
               var vbAspect = parseFloat(vbM[4]) / parseFloat(vbM[3]);
-              if (vbAspect > 0.85) continue; // too square-like for a rect — skip
+              if (vbAspect > 0.75 && vbAspect < 1.35) continue; // near-square zone — skip
             }
           }
 
@@ -1851,15 +1851,15 @@ const Gallery = {
 
   // Short pools (<5 items) — balanced repeat
   COMBO_SHORT: {
-    frames: ['single'], // TEST MODE: single frame only
-    texture: [''], // TEST MODE: no texture
-    shape: ['rectangle','square','lined']
+    frames: ['single', 'double', 'split'],
+    texture: [''],
+    shape: ['rectangle']
   },
 
   // Predefined patterns — fixed sequence then restart
   COMBO_PATTERNS: {
-    fill: ['empty'], // TEST MODE: no fill
-    tilt: [0] // TEST MODE: no tilt
+    fill: ['empty', 'full'],
+    tilt: [0, 0, 0, 3, -3]
   },
 
   // Rows sub-pool for square shape only
@@ -1887,14 +1887,16 @@ const Gallery = {
     var combo = {};
     var self = this;
 
-    // Long pools: rotating start per cycle
-    // cycle = floor(i/N) % N, position = i % N, value = pool[(cycle + position) % N]
+    // Stride-based cycling: each dimension uses a different prime stride
+    // coprime to its pool size, decorrelating all cross-pairings for
+    // maximum visual diversity. Consecutive stamps differ on every axis.
+    var STRIDES = { style: 3, color: 5, font: 4, corners: 3 };
+
+    // Long pools: stride cycling
     Object.keys(this.COMBO_LONG).forEach(function(key) {
       var pool = self.COMBO_LONG[key];
-      var N = pool.length;
-      var cycle = Math.floor(i / N) % N;
-      var position = i % N;
-      combo[key] = pool[(cycle + position) % N];
+      var stride = STRIDES[key] || 1;
+      combo[key] = pool[(i * stride) % pool.length];
     });
 
     // Short pools: balanced repeat
@@ -2027,6 +2029,16 @@ const Gallery = {
 
       var comboShape = combo.shape || 'rectangle';
 
+      // Skip near-square rects — they look like square stamps and dilute variety.
+      // Keep wide landscapes (ar < 0.75) AND tall skyscrapers (ar > 1.35), only cut the ambiguous zone.
+      if (comboShape === 'rectangle') {
+        var _vbM = svg.match(/viewBox=["']\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+        if (_vbM) {
+          var _ar = parseFloat(_vbM[4]) / parseFloat(_vbM[3]);
+          if (_ar > 0.75 && _ar < 1.35) return false;
+        }
+      }
+
       // Build product URL with ALL combo params
       var comboRows = combo.rows || (svg.match(/<tspan/gi) || []).length || 1;
       var productUrl = '/product.html?id=' + encodeURIComponent(entry.tpl.id) +
@@ -2108,11 +2120,11 @@ const Gallery = {
       document.getElementById('results-batches').appendChild(moreDiv);
     }
     if (remaining > 0) {
-      moreDiv.innerHTML = '<button class="btn btn-primary" id="btn-show-more" style="padding:10px 30px;font-size:1rem;">Show 4 more</button>' +
+      moreDiv.innerHTML = '<button class="btn btn-primary" id="btn-show-more" style="padding:10px 30px;font-size:1rem;">Show more</button>' +
         '<div style="color:#888;font-size:0.85rem;margin-top:0.5rem;">Available remaining: ' + remaining.toLocaleString() + '</div>';
       var self = this;
       document.getElementById('btn-show-more').addEventListener('click', function() {
-        self.generateBatch(4);
+        self.generateBatch(20);
       });
     } else {
       moreDiv.innerHTML = '<div style="color:#888;font-size:0.85rem;">All combinations shown!</div>';
