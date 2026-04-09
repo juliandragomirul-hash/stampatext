@@ -999,7 +999,20 @@ const SvgRenderer = {
       rW = parseFloat(innerRectM[3]);
       rH = parseFloat(innerRectM[4]);
       sw = 0;
-      totalMargin = 200; // fixed: innerSw/2 + outset + outer decoration + breathing
+      // Constant-aspect viewBox: pad small-corner cases extra so the final viewBox W×H
+      // is identical across all corner types. The rendered SVG element stays a constant
+      // size → text never shifts position when the user toggles corner radii.
+      // FORMULA MUST MATCH _applyAutoFitSizing correction step (line ~3457) — keep in sync.
+      var ctM = svgString.match(/data-corner-type="([^"]+)"/);
+      var ct = ctM ? ctM[1] : 'straight';
+      var CR_RX = { soft_round: 35, medium_round: 80, strong_round: 120,
+                    mixed_top_straight: 120, mixed_top_round: 120,
+                    mixed_diag_down: 120, mixed_diag_up: 120 };
+      var rxV = CR_RX[ct] || 0;
+      var actualCC = Math.max(0, rxV * 0.30 - 18);
+      if (actualCC > 0) actualCC += 4;
+      var MAX_CC = 22; // strong/mixed corner cornerComp at the formula's max
+      totalMargin = 200 + (MAX_CC - actualCC); // 200..222
     } else if (/data-frame-b="1"/.test(svgString)) {
       totalMargin = 100; // fallback for Frame B without inner rect data
     } else {
@@ -2720,9 +2733,10 @@ const SvgRenderer = {
       };
       var outerRx = CORNER_RX[cornerType] || 0;
       var innerRx = Math.max(0, outerRx - totalInset);
-      // 1-liners: less aggressive compensation (wide landscape, corners less visible)
-      // Path 2 (correction step) no longer re-applies corner comp — these factors now cover the full cost.
-      var cornerFactor = (numLines || 1) <= 1 ? 0.10 : 0.20;
+      // Corner compensation lives in the correction step (Path 2) which grows the rect
+      // around the text instead of shrinking the font. computeTextZone no longer touches
+      // text sizing for corners — keep cornerFactor at 0.
+      var cornerFactor = 0;
       totalInset += Math.max(0, innerRx * cornerFactor);
     }
 
@@ -3458,8 +3472,24 @@ const SvgRenderer = {
         var corrDfSw = Math.max(dfSwMin2, Math.min(dfSwMax2, proportionalSw));
         var corrInnerSw = Math.max(6, Math.round(corrDfSw * 0.36));
         var correctedInset = corrInnerSw / 2;
-        // Corner comp lives in computeTextZone (Path 1) only — no second application here.
-        var correctedHPad = textGap + correctedInset;
+        // Corner compensation: grow the rect outward around the text so the rounded
+        // inner corners don't clip the rectangular text bbox. Geometric minimum is
+        // innerRx * (1 - 1/sqrt(2)) ≈ 0.293; we use 0.30 for a small safety margin
+        // and SUBTRACT the existing textGap, since that gap is already absorbing the
+        // first 18 px of corner clearance for free.
+        // KEEP IN SYNC: cropViewBoxToStamp Frame B branch mirrors this formula to
+        // compute its viewBox padding — if you retune cornerComp, update both sites.
+        var CORNER_RX2 = {
+          soft_round: 35, medium_round: 80, strong_round: 120,
+          mixed_top_straight: 120, mixed_top_round: 120,
+          mixed_diag_down: 120, mixed_diag_up: 120
+        };
+        var cornerRx2 = CORNER_RX2[cornerType] || 0;
+        var cornerComp = Math.max(0, cornerRx2 * 0.30 - textGap);
+        // Visual safety bump for active corner radii (covers font ink overflow,
+        // anti-aliasing, and the difference between bbox and glyph extents).
+        if (cornerComp > 0) cornerComp += 4;
+        var correctedHPad = textGap + correctedInset + cornerComp;
         var padDelta = correctedHPad - hPadding;
         if (Math.abs(padDelta) > 1) {
           hPadding = correctedHPad;
@@ -6184,12 +6214,8 @@ const SvgRenderer = {
     }
     // The existing rect (ox, oy, ow, oh) is now the INNER frame
     var ix = ox, iy = oy, iw = ow, ih = oh;
-    // Corner compensation: with large corner radii the outer frame looks thin at curves.
-    // Boost outset proportional to corner radius for uniform visual weight.
-    var CORNER_RX_FB = { soft_round: 35, medium_round: 80, strong_round: 120,
-        mixed_top_straight: 120, mixed_top_round: 120, mixed_diag_down: 120, mixed_diag_up: 120 };
-    var cornerBoost = CORNER_RX_FB[frameCornerType] || 0;
-    if (cornerBoost > 0) outset += cornerBoost * 0.15;
+    // No outset boost for rounded corners — the visible inner-to-outer gap must stay
+    // equal to whiteGap regardless of corner radius (Plain reference invariant).
     // Compute outer rect by expanding outward
     var outerX = ox - outset, outerY = oy - outset;
     var outerW = ow + outset * 2, outerH = oh + outset * 2;
