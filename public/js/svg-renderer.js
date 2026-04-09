@@ -1179,9 +1179,11 @@ const SvgRenderer = {
    */
   _generateWavyBorder: function(x, y, w, h, color, strokeW, variant, filled, shape) {
     var F = function(n) { return n.toFixed(2); };
-    var scWidth = (variant === 'strong') ? 80 : 35;
-    var depth = (variant === 'strong') ? 20 : 7;
-    strokeW = strokeW || 40;
+    // Smoothened: more waves per length, shallower amplitude, thinner stroke (cap forces
+    // it down even when the caller passes a heavier value).
+    var scWidth = (variant === 'strong') ? 55 : 24;
+    var depth = (variant === 'strong') ? 10 : 4;
+    strokeW = Math.min(strokeW || 28, 28);
 
     var numH = Math.max(3, Math.round(w / scWidth));
     if (numH % 2 === 0) numH++;   // force ODD for smooth corners
@@ -1228,9 +1230,11 @@ const SvgRenderer = {
   // Single closed path around all 4 edges, peaks only (no corner points).
   _generateZigzagBorder: function(x, y, w, h, color, strokeW, filled, shape) {
     var F = function(n) { return n.toFixed(2); };
-    var scWidth = 60;   // segment width target (wider = fewer teeth)
-    var depth = 20;
-    strokeW = strokeW || 22;
+    // Smoothened: denser teeth, shorter teeth, thinner stroke (cap forces it down even
+    // when the caller passes a heavier value).
+    var scWidth = 38;   // segment width target (smaller = more teeth)
+    var depth = 10;
+    strokeW = Math.min(strokeW || 28, 28);
 
     var numH = Math.max(3, Math.round(w / scWidth));
     if (numH % 2 === 0) numH++;
@@ -2667,19 +2671,12 @@ const SvgRenderer = {
     var totalInset;
 
     if (frameMode === 'double') {
-      // Unified formula — mirrors addDoubleFrame's inset calculation exactly
+      // Unified formula — mirrors addDoubleFrame's inset calculation exactly.
+      // Plain border is the canonical reference: every style sizes its text to the SAME
+      // text zone (predictedInnerEdge = sw/2). Decoration-specific intrusion is handled
+      // by addDoubleFrame's outset, NOT by changing the text zone here.
       var innerSw = Math.max(6, Math.round(sw * 0.36));
-      // Predict innerEdge (same values border generators store as data-border-inner-edge)
-      var predictedInnerEdge;
-      if (borderFlags.stitch) predictedInnerEdge = -10;           // shapes sit on rect edge, pull inner rect closer
-      else if (borderFlags.wavy) {
-        var depth = (borderFlags.wavyStrong || borderFlags.wavyZigzag) ? 20 : 7;
-        predictedInnerEdge = depth + 20;                          // depth + wavySw/2 (wavySw~40)
-      } else if (borderFlags.border) {
-        predictedInnerEdge = Math.max(15, sw / 2.8);                         // undo 1.4x scaling to match plain-equivalent
-      } else {
-        predictedInnerEdge = sw / 2;                              // plain, filter, perfLine
-      }
+      var predictedInnerEdge = sw / 2;
       var whiteGap = innerSw;
       // inset to inner rect center + innerSw/2 for text inside inner stroke
       totalInset = predictedInnerEdge + whiteGap + innerSw * 0.5;
@@ -2724,7 +2721,8 @@ const SvgRenderer = {
       var outerRx = CORNER_RX[cornerType] || 0;
       var innerRx = Math.max(0, outerRx - totalInset);
       // 1-liners: less aggressive compensation (wide landscape, corners less visible)
-      var cornerFactor = (numLines || 1) <= 1 ? 0.25 : 0.45;
+      // Path 2 (correction step) no longer re-applies corner comp — these factors now cover the full cost.
+      var cornerFactor = (numLines || 1) <= 1 ? 0.10 : 0.20;
       totalInset += Math.max(0, innerRx * cornerFactor);
     }
 
@@ -2755,6 +2753,12 @@ const SvgRenderer = {
     // Use bounding_width from DB as the text zone reference (calibrated per template).
     // Not vbWidth (too large, includes stroke/padding) or template rect (varies with original font).
     var actualRectWidth = maxWidth;
+    // Frame B rect: every template has its own bounding_width in the DB (varies 800-1200+).
+    // For cross-style consistency we lock the rect to a single canonical width so the
+    // produced stamp is identical regardless of which style template was loaded.
+    if (stampShape !== 'square') {
+      actualRectWidth = 1052; // canonical width (plain template baseline)
+    }
     var vbWidthMatch = svgString.match(/viewBox=["'][^"']*\s([\d.]+)\s[\d.]+["']/);
     var vbWidth = vbWidthMatch ? parseFloat(vbWidthMatch[1]) : 1000;
 
@@ -3088,7 +3092,7 @@ const SvgRenderer = {
       // Unified text gap (all frames use same values — addDoubleFrame handles outer/inner)
       var textGap = hInnerGap;
       if (stampShape !== 'square') {
-        textGap = 25; // Fixed — style-independent
+        textGap = 18; // Fixed — style-independent (was 25, tightened to bring text closer to inner rect)
       }
       if (stampShape === 'square') {
         textGap = 30; // default (plain, perf line, zigzag, torn edge, chalk)
@@ -3454,16 +3458,8 @@ const SvgRenderer = {
         var corrDfSw = Math.max(dfSwMin2, Math.min(dfSwMax2, proportionalSw));
         var corrInnerSw = Math.max(6, Math.round(corrDfSw * 0.36));
         var correctedInset = corrInnerSw / 2;
-        // Corner compensation: rounded corners eat into rectangular text area
-        var CORNER_RX2 = {
-          soft_round: 35, medium_round: 80, strong_round: 120,
-          mixed_top_straight: 120, mixed_top_round: 120,
-          mixed_diag_down: 120, mixed_diag_up: 120
-        };
-        var cornerRx2 = CORNER_RX2[cornerType] || 0;
-        var innerRx2 = Math.max(0, cornerRx2 - correctedInset);
-        var cornerComp = innerRx2 * 0.25;
-        var correctedHPad = textGap + correctedInset + cornerComp;
+        // Corner comp lives in computeTextZone (Path 1) only — no second application here.
+        var correctedHPad = textGap + correctedInset;
         var padDelta = correctedHPad - hPadding;
         if (Math.abs(padDelta) > 1) {
           hPadding = correctedHPad;
@@ -6162,25 +6158,29 @@ const SvgRenderer = {
     var cornerTypeM = svgStr.match(/data-corner-type="([^"]+)"/);
     var frameCornerType = cornerTypeM ? cornerTypeM[1] : 'straight';
     var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
-    // Outset: distance from inner rect to outer rect center line.
-    // Base formula for plain/filter styles; stitch overrides below to match plain's gap.
+    // Outset: distance from inner rect outer-stroke edge to outer rect center line.
+    // Goal: every style produces the SAME visible white gap (`whiteGap`) between the
+    // inner rect outer edge and the visible decoration's inner edge — independent of
+    // whether the decoration is a thick stroke (plain), dots (stitch), a wavy path,
+    // or a brush group. Each branch computes its own outset to achieve that.
     // Fill-independent: geometry is identical for outlined and filled.
     var whiteGap = innerSw;
-    var outset = effectiveOsw / 2 + whiteGap + innerSw / 2;
+    var outset = effectiveOsw / 2 + whiteGap + innerSw / 2; // plain / filter / border / brush / perfLine
     if (bi.stitch) {
-      // Stitch dots ARE the visual border (outer rect stroke hidden).
-      // Standard outset creates excess gap because it reserves space for a thick outer stroke.
-      // Target: dot inner edge at `whiteGap` from inner rect outer stroke edge (same as plain).
+      // Stitch dots are placed at `outset + sOff` away from inner rect; inner edge of
+      // dot ring is at `outset + sOff - fbSS/2`. We want that == innerSw/2 + whiteGap.
       var stitchSizeM2 = svgStr.match(/data-stitch-size="([\d.]+)"/);
       var baseSS = stitchSizeM2 ? parseFloat(stitchSizeM2[1]) : 30;
-      var fbSS = Math.round(baseSS * 1.4);  // same 1.4x scaling applied later at line 6253
-      outset = Math.max(innerSw, whiteGap + innerSw / 2 - fbSS * 0.25);
+      var fbSS = Math.round(baseSS * 1.4);
+      var sOffStitch = fbSS * 0.75; // matches stitch generator
+      outset = innerSw / 2 + whiteGap - sOffStitch + fbSS / 2;
+      if (outset < innerSw) outset = innerSw; // never let outer rect collapse into inner stroke
     } else if (bi.wavy) {
-      // Wavy/zigzag path IS the visual border (outer rect stroke hidden).
-      // Outset must place outer rect so wavy inner edge sits at whiteGap from inner rect.
+      // Wavy/zigzag path is centered on outset; inner peak intrudes by `wavyInnerEdge`
+      // toward the inner rect. We want inner peak at `innerSw/2 + whiteGap` from inner rect.
       var bieM = svgStr.match(/data-border-inner-edge="([\d.]+)"/);
       var wavyInnerEdge = bieM ? parseFloat(bieM[1]) : (wavySw / 2 + 10);
-      outset = whiteGap + innerSw / 2 + wavyInnerEdge;
+      outset = innerSw / 2 + whiteGap + wavyInnerEdge;
     }
     // The existing rect (ox, oy, ow, oh) is now the INNER frame
     var ix = ox, iy = oy, iw = ow, ih = oh;
