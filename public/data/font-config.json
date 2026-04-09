@@ -7,7 +7,7 @@
       "dy": 0,
       "wb": 1,
       "hb": 1.07,
-      "stroke": 10,
+      "stroke": 5,
       "lineSpacing": 1,
       "ws": 0
     },
@@ -18,7 +18,7 @@
       "dy": 0,
       "wb": 0.98,
       "hb": 0.93,
-      "stroke": 10,
+      "stroke": 5,
       "lineSpacing": 1,
       "ws": 0
     },
@@ -29,7 +29,7 @@
       "dy": 0.02,
       "wb": 1,
       "hb": 1.01,
-      "stroke": 10,
+      "stroke": 5,
       "lineSpacing": 0.85,
       "ws": 0
     },
@@ -40,7 +40,7 @@
       "dy": 0,
       "wb": 1.03,
       "hb": 1,
-      "stroke": 10,
+      "stroke": 5,
       "lineSpacing": 1,
       "ws": 0
     }

@@ -998,21 +998,36 @@ const SvgRenderer = {
       rY = parseFloat(innerRectM[2]);
       rW = parseFloat(innerRectM[3]);
       rH = parseFloat(innerRectM[4]);
-      sw = 0;
-      // Constant-aspect viewBox: pad small-corner cases extra so the final viewBox W×H
-      // is identical across all corner types. The rendered SVG element stays a constant
-      // size → text never shifts position when the user toggles corner radii.
-      // FORMULA MUST MATCH _applyAutoFitSizing correction step (line ~3457) — keep in sync.
-      var ctM = svgString.match(/data-corner-type="([^"]+)"/);
-      var ct = ctM ? ctM[1] : 'straight';
-      var CR_RX = { soft_round: 35, medium_round: 80, strong_round: 120,
-                    mixed_top_straight: 120, mixed_top_round: 120,
-                    mixed_diag_down: 120, mixed_diag_up: 120 };
-      var rxV = CR_RX[ct] || 0;
-      var actualCC = Math.max(0, rxV * 0.30 - 18);
-      if (actualCC > 0) actualCC += 4;
-      var MAX_CC = 22; // strong/mixed corner cornerComp at the formula's max
-      totalMargin = 200 + (MAX_CC - actualCC); // 200..222
+      // Per-row-mode constant target viewBox. vbW stays constant (1340) so horizontal
+      // dimensions never flicker. vbH varies by row mode, sized for the worst-case
+      // (Oswald + strong corner) inner rect height plus ~240 vu padding (decoration
+      // 160 + breathing 80). Within a row mode, all font/corner toggles produce the
+      // same svgH. Toggling between row modes is an explicit user choice — layout
+      // shift is acceptable.
+      var rkM = svgString.match(/data-rows-key="([^"]+)"/);
+      var rk = rkM ? rkM[1] : '1';
+      // Per-row vbW + vbH. Sized for Oswald + strong corner + max decoration extent
+      // (~80 vu each side for wavy strong / brushstroke).
+      // 1-row gets a smaller vbW because Oswald 1-row irW (904) is much narrower than
+      // Oswald 2+ row irW (~1077) — so 1-row's stamp can fill more of the viewBox.
+      var ROWS_TARGETS = {
+        '1':  { w: 1080, h: 380 },  // Oswald irW=904 + 160 deco; irH=213 + 167 deco
+        '2':  { w: 1240, h: 650 },  // Oswald irW=1067 + 160; irH=483 + 167
+        '3':  { w: 1240, h: 860 },
+        '2A': { w: 1240, h: 740 },
+        '3A': { w: 1240, h: 1940 }
+      };
+      var target = ROWS_TARGETS[rk] || ROWS_TARGETS['1'];
+      var TARGET_VB_W = target.w;
+      var TARGET_VB_H = target.h;
+      var rectCenterX = rX + rW / 2;
+      var rectCenterY = rY + rH / 2;
+      var newVbX = rectCenterX - TARGET_VB_W / 2;
+      var newVbY = rectCenterY - TARGET_VB_H / 2;
+      svgString = svgString.replace(/viewBox=["'][^"']+["']/,
+        'viewBox="' + newVbX.toFixed(2) + ' ' + newVbY.toFixed(2) +
+        ' ' + TARGET_VB_W.toFixed(2) + ' ' + TARGET_VB_H.toFixed(2) + '"');
+      return svgString;
     } else if (/data-frame-b="1"/.test(svgString)) {
       totalMargin = 100; // fallback for Frame B without inner rect data
     } else {
@@ -3733,6 +3748,11 @@ const SvgRenderer = {
       var newRectX = viewBoxCenterX - newRectWidth / 2;
       var newRectY = viewBoxCenterY - newRectHeight / 2;
 
+      // Stamp the row mode key so cropViewBoxToStamp can pick a per-row-count target viewBox.
+      // Encodes numLines + fat-mode suffix: '1', '2', '3', '2A', '3A'.
+      var rowsKey = String(numLines) + (_fatMode ? 'A' : '');
+      result = result.replace(/<svg\b/, '<svg data-rows-key="' + rowsKey + '"');
+
       // Debug text zone tracking (set during rect loop, drawn after)
       var debugZoneX, debugZoneY, debugZoneW, debugZoneH;
 
@@ -5073,11 +5093,28 @@ const SvgRenderer = {
     var vbX = parseFloat(vbMatch[1]), vbY = parseFloat(vbMatch[2]);
     var vbW = parseFloat(vbMatch[3]), vbH = parseFloat(vbMatch[4]);
 
-    // Full viewBox coverage — no inset
-    var clipX = vbX;
-    var clipY = vbY;
-    var clipW = vbW;
-    var clipH = vbH;
+    // Watermark should cover the STAMP bounds only, not the empty viewBox margin.
+    // For Frame B (data-inner-rect present): use inner rect + stampPad (covers worst-case
+    // outer decoration extent like wavy strong / brushstroke).
+    var clipX, clipY, clipW, clipH;
+    var irM = svgString.match(/data-inner-rect="([\d.\-]+),([\d.\-]+),([\d.]+),([\d.]+)"/);
+    if (irM) {
+      var ir_x = parseFloat(irM[1]);
+      var ir_y = parseFloat(irM[2]);
+      var ir_w = parseFloat(irM[3]);
+      var ir_h = parseFloat(irM[4]);
+      var stampPad = 30; // tight to stamp — covers most decoration; wavy/brush bleed past watermark slightly, OK
+      clipX = ir_x - stampPad;
+      clipY = ir_y - stampPad;
+      clipW = ir_w + stampPad * 2;
+      clipH = ir_h + stampPad * 2;
+    } else {
+      // Non-Frame-B fallback: full viewBox coverage
+      clipX = vbX;
+      clipY = vbY;
+      clipW = vbW;
+      clipH = vbH;
+    }
 
     // Logo watermark — dual layer (dark shadow + white logo) for universal visibility
     var logoW = Math.min(clipW, clipH) * 0.6;
@@ -5090,9 +5127,11 @@ const SvgRenderer = {
       'width="' + clipW.toFixed(2) + '" height="' + clipH.toFixed(2) + '" ' +
       'overflow="hidden" pointer-events="none">';
 
-    // Filter: force uniform grey regardless of input color (neutralizes colored [a] in logo)
+    // Two filters: white logo (visible on dark stamps) + dark logo (visible on light stamps).
+    // Layered together so the watermark reads on both backgrounds, including over the stamp itself.
     watermark += '<defs>' +
-      '<filter id="' + wmId + '-g"><feColorMatrix type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 1 0"/></filter>' +
+      '<filter id="' + wmId + '-w"><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/></filter>' +
+      '<filter id="' + wmId + '-d"><feColorMatrix type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.15  0 0 0 0 0.15  0 0 0 1 0"/></filter>' +
       '</defs>';
 
     var cx = clipW / 2, cy = clipH / 2;
@@ -5111,9 +5150,13 @@ const SvgRenderer = {
       }
     }
 
-    // Single grey layer — visible on both light and dark stamps
+    // Dual layer: white halo (slightly larger via higher opacity) + dark fill on top.
+    // The white layer makes the dark layer readable on dark backgrounds; on light
+    // backgrounds the dark layer is the dominant one. Both render over the stamp.
     watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
-      'opacity="0.4" filter="url(#' + wmId + '-g)">' + tiles + '</g>';
+      'opacity="0.55" filter="url(#' + wmId + '-w)">' + tiles + '</g>';
+    watermark += '<g transform="rotate(-25 ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ')" ' +
+      'opacity="0.45" filter="url(#' + wmId + '-d)">' + tiles + '</g>';
 
     watermark += '</svg>';
 

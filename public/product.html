@@ -74,7 +74,7 @@
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:8;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="display:none;order:8;">
         <label class="filter-bar-label">Style</label>
         <div class="filter-bar-dropdown-box" id="product-border-toggle" style="min-width:90px">
           <span class="filter-bar-dropdown-value" id="product-border-value" style="flex:1;height:21px;overflow:hidden;">Plain</span>
@@ -98,7 +98,7 @@
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:9;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="display:none;order:9;">
         <label class="filter-bar-label">Corners</label>
         <div class="filter-bar-dropdown-box" id="product-corner-toggle" style="min-width:100px;padding:2px 4px;">
           <span class="filter-bar-dropdown-value" id="product-corner-value" style="flex:1;height:40px;overflow:hidden;display:flex;align-items:center;font-family:'CourierPrime',monospace;">Straight</span>
@@ -161,7 +161,7 @@
         </div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:10;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="display:none;order:10;">
         <label class="filter-bar-label">Texture</label>
         <div class="filter-bar-dropdown-box" id="product-texture-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-texture-value">No</span>
@@ -170,7 +170,7 @@
         <div class="filter-bar-dropdown-list" id="product-texture-list"></div>
       </div>
 
-      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:11;">
+      <div class="filter-bar-group filter-bar-dropdown-group filter-bar-advanced" style="display:none;order:11;">
         <label class="filter-bar-label">Tilt</label>
         <div class="filter-bar-dropdown-box" id="product-tilt-toggle" style="min-width:52px">
           <span class="filter-bar-dropdown-value" id="product-tilt-value">No</span>
@@ -185,15 +185,15 @@
       <!-- "More..." toggle — sits after Color (order 4), becomes "Less" after Tilt (order 9) -->
       <div class="filter-bar-group" id="product-more-toggle" style="order:12;display:flex;align-items:flex-end;cursor:pointer;padding-bottom:8px;" onclick="
         var adv = document.querySelectorAll('.filter-bar-advanced');
-        var show = adv[0] && adv[0].style.visibility === 'hidden';
-        adv.forEach(function(el) { el.style.visibility = show ? '' : 'hidden'; el.style.pointerEvents = show ? '' : 'none'; });
+        var show = adv[0] && adv[0].style.display === 'none';
+        adv.forEach(function(el) { el.style.display = show ? '' : 'none'; });
         this.querySelector('span').textContent = show ? 'Less' : 'More...';
       ">
         <span style="color:#666;font-size:0.82rem;font-weight:600;white-space:nowrap;display:inline-block;min-width:3.2em;">More...</span>
       </div>
 
       <!-- Row 3: Font -->
-      <div class="filter-bar-group filter-bar-font-group filter-bar-advanced" style="visibility:hidden;pointer-events:none;order:7;">
+      <div class="filter-bar-group filter-bar-font-group filter-bar-advanced" style="display:none;order:7;">
         <label class="filter-bar-label">Font</label>
         <div class="filter-bar-font-box" id="product-font-toggle">
           <span class="filter-bar-font-value" id="product-font-value"></span>
@@ -1401,6 +1401,16 @@
         overlay.innerHTML = svgEl.outerHTML;
         var zoomSvg = overlay.querySelector('svg');
         if (zoomSvg) {
+          // Crop viewBox to stamp bounds (inner rect + small padding) so the zoom
+          // doesn't show the empty viewBox margins around the stamp.
+          var ir = svgEl.getAttribute('data-inner-rect');
+          if (ir) {
+            var p = ir.split(',').map(parseFloat);
+            var zoomPad = 60; // tight padding around stamp for zoom
+            zoomSvg.setAttribute('viewBox',
+              (p[0] - zoomPad) + ' ' + (p[1] - zoomPad) + ' ' +
+              (p[2] + zoomPad * 2) + ' ' + (p[3] + zoomPad * 2));
+          }
           zoomSvg.removeAttribute('width');
           zoomSvg.removeAttribute('height');
           zoomSvg.style.maxWidth = '90vw';
@@ -1633,10 +1643,34 @@
 
           previewEl.innerHTML = '';
           var img = SvgRenderer.createSvgImage(svg);
+          // Responsive sizing: desktop uses fixed 636 card width; mobile shrinks fluidly.
+          // Width-driven within each viewport class; tall stamps (2/3/3A) cap at MAX_SVG_H.
           var pvSvg = img.querySelector('svg');
           if (pvSvg) {
-            pvSvg.style.maxWidth = '90%';
-            pvSvg.style.maxHeight = '500px';
+            var vbAttr = pvSvg.getAttribute('viewBox');
+            if (vbAttr) {
+              var vbParts = vbAttr.split(/\s+/).map(parseFloat);
+              var vbAspect = vbParts[2] / vbParts[3];
+              var DESKTOP_CARD_W = 636;
+              var CARD_PAD = 32;       // 16 px CSS padding each side
+              var cardW = Math.min(window.innerWidth - 40, DESKTOP_CARD_W);
+              var FIXED_SVG_W = cardW - CARD_PAD;
+              var MAX_SVG_H = 500;     // desktop cap
+              if (window.innerWidth <= 768) {
+                // Mobile: cap svgH to viewport availability (leave room for header + customize bar + sidebar)
+                MAX_SVG_H = Math.max(280, window.innerHeight - 280);
+              }
+              var svgW = FIXED_SVG_W;
+              var svgH = svgW / vbAspect;
+              // If the natural height would exceed MAX_SVG_H, fall back to height-driven
+              // sizing: scale svgW down too to preserve viewBox aspect.
+              if (svgH > MAX_SVG_H) {
+                svgH = MAX_SVG_H;
+                svgW = svgH * vbAspect;
+              }
+              pvSvg.style.width = svgW.toFixed(0) + 'px';
+              pvSvg.style.height = svgH.toFixed(0) + 'px';
+            }
           }
           previewEl.appendChild(img);
 
