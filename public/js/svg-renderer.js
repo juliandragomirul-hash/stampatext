@@ -1014,12 +1014,14 @@ const SvgRenderer = {
         '1':  { w: 1080, h: 380 },  // Oswald irW=904 + 160 deco; irH=213 + 167 deco
         '2':  { w: 1240, h: 650 },  // Oswald irW=1067 + 160; irH=483 + 167
         '3':  { w: 1240, h: 860 },
-        '2A': { w: 1240, h: 740 },
-        '3A': { w: 1240, h: 1940 }
+        '2A': { w: 1240, h: 740 }
       };
-      var target = ROWS_TARGETS[rk] || ROWS_TARGETS['1'];
-      var TARGET_VB_W = target.w;
-      var TARGET_VB_H = target.h;
+      var target = ROWS_TARGETS[rk];
+      var TARGET_VB_W = target ? target.w : 1240;
+      // Rows without a fixed target (3A, 4, 5, 4A, 5A, …) use adaptive height:
+      // actual inner rect + 240 vu deco/breathing padding. Accepts minor layout
+      // shift on font toggle — better than a worst-case box or missing entry.
+      var TARGET_VB_H = (target && target.h > 0) ? target.h : (rH + 240);
       var rectCenterX = rX + rW / 2;
       var rectCenterY = rY + rH / 2;
       var newVbX = rectCenterX - TARGET_VB_W / 2;
@@ -2731,7 +2733,9 @@ const SvgRenderer = {
         // But visually the shapes crowd the interior — need some breathing room.
         totalInset = 15;
       } else {
-        totalInset = sw / 2; // plain border
+        // Frame A plain: stroke lives on the outer rect (added by addDoubleFrame outset),
+        // so no need to reserve sw/2 inside the original rect. Small breathing room only.
+        totalInset = (frameMode === 'single') ? sw * 0.15 : sw / 2;
       }
       // Stitch shapes crowd visually regardless of fill — enforce minimum
       if (borderFlags.stitch) {
@@ -3121,7 +3125,9 @@ const SvgRenderer = {
       // Unified text gap (all frames use same values — addDoubleFrame handles outer/inner)
       var textGap = hInnerGap;
       if (stampShape !== 'square') {
-        textGap = 18; // Fixed — style-independent (was 25, tightened to bring text closer to inner rect)
+        // Frame A: no inner rect, so text can sit closer to the outer border.
+        // Frame B/C: inner rect needs breathing room from text.
+        textGap = (frameMode === 'single') ? 8 : 18;
       }
       if (stampShape === 'square') {
         textGap = 30; // default (plain, perf line, zigzag, torn edge, chalk)
@@ -6257,11 +6263,21 @@ const SvgRenderer = {
     }
     // The existing rect (ox, oy, ow, oh) is now the INNER frame
     var ix = ox, iy = oy, iw = ow, ih = oh;
-    // No outset boost for rounded corners — the visible inner-to-outer gap must stay
-    // equal to whiteGap regardless of corner radius (Plain reference invariant).
+    // Frame A: no inner rect visible, so reduce outset — text fills the border tightly.
+    // Keep just enough margin for the outer stroke; drop the whiteGap + innerSw
+    // that exist only to separate inner rect from outer border.
+    var effectiveOutset = outset;
+    if (frameMode === 'single') {
+      // Plain: stroke extends inward by sw/2, so outset can be reduced.
+      // Decorative: borders have no visible rect stroke — keep full outset
+      // so decorations stay at their calibrated Frame B positions.
+      // The reduced textGap (8 vs 18) already tightens text-to-border gap.
+      var hasDecorative = bi.stitch || bi.wavy || bi.brush || bi.border || bi.filter;
+      effectiveOutset = hasDecorative ? outset : (outset - whiteGap - innerSw / 2);
+    }
     // Compute outer rect by expanding outward
-    var outerX = ox - outset, outerY = oy - outset;
-    var outerW = ow + outset * 2, outerH = oh + outset * 2;
+    var outerX = ox - effectiveOutset, outerY = oy - effectiveOutset;
+    var outerW = ow + effectiveOutset * 2, outerH = oh + effectiveOutset * 2;
 
     // Helper: build a rect/path shape with corner radius adjustment
     var self = this;
@@ -6312,7 +6328,7 @@ const SvgRenderer = {
     }
     var outerStrokeVal = (outerStroke && outerStroke !== 'none') ? outerStroke : innerColor;
     if (!hasVisibleOuterStroke) outerStrokeVal = outerStroke || 'none';
-    var outerRectEl = _shape(outerX, outerY, outerW, outerH, outerFillVal, outerStrokeVal, outerSwVal, outset);
+    var outerRectEl = _shape(outerX, outerY, outerW, outerH, outerFillVal, outerStrokeVal, outerSwVal, effectiveOutset);
 
     // Outlined sawtooth/perforated: white gap + colored inner rect (special handling)
     if (bi.border && !isFull) {

@@ -1641,6 +1641,8 @@
 
           currentSvg = svg;
 
+          // Lock height before clearing to prevent layout shift during swap
+          previewEl.style.minHeight = previewEl.offsetHeight + 'px';
           previewEl.innerHTML = '';
           var img = SvgRenderer.createSvgImage(svg);
           // Responsive sizing: desktop uses fixed 636 card width; mobile shrinks fluidly.
@@ -1655,10 +1657,12 @@
               var CARD_PAD = 32;       // 16 px CSS padding each side
               var cardW = Math.min(window.innerWidth - 40, DESKTOP_CARD_W);
               var FIXED_SVG_W = cardW - CARD_PAD;
-              var MAX_SVG_H = 500;     // desktop cap
+              // Viewport-aware height cap: leave room for header + back link + customize bar + padding (~250px overhead)
+              var MAX_SVG_H;
               if (window.innerWidth <= 768) {
-                // Mobile: cap svgH to viewport availability (leave room for header + customize bar + sidebar)
                 MAX_SVG_H = Math.max(280, window.innerHeight - 280);
+              } else {
+                MAX_SVG_H = Math.max(350, window.innerHeight - 250);
               }
               var svgW = FIXED_SVG_W;
               var svgH = svgW / vbAspect;
@@ -1673,6 +1677,7 @@
             }
           }
           previewEl.appendChild(img);
+          previewEl.style.minHeight = '';
 
           updateDescription();
           updateUrl();
