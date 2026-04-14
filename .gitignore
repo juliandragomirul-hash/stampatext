@@ -4,3 +4,7 @@ npm-cache/
 temp_*
 nul
 stampatext recuzita/
+.claude/
+.playwright-mcp/
+test-screenshots/
+test-*.png

@@ -9,6 +9,16 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
     "dotenv": "^17.3.1",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "hyphenation.de": "^0.2.1",
+    "hyphenation.en-us": "^0.2.1",
+    "hyphenation.es": "^0.2.1",
+    "hyphenation.fr": "^0.2.1",
+    "hyphenation.it": "^0.2.1",
+    "hyphenation.pt": "^0.2.1",
+    "hypher": "^0.2.5"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.39.1"
   }
 }

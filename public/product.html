@@ -1401,15 +1401,27 @@
         overlay.innerHTML = svgEl.outerHTML;
         var zoomSvg = overlay.querySelector('svg');
         if (zoomSvg) {
-          // Crop viewBox to stamp bounds (inner rect + small padding) so the zoom
-          // doesn't show the empty viewBox margins around the stamp.
-          var ir = svgEl.getAttribute('data-inner-rect');
-          if (ir) {
-            var p = ir.split(',').map(parseFloat);
-            var zoomPad = 60; // tight padding around stamp for zoom
+          // Crop viewBox tightly around the actual outermost stamp geometry.
+          // Prefer the asymmetric outer frame path (it sits outside the inner
+          // rect by the full band thickness); fall back to inner rect.
+          var zoomPad = 40;
+          var asymOuter = svgEl.querySelector('path[data-asym-frame="1"][data-rect-w]');
+          var cropRect = null;
+          if (asymOuter) {
+            cropRect = [
+              parseFloat(asymOuter.getAttribute('data-rect-x')),
+              parseFloat(asymOuter.getAttribute('data-rect-y')),
+              parseFloat(asymOuter.getAttribute('data-rect-w')),
+              parseFloat(asymOuter.getAttribute('data-rect-h'))
+            ];
+          } else {
+            var ir = svgEl.getAttribute('data-inner-rect');
+            if (ir) cropRect = ir.split(',').map(parseFloat);
+          }
+          if (cropRect) {
             zoomSvg.setAttribute('viewBox',
-              (p[0] - zoomPad) + ' ' + (p[1] - zoomPad) + ' ' +
-              (p[2] + zoomPad * 2) + ' ' + (p[3] + zoomPad * 2));
+              (cropRect[0] - zoomPad) + ' ' + (cropRect[1] - zoomPad) + ' ' +
+              (cropRect[2] + zoomPad * 2) + ' ' + (cropRect[3] + zoomPad * 2));
           }
           zoomSvg.removeAttribute('width');
           zoomSvg.removeAttribute('height');

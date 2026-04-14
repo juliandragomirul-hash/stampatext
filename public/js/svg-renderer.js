@@ -7,6 +7,20 @@
  */
 const SvgRenderer = {
 
+  // Phase 1 flag: asymmetric frame stroke (equal optical weight on non-square rects).
+  // See C:\Users\Iulian\.claude\plans\eager-painting-balloon.md for the full context.
+  ASYMMETRIC_STROKE: true,
+  // Compensation exponent: swV = sw * aspect^k (and swH = sw on wide rects).
+  // k=0 → no compensation (swV == sw); k=1 → full optical equalization (swH/H == swV/W).
+  // Realistic visual balance sits around 0.25–0.40 for wide rects.
+  ASYMMETRIC_STROKE_K: 0.08,
+
+  // Double-frame gap (visual white channel between outer and inner frame edges).
+  // Floor; the effective gap grows with outer band thickness so proportions stay
+  // consistent across row counts (thick band => wider gap).
+  DOUBLE_FRAME_GAP: 5,
+  DOUBLE_FRAME_GAP_RATIO: 0.28,
+
   // Font data cache for embedding in exported SVGs (base64 @font-face rules)
   _fontDataCache: {},
 
@@ -1026,6 +1040,42 @@ const SvgRenderer = {
       var rectCenterY = rY + rH / 2;
       var newVbX = rectCenterX - TARGET_VB_W / 2;
       var newVbY = rectCenterY - TARGET_VB_H / 2;
+      // Ensure the actual outer frame fits with breathing room. Scan all paths
+      // with data-rect-* (asym donuts AND mixed-corner paths), pick the largest,
+      // and account for stroke overflow (sw/2 outside the path). Without this,
+      // mixed-corner stamps on 4/5-row clip at left/right because the outer
+      // mixed path bbox only gets ~25 vu breathing while the stroke extends
+      // further outward.
+      var outerFrameCandidates = [];
+      var frameRe = /<(?:path|rect)\b([^>]*\bdata-rect-x="([\d.\-]+)"[^>]*\bdata-rect-y="([\d.\-]+)"[^>]*\bdata-rect-w="([\d.]+)"[^>]*\bdata-rect-h="([\d.]+)"[^>]*)\/?>/g;
+      var frm;
+      while ((frm = frameRe.exec(svgString)) !== null) {
+        var allAttrs = frm[1];
+        var fw = parseFloat(frm[4]), fh = parseFloat(frm[5]);
+        var swMatch = allAttrs.match(/\bstroke-width=["']([\d.]+)["']/);
+        outerFrameCandidates.push({
+          x: parseFloat(frm[2]), y: parseFloat(frm[3]), w: fw, h: fh,
+          sw: swMatch ? parseFloat(swMatch[1]) : 0,
+          area: fw * fh
+        });
+      }
+      outerFrameCandidates.sort(function(a, b) { return b.area - a.area; });
+      if (outerFrameCandidates.length > 0) {
+        var of = outerFrameCandidates[0];
+        var aox = of.x - of.sw / 2;
+        var aoy = of.y - of.sw / 2;
+        var aow = of.w + of.sw;
+        var aoh = of.h + of.sw;
+        var BREATHE = 30;
+        var halfW = Math.max(rectCenterX - (aox - BREATHE), (aox + aow + BREATHE) - rectCenterX);
+        var halfH = Math.max(rectCenterY - (aoy - BREATHE), (aoy + aoh + BREATHE) - rectCenterY);
+        var needW = halfW * 2;
+        var needH = halfH * 2;
+        if (needW > TARGET_VB_W) TARGET_VB_W = needW;
+        if (needH > TARGET_VB_H) TARGET_VB_H = needH;
+        newVbX = rectCenterX - TARGET_VB_W / 2;
+        newVbY = rectCenterY - TARGET_VB_H / 2;
+      }
       svgString = svgString.replace(/viewBox=["'][^"']+["']/,
         'viewBox="' + newVbX.toFixed(2) + ' ' + newVbY.toFixed(2) +
         ' ' + TARGET_VB_W.toFixed(2) + ' ' + TARGET_VB_H.toFixed(2) + '"');
@@ -1150,27 +1200,8 @@ const SvgRenderer = {
       return null;
     }
 
-    // Corner regions: vertex-centered, dynamic count
-    for (var pci = 0; pci < regions.corners.length; pci++) {
-      var cReg = regions.corners[pci];
-      if (cReg.totalLength <= 0) continue;
-      var armLen = cReg.totalLength / 2;
-      var mid = armLen;
-      var nSq = (armLen < plRadius) ? 1 : Math.max(2, Math.round((armLen - plRadius) / plSpacing) + 1);
-      var cornerStride = (nSq > 1) ? (armLen - plRadius) / (nSq - 1) : 0;
-      for (var ai = 0; ai < nSq; ai++) {
-        var d1 = mid - ai * cornerStride;
-        var pt = pointAtDist(cReg, d1);
-        if (pt) html += SvgRenderer._borderShape(plShape, pt.x, pt.y, plRadius, pt.rotDeg);
-        if (ai > 0) {
-          var d2 = mid + ai * cornerStride;
-          var pt2 = pointAtDist(cReg, d2);
-          if (pt2) html += SvgRenderer._borderShape(plShape, pt2.x, pt2.y, plRadius, pt2.rotDeg);
-        }
-      }
-    }
-
-    // Edge regions: uniform stride from widest edge
+    // Pre-compute uniform refStride from widest edge — corners and edges share it
+    // for seamless perimeter continuity.
     var plGap = Math.max(0, plSpacing - plRadius * 2);
     var refStride = plSpacing;
     for (var pei = 0; pei < regions.edges.length; pei++) {
@@ -1182,15 +1213,75 @@ const SvgRenderer = {
       refStride = (av - plRadius * 2) / (rn - 1);
       break;
     }
+
+    // Corner regions: vertex-anchored, spacing = refStride (matches edges).
+    // The region layout is: [prev-edge tail] [optional arc] [next-edge head].
+    // The VERTEX sits at: tailLen + arcLen/2. We place one dot at the vertex,
+    // then step outward in each direction independently (arms may be
+    // asymmetric if an adjacent edge was too short and extensions got clamped).
+    var cornerLeftovers = []; // per-corner: { prev, next } distance from farthest dot to each region boundary
+    for (var pci = 0; pci < regions.corners.length; pci++) {
+      var cReg = regions.corners[pci];
+      if (cReg.totalLength <= 0) { cornerLeftovers.push({ prev: 0, next: 0 }); continue; }
+      var tailLen = 0, arcLen = 0;
+      for (var si = 0; si < cReg.segments.length; si++) {
+        var s = cReg.segments[si];
+        if (s.type === 'arc') { arcLen = s.len; break; }
+        if (tailLen > 0) break; // already consumed the tail — next h/v is the head
+        tailLen = s.len;
+      }
+      var vertexDist = tailLen + arcLen / 2;
+      var prevArm = vertexDist;                        // region-start → vertex
+      var nextArm = cReg.totalLength - vertexDist;     // vertex → region-end
+      // Vertex dot
+      var vpt = pointAtDist(cReg, vertexDist);
+      if (vpt) html += SvgRenderer._borderShape(plShape, vpt.x, vpt.y, plRadius, vpt.rotDeg);
+      // Step outward into the prev arm
+      var nPrev = (prevArm < plRadius) ? 0 : Math.max(0, Math.floor((prevArm - plRadius) / refStride));
+      for (var k = 1; k <= nPrev; k++) {
+        var pt1 = pointAtDist(cReg, vertexDist - k * refStride);
+        if (pt1) html += SvgRenderer._borderShape(plShape, pt1.x, pt1.y, plRadius, pt1.rotDeg);
+      }
+      // Step outward into the next arm
+      var nNext = (nextArm < plRadius) ? 0 : Math.max(0, Math.floor((nextArm - plRadius) / refStride));
+      for (var k = 1; k <= nNext; k++) {
+        var pt2 = pointAtDist(cReg, vertexDist + k * refStride);
+        if (pt2) html += SvgRenderer._borderShape(plShape, pt2.x, pt2.y, plRadius, pt2.rotDeg);
+      }
+      // Leftover = distance from farthest dot to region boundary on each side
+      cornerLeftovers.push({
+        prev: prevArm - nPrev * refStride,
+        next: nextArm - nNext * refStride
+      });
+    }
+
+    // Edge regions: first dot sits `refStride` from the previous corner's last dot.
+    // Corner index order from _splitTraceRegions: [TR, BR, BL, TL]
+    // Edge index order:                           [top, right, bottom, left]
+    // Mapping: edge[i]'s LEAD (start-side) corner = corners[(i+3)%4]
+    //          edge[i]'s TRAIL (end-side) corner  = corners[i]
+    //   top(0):    lead=TL(3), trail=TR(0)
+    //   right(1):  lead=TR(0), trail=BR(1)
+    //   bottom(2): lead=BR(1), trail=BL(2)
+    //   left(3):   lead=BL(2), trail=TL(3)
+    // The lead corner feeds the edge via its NEXT arm; the trail corner via its PREV arm.
     for (var pei = 0; pei < regions.edges.length; pei++) {
       var edgeReg = regions.edges[pei];
       var edgeLen = edgeReg.totalLength;
       if (edgeLen <= 0 || !edgeReg.segments.length) continue;
-      var available = edgeLen - 2 * plGap;
-      if (available <= 0) continue;
-      var nEdge = Math.max(1, Math.round((available - plRadius * 2) / refStride) + 1);
-      var edgeStride = (nEdge > 1) ? (available - plRadius * 2) / (nEdge - 1) : 0;
-      var startOff = (nEdge === 1) ? plGap + available / 2 : plGap + plRadius;
+      var leadL = cornerLeftovers[(pei + 3) % 4] || { prev: 0, next: 0 };
+      var trailL = cornerLeftovers[pei] || { prev: 0, next: 0 };
+      var leadLeftover = leadL.next;   // lead corner's NEXT arm boundary leftover
+      var trailLeftover = trailL.prev; // trail corner's PREV arm boundary leftover
+      // First-dot offset: gap across boundary = leadLeftover + firstOff = refStride.
+      // So firstOff = refStride - leadLeftover.
+      var firstOff = Math.max(0, refStride - leadLeftover);
+      var lastMax = edgeLen - Math.max(0, refStride - trailLeftover);
+      var available = lastMax - firstOff;
+      if (available < 0) continue;
+      var nEdge = Math.max(1, Math.round(available / refStride) + 1);
+      var edgeStride = (nEdge > 1) ? available / (nEdge - 1) : 0;
+      var startOff = (nEdge === 1) ? firstOff + available / 2 : firstOff;
       for (var si = 0; si < nEdge; si++) {
         var dist = startOff + si * edgeStride;
         var pt = pointAtDist(edgeReg, dist);
@@ -2746,9 +2837,9 @@ const SvgRenderer = {
     // Corner compensation: rounded corners eat into rectangular space
     if (cornerType && cornerType !== 'straight') {
       var CORNER_RX = {
-        soft_round: 35, medium_round: 80, strong_round: 120,
-        mixed_top_straight: 120, mixed_top_round: 120,
-        mixed_diag_down: 120, mixed_diag_up: 120
+        soft_round: 35, medium_round: 80, strong_round: 130,
+        mixed_top_straight: 35, mixed_top_round: 35,
+        mixed_diag_down: 35, mixed_diag_up: 35
       };
       var outerRx = CORNER_RX[cornerType] || 0;
       var innerRx = Math.max(0, outerRx - totalInset);
@@ -3501,11 +3592,15 @@ const SvgRenderer = {
         // KEEP IN SYNC: cropViewBoxToStamp Frame B branch mirrors this formula to
         // compute its viewBox padding — if you retune cornerComp, update both sites.
         var CORNER_RX2 = {
-          soft_round: 35, medium_round: 80, strong_round: 120,
-          mixed_top_straight: 120, mixed_top_round: 120,
-          mixed_diag_down: 120, mixed_diag_up: 120
+          soft_round: 35, medium_round: 80, strong_round: 130,
+          mixed_top_straight: 35, mixed_top_round: 35,
+          mixed_diag_down: 35, mixed_diag_up: 35
         };
         var cornerRx2 = CORNER_RX2[cornerType] || 0;
+        // Use raw rx so padding grows the rect enough for the requested
+        // curvature to actually render (cap scales with rect size). This
+        // trades stamp size for visible corner radius — intended behavior
+        // for strong_round on short stamps.
         var cornerComp = Math.max(0, cornerRx2 * 0.30 - textGap);
         // Visual safety bump for active corner radii (covers font ink overflow,
         // anti-aliasing, and the difference between bbox and glyph extents).
@@ -3970,7 +4065,7 @@ const SvgRenderer = {
 
       // ---- Compute corner radius for decorative borders ----
       var DECO_CORNER_RX = {
-        soft_round: 35, medium_round: 80, strong_round: 120
+        soft_round: 35, medium_round: 80, strong_round: 130
       };
       var decoCornerRx = 0;
       if (cornerType && cornerType !== 'straight') {
@@ -5653,11 +5748,13 @@ const SvgRenderer = {
    * Returns {tl, tr, br, bl} or null if not a mixed type.
    */
   _getMixedCorners(cornerType) {
+    // Mixed variants use soft_round rx (35) for their rounded corners — 120 was
+    // too aggressive when paired with sharp corners on the opposing side.
     var MIXED = {
-      mixed_top_straight: { tl: 0, tr: 0, br: 120, bl: 120 },
-      mixed_top_round:    { tl: 120, tr: 120, br: 0, bl: 0 },
-      mixed_diag_down:    { tl: 0, tr: 120, br: 0, bl: 120 },
-      mixed_diag_up:      { tl: 120, tr: 0, br: 120, bl: 0 }
+      mixed_top_straight: { tl: 0, tr: 0, br: 35, bl: 35 },
+      mixed_top_round:    { tl: 35, tr: 35, br: 0, bl: 0 },
+      mixed_diag_down:    { tl: 0, tr: 35, br: 0, bl: 35 },
+      mixed_diag_up:      { tl: 35, tr: 0, br: 35, bl: 0 }
     };
     return MIXED[cornerType] || null;
   },
@@ -5668,13 +5765,31 @@ const SvgRenderer = {
    * When a radius is 0, a sharp corner is drawn (no arc).
    */
   /**
+   * Maximum corner radius that keeps the shape reading as a rectangle rather
+   * than a pill/capsule. Reserves a straight segment on both axes that scales
+   * with the short side (so strong_round on a short stamp doesn't swallow the
+   * whole vertical edge). Absolute floor of 30 for very tiny rects.
+   * Shared by _generateTrace, _shape, and applyCornerRadius.
+   */
+  _cornerRadiusCap: function(w, h) {
+    var shortAxis = Math.min(w, h);
+    // 0.15 reserve keeps a visible straight segment while letting strong_round
+    // express itself on short stamps (1-row). Was 0.35; at that level
+    // medium_round and strong_round clamped to the same value on 1-row.
+    var minStraight = Math.max(30, shortAxis * 0.15);
+    var capW = Math.max(0, (w - minStraight) / 2);
+    var capH = Math.max(0, (h - minStraight) / 2);
+    return Math.min(capW, capH);
+  },
+
+  /**
    * Generate a trace object for a rounded rect — the foundation for all border generators.
    * Returns { d, rxTL, rxTR, rxBR, rxBL, x, y, w, h, segments[] }
    * @param {string} cornerType - 'straight', 'soft_round', 'medium_round', 'strong_round', 'mixed_*'
    */
   _generateTrace: function(x, y, w, h, cornerType, rxOffset) {
     var CORNER_RX = {
-      soft_round: 35, medium_round: 80, strong_round: 120
+      soft_round: 35, medium_round: 80, strong_round: 130
     };
     var rxTL = 0, rxTR = 0, rxBR = 0, rxBL = 0;
 
@@ -5696,8 +5811,11 @@ const SvgRenderer = {
       if (rxBL > 0) rxBL = Math.max(0, rxBL + rxOffset);
     }
 
-    // Clamp rx values to half the rect dimension
-    var maxRx = Math.min(w / 2, h / 2);
+    // Clamp rx so both axes always retain a visible straight segment.
+    // Without this, strong_round on short/narrow stamps collapses the short-axis
+    // straight run to ~0, making one pair of sides read as pure arc (the user
+    // perceives it as "thinner" than the long-axis sides).
+    var maxRx = SvgRenderer._cornerRadiusCap(w, h);
     rxTL = Math.min(rxTL, maxRx); rxTR = Math.min(rxTR, maxRx);
     rxBR = Math.min(rxBR, maxRx); rxBL = Math.min(rxBL, maxRx);
 
@@ -5985,6 +6103,269 @@ const SvgRenderer = {
   },
 
   /**
+   * Compute per-axis stroke thickness for equal optical weight on a non-square rect.
+   * On a square, swH == swV == sw. On a wide rect, swV > swH (vertical edges thicker
+   * so they read with the same optical weight as horizontal edges).
+   * See ASYMMETRIC_STROKE constant and the plan file for full derivation.
+   */
+  _asymmetricStrokeWeights(w, h, sw) {
+    if (!this.ASYMMETRIC_STROKE || w <= 0 || h <= 0 || sw <= 0) {
+      return { swH: sw, swV: sw };
+    }
+    var k = this.ASYMMETRIC_STROKE_K;
+    if (h <= w) {
+      var aspect = w / h;
+      return { swH: sw, swV: sw * Math.pow(aspect, k) };
+    } else {
+      var aspectT = h / w;
+      return { swH: sw * Math.pow(aspectT, k), swV: sw };
+    }
+  },
+
+  /**
+   * Build an asymmetric donut <path> d-string covering a frame of thickness swH on
+   * top/bottom and swV on left/right. Outer rect = (x,y,w,h), inner hole inset by
+   * swV horizontally and swH vertically. Uses fill-rule evenodd on the path tag.
+   * No rounded corners (Phase 1 — straight corners only).
+   */
+  _asymmetricDonutPath(x, y, w, h, swH, swV) {
+    var xi = x + swV, yi = y + swH;
+    var wi = w - swV * 2, hi = h - swH * 2;
+    // Outer clockwise
+    var d = 'M' + x.toFixed(2) + ' ' + y.toFixed(2) +
+            ' H' + (x + w).toFixed(2) +
+            ' V' + (y + h).toFixed(2) +
+            ' H' + x.toFixed(2) + ' Z';
+    // Inner counter-clockwise (hole)
+    d += ' M' + xi.toFixed(2) + ' ' + yi.toFixed(2) +
+         ' V' + (yi + hi).toFixed(2) +
+         ' H' + (xi + wi).toFixed(2) +
+         ' V' + yi.toFixed(2) + ' Z';
+    return d;
+  },
+
+  /**
+   * Rounded-rect asymmetric donut. Inner hole is a rounded rect (hx, hy, hw, hh)
+   * with uniform corner radius rxInner. Outer edge is offset outward by swV on
+   * left/right and swH on top/bottom; its corners are elliptical with radii
+   * (rxInner + swV, rxInner + swH) so the offset remains constant along the edge.
+   */
+  _asymmetricRoundedDonutPath(hx, hy, hw, hh, swH, swV, rxInner) {
+    var ox = hx - swV, oy = hy - swH;
+    var ow = hw + swV * 2, oh = hh + swH * 2;
+    var rxOX = rxInner + swV, rxOY = rxInner + swH;
+    // Clamp inner rx to half the hole's short side
+    var rxI = Math.max(0, Math.min(rxInner, Math.min(hw, hh) / 2));
+    var f = function(v) { return v.toFixed(2); };
+    // Outer (clockwise)
+    var d = 'M' + f(ox + rxOX) + ' ' + f(oy) +
+            ' H' + f(ox + ow - rxOX) +
+            ' A' + f(rxOX) + ' ' + f(rxOY) + ' 0 0 1 ' + f(ox + ow) + ' ' + f(oy + rxOY) +
+            ' V' + f(oy + oh - rxOY) +
+            ' A' + f(rxOX) + ' ' + f(rxOY) + ' 0 0 1 ' + f(ox + ow - rxOX) + ' ' + f(oy + oh) +
+            ' H' + f(ox + rxOX) +
+            ' A' + f(rxOX) + ' ' + f(rxOY) + ' 0 0 1 ' + f(ox) + ' ' + f(oy + oh - rxOY) +
+            ' V' + f(oy + rxOY) +
+            ' A' + f(rxOX) + ' ' + f(rxOY) + ' 0 0 1 ' + f(ox + rxOX) + ' ' + f(oy) +
+            ' Z';
+    // Inner hole (counter-clockwise)
+    d += ' M' + f(hx + rxI) + ' ' + f(hy) +
+         ' A' + f(rxI) + ' ' + f(rxI) + ' 0 0 0 ' + f(hx) + ' ' + f(hy + rxI) +
+         ' V' + f(hy + hh - rxI) +
+         ' A' + f(rxI) + ' ' + f(rxI) + ' 0 0 0 ' + f(hx + rxI) + ' ' + f(hy + hh) +
+         ' H' + f(hx + hw - rxI) +
+         ' A' + f(rxI) + ' ' + f(rxI) + ' 0 0 0 ' + f(hx + hw) + ' ' + f(hy + hh - rxI) +
+         ' V' + f(hy + rxI) +
+         ' A' + f(rxI) + ' ' + f(rxI) + ' 0 0 0 ' + f(hx + hw - rxI) + ' ' + f(hy) +
+         ' Z';
+    return d;
+  },
+
+  /**
+   * Post-process pass: rewrite outlined outer rects as asymmetric donut paths.
+   * Only targets rects with fill=none, stroke set, stroke-width>0, no rx/ry.
+   * Leaves filled rects, rounded rects, decorative-border rects, and already-converted
+   * paths (mixed corners) untouched — those are Phase 2.
+   */
+  applyAsymmetricStroke(svgStr) {
+    if (!this.ASYMMETRIC_STROKE) return svgStr;
+    var self = this;
+    // Pass 1: parse eligible rects into a list with their tag positions.
+    var rectRegex = /<rect\b([^>]*)\/>/gi;
+    var matches = [];
+    var mm;
+    while ((mm = rectRegex.exec(svgStr)) !== null) {
+      var attrs = mm[1];
+      if (/\sdata-(?:border|stitch|wavy|filter|brush-border)=["']/.test(attrs)) continue;
+      var fillM = attrs.match(/\bfill=["']([^"']*)["']/);
+      if (!fillM || fillM[1].toLowerCase() !== 'none') continue;
+      var strokeM = attrs.match(/\bstroke=["']([^"']*)["']/);
+      if (!strokeM || strokeM[1].toLowerCase() === 'none') continue;
+      var swM = attrs.match(/\bstroke-width=["']([\d.]+)["']/);
+      if (!swM) continue;
+      var sw = parseFloat(swM[1]);
+      if (!(sw > 0)) continue;
+      var wM = attrs.match(/\swidth=["']([\d.]+)["']/);
+      var hM = attrs.match(/\sheight=["']([\d.]+)["']/);
+      if (!wM || !hM) continue;
+      var xM = attrs.match(/\bx=["']([\d.\-]+)["']/);
+      var yM = attrs.match(/\by=["']([\d.\-]+)["']/);
+      var w = parseFloat(wM[1]), h = parseFloat(hM[1]);
+      var aspect = Math.max(w, h) / Math.max(1, Math.min(w, h));
+      if (aspect < 1.05) continue;
+      var rxM = attrs.match(/\srx=["']([\d.]+)["']/);
+      matches.push({
+        start: mm.index, end: mm.index + mm[0].length,
+        attrs: attrs, sw: sw, stroke: strokeM[1],
+        x: xM ? parseFloat(xM[1]) : 0,
+        y: yM ? parseFloat(yM[1]) : 0,
+        w: w, h: h,
+        rx: rxM ? parseFloat(rxM[1]) : 0,
+        area: w * h
+      });
+    }
+    if (matches.length === 0) return svgStr;
+
+    // Identify outer/inner pair: largest area = outer, next = inner.
+    matches.sort(function(a, b) { return b.area - a.area; });
+    var outerRect = matches[0];
+    var innerRect = matches[1] || null;
+
+    // Build donut geometry.
+    // Inner frame: standard asymmetric expansion around its rect.
+    // Outer frame: inner hole enforced to be DOUBLE_FRAME_GAP outside the inner
+    // frame's outer edge (so the white channel is a uniform gap). Outer edge
+    // of the outer frame stays at the expanded original outer rect position.
+    function stripStrokeAttrs(a) {
+      return a
+        .replace(/\sx=["'][^"']*["']/g, '')
+        .replace(/\sy=["'][^"']*["']/g, '')
+        .replace(/\swidth=["'][^"']*["']/g, '')
+        .replace(/\sheight=["'][^"']*["']/g, '')
+        .replace(/\sfill=["'][^"']*["']/g, '')
+        .replace(/\sstroke=["'][^"']*["']/g, '')
+        .replace(/\sstroke-width=["'][^"']*["']/g, '')
+        .replace(/\sstroke-miterlimit=["'][^"']*["']/g, '')
+        .replace(/\sstroke-linejoin=["'][^"']*["']/g, '');
+    }
+    function emitDonut(ox, oy, ow, oh, swH, swV, fill, carry, rxInner) {
+      var d;
+      if (rxInner && rxInner > 0) {
+        // Rounded: pass the INNER hole bounds (pinned to visual inner edge).
+        var hx = ox + swV, hy = oy + swH, hw = ow - swV * 2, hh = oh - swH * 2;
+        d = self._asymmetricRoundedDonutPath(hx, hy, hw, hh, swH, swV, rxInner);
+      } else {
+        d = self._asymmetricDonutPath(ox, oy, ow, oh, swH, swV);
+      }
+      return '<path d="' + d + '" fill="' + fill + '" fill-rule="evenodd"' +
+             ' data-asym-frame="1"' +
+             ' data-rect-x="' + ox.toFixed(2) + '" data-rect-y="' + oy.toFixed(2) +
+             '" data-rect-w="' + ow.toFixed(2) + '" data-rect-h="' + oh.toFixed(2) +
+             '"' + carry + '/>';
+    }
+
+    var replacements = {};
+
+    // Inner rect → donut with asymmetric thickness.
+    // Donut inner hole is pinned to the ORIGINAL rect's visual inner edge
+    // (rect.x + sw/2) so text padding is preserved. The stroke boost grows
+    // the outer edge outward.
+    var innerOuterBB = null; // visual outer edge of the inner band (gap reference)
+    if (innerRect) {
+      var iws = self._asymmetricStrokeWeights(innerRect.w, innerRect.h, innerRect.sw);
+      var iHoleX = innerRect.x + innerRect.sw / 2;
+      var iHoleY = innerRect.y + innerRect.sw / 2;
+      var iHoleW = innerRect.w - innerRect.sw;
+      var iHoleH = innerRect.h - innerRect.sw;
+      var iox = iHoleX - iws.swV;
+      var ioy = iHoleY - iws.swH;
+      var iow = iHoleW + iws.swV * 2;
+      var ioh = iHoleH + iws.swH * 2;
+      innerOuterBB = { x: iox, y: ioy, w: iow, h: ioh };
+      // Inner hole rx (rect had rx, its visual inner edge has rx - sw/2).
+      var iRxInner = innerRect.rx > 0 ? Math.max(0, innerRect.rx - innerRect.sw / 2) : 0;
+      innerOuterBB.rx = iRxInner;
+      replacements[innerRect.start] = {
+        end: innerRect.end,
+        html: emitDonut(iox, ioy, iow, ioh, iws.swH, iws.swV, innerRect.stroke, stripStrokeAttrs(innerRect.attrs), iRxInner)
+      };
+    }
+
+    // Outer rect → donut. Same principle: inner hole pinned to original
+    // visual inner edge; boost grows outer edge outward.
+    var ows = self._asymmetricStrokeWeights(outerRect.w, outerRect.h, outerRect.sw);
+    var oHoleX = outerRect.x + outerRect.sw / 2;
+    var oHoleY = outerRect.y + outerRect.sw / 2;
+    var oHoleW = outerRect.w - outerRect.sw;
+    var oHoleH = outerRect.h - outerRect.sw;
+    var oox = oHoleX - ows.swV;
+    var ooy = oHoleY - ows.swH;
+    var oow = oHoleW + ows.swV * 2;
+    var ooh = oHoleH + ows.swH * 2;
+
+    var outSwH = ows.swH, outSwV = ows.swV;
+    if (innerOuterBB) {
+      // Scale gap with outer band thickness so the proportion holds across row counts.
+      var outerAvgSw = (ows.swH + ows.swV) / 2;
+      var gap = Math.max(self.DOUBLE_FRAME_GAP, outerAvgSw * self.DOUBLE_FRAME_GAP_RATIO);
+      // Outer band inner hole must start at (innerOuterBB - gap) on each side.
+      // Therefore thickness swV = (innerOuterBB.x - gap) - oox; swH similar.
+      var holeX = innerOuterBB.x - gap;
+      var holeY = innerOuterBB.y - gap;
+      var holeW = innerOuterBB.w + gap * 2;
+      var holeH = innerOuterBB.h + gap * 2;
+      var targetSwV = holeX - oox;
+      var targetSwH = holeY - ooy;
+      // If outer rect sits INSIDE where we need the hole (negative thickness),
+      // grow the outer edge outward so we keep a sane minimum thickness.
+      var MIN_THICK = 6;
+      if (targetSwV < MIN_THICK) {
+        var pushX = MIN_THICK - targetSwV;
+        oox -= pushX; oow += pushX * 2; targetSwV = MIN_THICK;
+      }
+      if (targetSwH < MIN_THICK) {
+        var pushY = MIN_THICK - targetSwH;
+        ooy -= pushY; ooh += pushY * 2; targetSwH = MIN_THICK;
+      }
+      // Also make sure right/bottom edges line up with the hole (symmetry).
+      // Recompute outer box so hole sits centered.
+      oox = holeX - targetSwV;
+      ooy = holeY - targetSwH;
+      oow = holeW + targetSwV * 2;
+      ooh = holeH + targetSwH * 2;
+      outSwV = targetSwV;
+      outSwH = targetSwH;
+    }
+    // Outer band's inner hole rx: if inner frame has rx > 0, outer inner edge
+    // is at (inner outer edge + gap). Guard the zero case so straight corners
+    // stay sharp on the outer band (otherwise stroke+gap produces ~16px rx
+    // even with both inputs at 0).
+    var outerRxInner;
+    if (innerOuterBB && typeof innerOuterBB.rx === 'number' && innerOuterBB.rx > 0) {
+      var innerBandAvgSw = (iws.swH + iws.swV) / 2;
+      var innerOuterEdgeRx = innerOuterBB.rx + innerBandAvgSw;
+      outerRxInner = innerOuterEdgeRx + ((typeof gap === 'number') ? gap : self.DOUBLE_FRAME_GAP);
+    } else if (outerRect.rx > 0) {
+      outerRxInner = Math.max(0, outerRect.rx - outerRect.sw / 2);
+    } else {
+      outerRxInner = 0;
+    }
+    replacements[outerRect.start] = {
+      end: outerRect.end,
+      html: emitDonut(oox, ooy, oow, ooh, outSwH, outSwV, outerRect.stroke, stripStrokeAttrs(outerRect.attrs), outerRxInner)
+    };
+
+    // Apply replacements from last to first so indices stay valid.
+    var starts = Object.keys(replacements).map(Number).sort(function(a, b) { return b - a; });
+    var out = svgStr;
+    for (var si = 0; si < starts.length; si++) {
+      var s = starts[si], r = replacements[s];
+      out = out.slice(0, s) + r.html + out.slice(r.end);
+    }
+    return out;
+  },
+
+  /**
    * Build a <path> tag from per-corner radii, carrying over extra attributes (fill, stroke, etc).
    * Also stamps data-rect-x/y/w/h and data-mixed-type for downstream functions.
    */
@@ -6034,8 +6415,8 @@ const SvgRenderer = {
       var rectX = xM ? parseFloat(xM[1]) : 0;
       var rectY = yM ? parseFloat(yM[1]) : 0;
       var rectW = wMatch ? parseFloat(wMatch[1]) : 0;
-      // Cap each radius: no larger than half the short side minus a safety margin
-      var maxR = Math.max(0, (Math.min(rectW, rectH) - 10) / 2);
+      // Cap each radius so both axes keep a visible straight segment
+      var maxR = this._cornerRadiusCap(rectW, rectH);
       var tl = Math.min(mc.tl, maxR);
       var tr = Math.min(mc.tr, maxR);
       var br = Math.min(mc.br, maxR);
@@ -6056,13 +6437,12 @@ const SvgRenderer = {
 
     // === Uniform corners: set rx/ry on the rect ===
     // Offset path: inner_rx = rx - inset, outer inner edge = rx - sw/2. Stroke capped to 30 in autoFit.
-    var CORNER_RX = { soft_round: 35, medium_round: 80, strong_round: 120 };
+    var CORNER_RX = { soft_round: 35, medium_round: 80, strong_round: 130 };
     var targetRx = CORNER_RX[cornerType];
     if (!targetRx) return svgStr;
-    // Cap rx to prevent capsule/pill shape on wide stamps:
-    // ensure at least a short straight segment on each short side
-    var rx = rectH > 0 ? Math.min(targetRx, (rectH - 10) / 2) : targetRx;
-    rx = Math.max(rx, 0);
+    // Cap rx so both axes keep a visible straight segment
+    var rectWNum = parseFloat(outer.attrs.match(/\swidth=["']([\d.]+)["']/)[1]) || 0;
+    var rx = Math.max(0, Math.min(targetRx, this._cornerRadiusCap(rectWNum, rectH)));
     // Replace or add rx/ry on the outer rect
     var newAttrs = outer.full;
     if (/\brx=["'][\d.]+["']/.test(newAttrs)) {
@@ -6282,13 +6662,14 @@ const SvgRenderer = {
     // Helper: build a rect/path shape with corner radius adjustment
     var self = this;
     var _shape = function(sx, sy, sw2, sh2, fill, stroke, strokeW, cornerOffset) {
+      // Cap radii so both axes keep a visible straight segment (see _cornerRadiusCap)
+      var rCap = SvgRenderer._cornerRadiusCap(sw2, sh2);
       if (mixedType) {
         var mc = self._getMixedCorners(mixedType);
-        var maxR = Math.max(0, (Math.min(outerW, outerH) - 10) / 2);
-        var stl = mc.tl > 0 ? Math.max(0, Math.min(mc.tl, maxR) + cornerOffset) : 0;
-        var str = mc.tr > 0 ? Math.max(0, Math.min(mc.tr, maxR) + cornerOffset) : 0;
-        var sbr = mc.br > 0 ? Math.max(0, Math.min(mc.br, maxR) + cornerOffset) : 0;
-        var sbl = mc.bl > 0 ? Math.max(0, Math.min(mc.bl, maxR) + cornerOffset) : 0;
+        var stl = mc.tl > 0 ? Math.max(0, Math.min(mc.tl, rCap) + cornerOffset) : 0;
+        var str = mc.tr > 0 ? Math.max(0, Math.min(mc.tr, rCap) + cornerOffset) : 0;
+        var sbr = mc.br > 0 ? Math.max(0, Math.min(mc.br, rCap) + cornerOffset) : 0;
+        var sbl = mc.bl > 0 ? Math.max(0, Math.min(mc.bl, rCap) + cornerOffset) : 0;
         var d = self._rectToPath(sx, sy, sw2, sh2, stl, str, sbr, sbl);
         var tag = '<path d="' + d + '" fill="' + fill + '" stroke="' + stroke + '"';
         if (strokeW > 0) tag += ' stroke-width="' + strokeW + '" stroke-miterlimit="10"';
@@ -6297,8 +6678,8 @@ const SvgRenderer = {
           '" data-mixed-type="' + mixedType + '"';
         return tag + '/>';
       }
-      var srx = orx > 0 ? Math.max(0, orx + cornerOffset) : 0;
-      var sry = ory > 0 ? Math.max(0, ory + cornerOffset) : 0;
+      var srx = orx > 0 ? Math.max(0, Math.min(orx + cornerOffset, rCap)) : 0;
+      var sry = ory > 0 ? Math.max(0, Math.min(ory + cornerOffset, rCap)) : 0;
       var tag = '<rect x="' + sx.toFixed(2) + '" y="' + sy.toFixed(2) +
         '" width="' + sw2.toFixed(2) + '" height="' + sh2.toFixed(2) +
         '" fill="' + fill + '" stroke="' + stroke + '"';
@@ -6394,8 +6775,14 @@ const SvgRenderer = {
       var plSpacingM = svgStr.match(/data-perf-line-spacing="([\d.]+)"/);
       if (plShapeM && plRadiusM) {
         var plShape2 = plShapeM[1];
-        var plRadius2 = Math.round(parseFloat(plRadiusM[1]) * 0.6);  // scale down for delicate outer perforations
-        var plSpacing2 = plSpacingM ? parseFloat(plSpacingM[1]) : plRadius2 * 2.5;  // keep original spacing
+        var plScale = 0.6;
+        var plRadius2 = Math.max(3, Math.round(parseFloat(plRadiusM[1]) * plScale));
+        // Scale spacing by same factor so radius:spacing ratio is preserved
+        var plSpacing2 = plSpacingM ? parseFloat(plSpacingM[1]) * plScale : plRadius2 * 2.5;
+        // Clamp diamond radius against outer stroke band (mirrors first-pass clamp)
+        if (plShape2 === 'diamond') {
+          plRadius2 = Math.min(plRadius2, Math.round(effectiveOsw / 2));
+        }
         // Remove old perf line shapes at inner rect position (white circles/diamonds)
         svgStr = svgStr.replace(/<circle[^>]*fill=["']#(?:FFF(?:FFF)?|FFFFFF|white)["'][^>]*\/>/gi, '');
         svgStr = svgStr.replace(/<polygon[^>]*fill=["']#(?:FFF(?:FFF)?|FFFFFF|white)["'][^>]*\/>/gi, '');
@@ -6690,6 +7077,7 @@ const SvgRenderer = {
     // Frame B: outer rect + borders, inner rect visible
     // Frame C: outer rect + borders + white split, inner rect invisible
     svg = SvgRenderer.addDoubleFrame(svg, bi, params.color, params.frame || 'single');
+    svg = SvgRenderer.applyAsymmetricStroke(svg);
     svg = SvgRenderer.cropViewBoxToStamp(svg);
 
     // 11. Texture
