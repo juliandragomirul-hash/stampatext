@@ -1402,18 +1402,37 @@
         var zoomSvg = overlay.querySelector('svg');
         if (zoomSvg) {
           // Crop viewBox tightly around the actual outermost stamp geometry.
-          // Prefer the asymmetric outer frame path (it sits outside the inner
-          // rect by the full band thickness); fall back to inner rect.
+          // Scan all candidates (asym donut paths, mixed-corner paths, filled
+          // outer rects) and pick the largest bounding box. Account for
+          // stroke-width/2 overflow.
           var zoomPad = 40;
-          var asymOuter = svgEl.querySelector('path[data-asym-frame="1"][data-rect-w]');
+          var cropCandidates = [];
+          var dataPaths = svgEl.querySelectorAll('path[data-rect-w], rect[data-rect-w]');
+          dataPaths.forEach(function(el) {
+            var x = parseFloat(el.getAttribute('data-rect-x'));
+            var y = parseFloat(el.getAttribute('data-rect-y'));
+            var w = parseFloat(el.getAttribute('data-rect-w'));
+            var h = parseFloat(el.getAttribute('data-rect-h'));
+            var sw = parseFloat(el.getAttribute('stroke-width') || '0');
+            cropCandidates.push({ x: x - sw/2, y: y - sw/2, w: w + sw, h: h + sw });
+          });
+          // Also consider filled colored rects (fill=yes stamps: outer rect
+          // carries the color fill and no data-rect-* attrs).
+          var colorRects = svgEl.querySelectorAll('rect[fill]:not([fill="none"]):not([fill="#FFFFFF"]):not([fill="white"])');
+          colorRects.forEach(function(r) {
+            var w = parseFloat(r.getAttribute('width') || '0');
+            var h = parseFloat(r.getAttribute('height') || '0');
+            if (w < 200 || h < 100) return; // skip watermarks / small decorations
+            var x = parseFloat(r.getAttribute('x') || '0');
+            var y = parseFloat(r.getAttribute('y') || '0');
+            var sw = parseFloat(r.getAttribute('stroke-width') || '0');
+            cropCandidates.push({ x: x - sw/2, y: y - sw/2, w: w + sw, h: h + sw });
+          });
           var cropRect = null;
-          if (asymOuter) {
-            cropRect = [
-              parseFloat(asymOuter.getAttribute('data-rect-x')),
-              parseFloat(asymOuter.getAttribute('data-rect-y')),
-              parseFloat(asymOuter.getAttribute('data-rect-w')),
-              parseFloat(asymOuter.getAttribute('data-rect-h'))
-            ];
+          if (cropCandidates.length > 0) {
+            cropCandidates.sort(function(a, b) { return (b.w * b.h) - (a.w * a.h); });
+            var c = cropCandidates[0];
+            cropRect = [c.x, c.y, c.w, c.h];
           } else {
             var ir = svgEl.getAttribute('data-inner-rect');
             if (ir) cropRect = ir.split(',').map(parseFloat);

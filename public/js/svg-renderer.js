@@ -6686,6 +6686,11 @@ const SvgRenderer = {
       if (strokeW > 0) tag += ' stroke-width="' + strokeW + '" stroke-miterlimit="10"';
       if (srx > 0) tag += ' rx="' + srx.toFixed(1) + '"';
       if (sry > 0) tag += ' ry="' + sry.toFixed(1) + '"';
+      // Stamp data-rect-* so cropViewBoxToStamp's breathing scan picks up
+      // colored outer rects (filled stamps) and includes them in the largest-
+      // bounds calculation.
+      tag += ' data-rect-x="' + sx.toFixed(2) + '" data-rect-y="' + sy.toFixed(2) +
+             '" data-rect-w="' + sw2.toFixed(2) + '" data-rect-h="' + sh2.toFixed(2) + '"';
       return tag + '/>';
     };
 
