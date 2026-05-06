@@ -81,20 +81,24 @@
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-border-list" style="min-width:auto;padding:2px;">
+          <!-- Iconic short list (ranks 1-7), order from iconic-config.js -->
           <div class="filter-bar-dropdown-item active" data-value="simple">Plain</div>
           <div class="filter-bar-dropdown-item" data-value="stitch_line">Stitch Line</div>
-          <div class="filter-bar-dropdown-item" data-value="stitch_square">Stitch Square</div>
-          <div class="filter-bar-dropdown-item" data-value="stitch_circle">Stitch Dot</div>
-          <div class="filter-bar-dropdown-item" data-value="perf_line">Perf. Line</div>
           <div class="filter-bar-dropdown-item" data-value="perf_line_spaced">Perf. Spaced</div>
-          <div class="filter-bar-dropdown-item" data-value="saw_line">Saw Line</div>
           <div class="filter-bar-dropdown-item" data-value="sawtooth">Sawtooth</div>
-          <div class="filter-bar-dropdown-item" data-value="perforated">Perforated</div>
           <div class="filter-bar-dropdown-item" data-value="perforated_spaced">Spaced Perforated</div>
           <div class="filter-bar-dropdown-item" data-value="wavy">Wavy</div>
-          <div class="filter-bar-dropdown-item" data-value="zigzag">Zigzag</div>
           <div class="filter-bar-dropdown-item" data-value="torn_edge">Torn Edge</div>
-          <div class="filter-bar-dropdown-item" data-value="chalk">Chalk</div>
+          <!-- "More…" toggle, reveals ranks 8-14 below -->
+          <div class="filter-bar-dropdown-more" data-target="product-border-list" style="padding:4px 8px;cursor:pointer;color:#888;font-size:0.85em;border-top:1px solid #eee;margin-top:2px;text-align:center;">More…</div>
+          <!-- Behind More (ranks 8-14), hidden by default -->
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="perf_line" style="display:none;">Perf. Line</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="perforated" style="display:none;">Perforated</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="saw_line" style="display:none;">Saw Line</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="stitch_square" style="display:none;">Stitch Square</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="stitch_circle" style="display:none;">Stitch Dot</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="zigzag" style="display:none;">Zigzag</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="chalk" style="display:none;">Chalk</div>
         </div>
       </div>
 
@@ -105,14 +109,17 @@
           <span class="filter-bar-color-arrow">&#9662;</span>
         </div>
         <div class="filter-bar-dropdown-list" id="product-corner-list" style="display:none;grid-template-columns:1fr 1fr;gap:4px;padding:6px;font-family:'CourierPrime',monospace;">
+          <!-- Iconic short list (ranks 1-3) — Medium removed 2026-05-05 -->
           <div class="filter-bar-dropdown-item active" data-value="straight" data-letter="A">AAA</div>
           <div class="filter-bar-dropdown-item" data-value="soft_round" data-letter="B">BBB</div>
-          <div class="filter-bar-dropdown-item" data-value="medium_round" data-letter="C">CCC</div>
           <div class="filter-bar-dropdown-item" data-value="strong_round" data-letter="D">DDD</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_top_straight" data-letter="E">EEE</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_top_round" data-letter="F">FFF</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_diag_down" data-letter="G">GGG</div>
-          <div class="filter-bar-dropdown-item" data-value="mixed_diag_up" data-letter="H">HHH</div>
+          <!-- "More…" toggle, spans both grid columns -->
+          <div class="filter-bar-dropdown-more" data-target="product-corner-list" style="grid-column:1/-1;padding:4px 8px;cursor:pointer;color:#888;font-size:0.85em;border-top:1px solid #eee;margin-top:2px;text-align:center;font-family:sans-serif;">More…</div>
+          <!-- Behind More (ranks 4-7), hidden by default -->
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="mixed_top_round" data-letter="F" style="display:none;">FFF</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="mixed_top_straight" data-letter="E" style="display:none;">EEE</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="mixed_diag_down" data-letter="G" style="display:none;">GGG</div>
+          <div class="filter-bar-dropdown-item filter-bar-dropdown-extra" data-value="mixed_diag_up" data-letter="H" style="display:none;">HHH</div>
         </div>
       </div>
 
@@ -331,6 +338,7 @@
   <script src="/js/buy-credits.js"></script>
   <script src="/js/hypher-bundle.js"></script>
   <script src="/js/svg-renderer.js?v=291"></script>
+  <script src="/js/iconic-config.js?v=2"></script>
   <script>
     (async function() {
       // ---- Constants ----
@@ -899,6 +907,8 @@
         e.stopPropagation();
         var swatch = e.target.closest('.filter-bar-swatch');
         if (!swatch) return;
+        // Custom-color swatch is handled by its own <input type="color"> overlay
+        if (swatch.classList.contains('filter-bar-swatch-custom')) return;
         this.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
         swatch.classList.add('active');
         currentColor = swatch.dataset.color;
@@ -1036,6 +1046,16 @@
       });
       document.getElementById('product-border-list').addEventListener('click', function(e) {
         e.stopPropagation();
+        // "More…" toggle: reveal/hide ranks beyond iconic
+        var moreBtn = e.target.closest('.filter-bar-dropdown-more');
+        if (moreBtn) {
+          var extras = this.querySelectorAll('.filter-bar-dropdown-extra');
+          var isExpanded = moreBtn.dataset.expanded === '1';
+          extras.forEach(function(el) { el.style.display = isExpanded ? 'none' : 'block'; });
+          moreBtn.textContent = isExpanded ? 'More…' : 'Less…';
+          moreBtn.dataset.expanded = isExpanded ? '0' : '1';
+          return;
+        }
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
         var newBorder = item.dataset.value;
@@ -1082,6 +1102,16 @@
       });
       document.getElementById('product-corner-list').addEventListener('click', function(e) {
         e.stopPropagation();
+        // "More…" toggle: reveal/hide ranks beyond iconic
+        var moreBtn = e.target.closest('.filter-bar-dropdown-more');
+        if (moreBtn) {
+          var extras = this.querySelectorAll('.filter-bar-dropdown-extra');
+          var isExpanded = moreBtn.dataset.expanded === '1';
+          extras.forEach(function(el) { el.style.display = isExpanded ? 'none' : 'block'; });
+          moreBtn.textContent = isExpanded ? 'More…' : 'Less…';
+          moreBtn.dataset.expanded = isExpanded ? '0' : '1';
+          return;
+        }
         var item = e.target.closest('.filter-bar-dropdown-item');
         if (!item) return;
         // Click active item again = close list
@@ -1541,6 +1571,32 @@
           }
           grid.appendChild(swatch);
         });
+        // Custom color picker — last swatch, opens native color input
+        var customSwatch = document.createElement('div');
+        customSwatch.className = 'filter-bar-swatch filter-bar-swatch-custom';
+        customSwatch.style.cssText = 'background:conic-gradient(from 0deg,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000);position:relative;cursor:pointer;';
+        customSwatch.title = 'Pick custom color';
+        var customInput = document.createElement('input');
+        customInput.type = 'color';
+        customInput.value = '#FF0000';
+        customInput.style.cssText = 'position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:0;padding:0;';
+        customInput.addEventListener('change', function(e) {
+          e.stopPropagation();
+          var picked = customInput.value.toUpperCase();
+          customSwatch.style.background = picked;
+          grid.querySelectorAll('.filter-bar-swatch').forEach(function(s) { s.classList.remove('active'); });
+          customSwatch.classList.add('active');
+          customSwatch.dataset.color = picked;
+          currentColor = picked;
+          document.getElementById('product-color-dot').style.background = picked;
+          var cVal = document.getElementById('product-corner-value');
+          if (cVal) cVal.style.color = picked;
+          var bVal = document.getElementById('product-border-value');
+          if (bVal) bVal.style.color = picked;
+          renderPreview();
+        });
+        customSwatch.appendChild(customInput);
+        grid.appendChild(customSwatch);
       }
 
       // Set initial color on Style + Corners icons

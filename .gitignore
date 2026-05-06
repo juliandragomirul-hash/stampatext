@@ -8,3 +8,9 @@ stampatext recuzita/
 .playwright-mcp/
 test-screenshots/
 test-*.png
+
+# Debug screenshots saved to repo root during stamp engine work
+/*.png
+
+# Stray temp files anywhere in the tree
+*temp_*

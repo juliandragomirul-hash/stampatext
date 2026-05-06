@@ -3218,7 +3218,11 @@ const SvgRenderer = {
       if (stampShape !== 'square') {
         // Frame A: no inner rect, so text can sit closer to the outer border.
         // Frame B/C: inner rect needs breathing room from text.
-        textGap = (frameMode === 'single') ? 8 : 18;
+        // Bumped 2026-05-06: user reported text "smothered" against borders on straight
+        // and soft_round corners (no/minimal cornerComp slack). Iterations: 8 → 14 → 24
+        // (Frame A); 18 → 28 (Frame B/C). 24/28 gives clear breathing room without
+        // making the stamp feel oversized.
+        textGap = (frameMode === 'single') ? 24 : 28;
       }
       if (stampShape === 'square') {
         textGap = 30; // default (plain, perf line, zigzag, torn edge, chalk)
@@ -6201,6 +6205,11 @@ const SvgRenderer = {
       if (!fillM || fillM[1].toLowerCase() !== 'none') continue;
       var strokeM = attrs.match(/\bstroke=["']([^"']*)["']/);
       if (!strokeM || strokeM[1].toLowerCase() === 'none') continue;
+      // Skip white-stroked rects — they're Frame C (split) overlays meant to sit on top of
+      // the colored outer as a "split stripe", NOT independent borders to be donut-fied.
+      // Treating them as donuts scrambles the geometry and makes split look like a thin frame.
+      var sLower = strokeM[1].toLowerCase().replace(/\s/g, '');
+      if (sLower === '#fff' || sLower === '#ffffff' || sLower === 'white') continue;
       var swM = attrs.match(/\bstroke-width=["']([\d.]+)["']/);
       if (!swM) continue;
       var sw = parseFloat(swM[1]);
@@ -6406,6 +6415,13 @@ const SvgRenderer = {
     var hM = outer.attrs.match(/\sheight=["']([\d.]+)["']/);
     var rectH = hM ? parseFloat(hM[1]) : 0;
 
+    // === STADIUM (strong_round): widen rect by `height` so semicircle ends sit OUTSIDE
+    // the text region, then set rx = height/2 (no cap). Net effect: text size & position
+    // unchanged, corners always read fully strong, viewBox grows to fit the wider rect.
+    if (cornerType === 'strong_round') {
+      return this._applyStadiumCorner(svgStr, outer, rectH);
+    }
+
     // === Mixed corners: convert rect to path with per-corner radii ===
     var mc = this._getMixedCorners(cornerType);
     if (mc) {
@@ -6435,9 +6451,9 @@ const SvgRenderer = {
       return svgStr.slice(0, outer.index) + pathTag + svgStr.slice(outer.index + outer.full.length);
     }
 
-    // === Uniform corners: set rx/ry on the rect ===
+    // === Uniform corners (soft_round only — medium removed 2026-05-05; strong handled above as stadium) ===
     // Offset path: inner_rx = rx - inset, outer inner edge = rx - sw/2. Stroke capped to 30 in autoFit.
-    var CORNER_RX = { soft_round: 35, medium_round: 80, strong_round: 130 };
+    var CORNER_RX = { soft_round: 35, medium_round: 80 };
     var targetRx = CORNER_RX[cornerType];
     if (!targetRx) return svgStr;
     // Cap rx so both axes keep a visible straight segment
@@ -6456,6 +6472,76 @@ const SvgRenderer = {
       newAttrs = newAttrs.replace(/<rect /, '<rect ry="' + rx + '" ');
     }
     return svgStr.slice(0, outer.index) + newAttrs + svgStr.slice(outer.index + outer.full.length);
+  },
+
+  /**
+   * Stadium corner technique for strong_round.
+   * Widens the outer rect by `height` (added equally to left + right) so the
+   * full semicircle ends fit OUTSIDE the text region. rx = height/2 (no cap).
+   * Also widens the parent <svg> viewBox to match.
+   *
+   * Net effect:
+   *   - Text size and position UNCHANGED
+   *   - Corners always read fully rounded at any stamp size
+   *   - On wide one-liners: classic stadium / pill shape
+   *   - On square multi-row text (h ≈ w): morphs to near-circle (intentional)
+   */
+  _applyStadiumCorner(svgStr, outer, rectH) {
+    if (!rectH || rectH <= 0) return svgStr;
+    var xM = outer.attrs.match(/\bx=["']([\d.\-]+)["']/);
+    var wMatch = outer.attrs.match(/\swidth=["']([\d.]+)["']/);
+    var rectX = xM ? parseFloat(xM[1]) : 0;
+    var rectW = wMatch ? parseFloat(wMatch[1]) : 0;
+    if (!rectW || rectW <= 0) return svgStr;
+
+    // ext = rectH * 0.25 (revised 2026-05-06 round 2): 0.5 still left noticeable empty
+    // padding on the sides. Quartering the extension brings the semicircle ends in close
+    // to the text. rx = rectH/2 still preserved so corners read fully stadium-rounded.
+    var ext = rectH * 0.25;
+    var newX = rectX - ext / 2;
+    var newW = rectW + ext;
+    var rx = rectH / 2;
+
+    // Update outer rect attrs: x, width, rx, ry
+    var updated = outer.full
+      .replace(/\bx=["'][\d.\-]+["']/, 'x="' + newX.toFixed(3) + '"')
+      .replace(/\swidth=["'][\d.]+["']/, ' width="' + newW.toFixed(3) + '"');
+    if (/\brx=["'][\d.]+["']/.test(updated)) {
+      updated = updated.replace(/\brx=["'][\d.]+["']/, 'rx="' + rx.toFixed(3) + '"');
+    } else {
+      updated = updated.replace(/<rect /, '<rect rx="' + rx.toFixed(3) + '" ');
+    }
+    if (/\bry=["'][\d.]+["']/.test(updated)) {
+      updated = updated.replace(/\bry=["'][\d.]+["']/, 'ry="' + rx.toFixed(3) + '"');
+    } else {
+      updated = updated.replace(/<rect /, '<rect ry="' + rx.toFixed(3) + '" ');
+    }
+
+    var newSvg = svgStr.slice(0, outer.index) + updated + svgStr.slice(outer.index + outer.full.length);
+
+    // Widen the parent <svg> viewBox by the same amount, shifted left by ext/2
+    var vbRe = /(<svg\b[^>]*\sviewBox=["'])\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*(["'])/i;
+    var vbM = newSvg.match(vbRe);
+    if (vbM) {
+      var vbX = parseFloat(vbM[2]);
+      var vbY = parseFloat(vbM[3]);
+      var vbW = parseFloat(vbM[4]);
+      var vbH = parseFloat(vbM[5]);
+      var newVbX = vbX - ext / 2;
+      var newVbW = vbW + ext;
+      newSvg = newSvg.replace(vbRe,
+        '$1' + newVbX.toFixed(3) + ' ' + vbY.toFixed(3) + ' ' + newVbW.toFixed(3) + ' ' + vbH.toFixed(3) + '$6'
+      );
+    }
+
+    // Mark stadium so downstream consumers (addDoubleFrame, decorations) can detect & adapt
+    if (!/data-stadium=/.test(newSvg)) {
+      newSvg = newSvg.replace(/<rect\s+rx="[\d.]+"\s+ry="[\d.]+"/, function (match) {
+        return match + ' data-stadium="1"';
+      });
+    }
+
+    return newSvg;
   },
 
   /**
@@ -6616,7 +6702,10 @@ const SvgRenderer = {
     var effectiveOsw = propSwAttr ? parseFloat(propSwAttr[1]) : osw;
     var cornerTypeM = svgStr.match(/data-corner-type="([^"]+)"/);
     var frameCornerType = cornerTypeM ? cornerTypeM[1] : 'straight';
-    var innerSw = Math.max(6, Math.round(effectiveOsw * 0.36));
+    // Frame B punchier inner stroke (2026-05-06): bumped 0.36 → 0.50 of outer stroke
+    // for double-frame mode so the inner rect reads more confidently. Other frames keep 0.36.
+    var innerSwRatio = (frameMode === 'double') ? 0.50 : 0.36;
+    var innerSw = Math.max(6, Math.round(effectiveOsw * innerSwRatio));
     // Outset: distance from inner rect outer-stroke edge to outer rect center line.
     // Goal: every style produces the SAME visible white gap (`whiteGap`) between the
     // inner rect outer edge and the visible decoration's inner edge — independent of
@@ -6709,7 +6798,9 @@ const SvgRenderer = {
     var outerSwVal = hasVisibleOuterStroke ? effectiveOsw : osw;
     // Frame A: inner rect is hidden, so absorb inner stroke gap into outer stroke
     // for a beefier visual border. Doesn't apply to stitch/wavy/brush (no visible rect stroke).
-    if (frameMode === 'single' && hasVisibleOuterStroke) {
+    // Frame C (split) also needs a beefy outer so the white split stroke down the middle
+    // creates two visibly-distinct red strips on either side (otherwise looks like a thin Frame A).
+    if ((frameMode === 'single' || frameMode === 'split') && hasVisibleOuterStroke) {
       outerSwVal += innerSw;
     }
     var outerStrokeVal = (outerStroke && outerStroke !== 'none') ? outerStroke : innerColor;

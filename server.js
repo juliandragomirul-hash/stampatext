@@ -468,6 +468,10 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html'));
 });
 
+app.get('/admin/test-gallery', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin', 'test-gallery.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });

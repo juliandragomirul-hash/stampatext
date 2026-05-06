@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StampaText - Test Gallery</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Preload all 11 fonts so renders are immediate -->
+  <link rel="preload" href="/fonts/Oswald-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Montserrat-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Nunito-Black.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/BlackOpsOne-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/CourierPrime-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Yomogi-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Bitter-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Exo2-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Comfortaa-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/FuzzyBubbles-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/BebasNeue-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <style>
+    .tg-wrap { max-width: 1500px; margin: 1rem auto; padding: 0 1rem; }
+    .tg-controls { background: #fafafa; border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px 16px; margin-bottom: 1rem; }
+    .tg-text-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .tg-text-input { flex: 1; min-width: 280px; padding: 8px 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+    .tg-mode-row { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; font-size: 13px; }
+    .tg-mode-row label { cursor: pointer; display: flex; gap: 4px; align-items: center; user-select: none; }
+    .tg-list-area { display: none; }
+    .tg-list-area.tg-show { display: block; }
+    .tg-list-textarea {
+      width: 100%; min-height: 140px; padding: 8px 10px;
+      font-family: 'Courier Prime', monospace; font-size: 13px; line-height: 1.4;
+      border: 1px solid #ccc; border-radius: 4px; resize: vertical;
+    }
+    .tg-list-actions { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; color: #666; align-items: center; }
+    .tg-list-actions button { padding: 3px 8px; font-size: 12px; cursor: pointer; border: 1px solid #aaa; background: white; border-radius: 3px; }
+    .tg-list-actions button:hover { background: #f0f0f0; }
+    .tg-results-section-header {
+      grid-column: 1 / -1; padding: 12px 4px 6px; margin-top: 8px;
+      font-weight: 600; font-size: 14px; color: #333; border-top: 2px solid #4f46e5;
+    }
+    .tg-results-section-header:first-child { margin-top: 0; border-top: none; }
+    .tg-count { font-weight: 600; color: #333; padding: 6px 12px; background: #fff; border: 1px solid #ddd; border-radius: 4px; min-width: 140px; text-align: center; }
+    .tg-count.warn { background: #fff8e0; border-color: #f0c040; }
+    .tg-count.danger { background: #ffe8e8; border-color: #f08080; color: #a00; }
+    .tg-stamp-btn { padding: 8px 18px; font-size: 14px; background: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    .tg-stamp-btn:disabled { background: #aaa; cursor: not-allowed; }
+    .tg-stamp-btn:hover:not(:disabled) { background: #3a31c8; }
+    .tg-send-btn {
+      padding: 8px 14px; font-size: 13px;
+      background: white; color: #c00; border: 2px solid #c00; border-radius: 4px;
+      cursor: pointer; font-weight: 600;
+    }
+    .tg-send-btn:disabled { background: #f5f5f5; color: #aaa; border-color: #ccc; cursor: not-allowed; }
+    .tg-send-btn:hover:not(:disabled) { background: #c00; color: white; }
+    .tg-toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1a1f2e; color: white; padding: 12px 20px; border-radius: 6px;
+      font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.25); z-index: 1000;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .tg-toast.tg-toast-show { opacity: 1; }
+    .tg-toast.tg-toast-error { background: #c00; }
+    .tg-param-row { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed #eee; }
+    .tg-param-row:last-child { border-bottom: 0; }
+    .tg-param-label { width: 80px; font-weight: 600; font-size: 12px; color: #555; padding-top: 4px; text-transform: uppercase; flex-shrink: 0; }
+    .tg-param-values { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .tg-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: white; border: 1px solid #ccc; border-radius: 14px; font-size: 12px; cursor: pointer; user-select: none; }
+    .tg-chip:hover { border-color: #4f46e5; }
+    .tg-chip.checked { background: #ede9fe; border-color: #4f46e5; color: #3a31c8; }
+    .tg-chip input[type="checkbox"] { margin: 0; cursor: pointer; }
+    .tg-chip.tg-extra { display: none; }
+    .tg-chip.tg-extra.tg-shown { display: inline-flex; }
+    .tg-chip.tg-extra.tg-shown { background: #fafafa; }
+    .tg-more-btn { display: inline-flex; align-items: center; padding: 3px 8px; background: transparent; border: 1px dashed #aaa; border-radius: 14px; font-size: 11px; color: #666; cursor: pointer; user-select: none; }
+    .tg-more-btn:hover { border-color: #4f46e5; color: #4f46e5; }
+    .tg-quick { display: inline-flex; gap: 4px; margin-left: 8px; }
+    .tg-quick a { color: #4f46e5; font-size: 11px; cursor: pointer; text-decoration: none; padding: 3px 6px; border-radius: 3px; }
+    .tg-quick a:hover { background: #ede9fe; }
+    .tg-status { color: #666; font-size: 12px; padding: 8px 0; }
+    .tg-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+    .tg-cell {
+      background: #f7f7f7; border: 1px solid #ddd; border-radius: 4px; padding: 4px;
+      position: relative; min-height: 100px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: visible;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+      transform-origin: center center;
+    }
+    /* Hover zoom — scale up + lift + white bg + shadow. Sticky while reject popover is open. */
+    .tg-cell:hover,
+    .tg-cell:has(.tg-reject-popover.tg-open),
+    .tg-cell.tg-pinned {
+      transform: scale(1.7);
+      z-index: 50;
+      background: #ffffff;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      border-color: #4f46e5;
+    }
+    .tg-cell svg { max-width: 100%; height: auto; max-height: 200px; display: block; }
+    .tg-cell.tg-broken { background: #ffe5e5; color: #c00; font-size: 11px; padding: 8px; text-align: center; }
+
+    /* Meta caption — sits BELOW the stamp when zoomed, never overlaps the stamp itself */
+    .tg-meta {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: rgba(15,15,20,0.92); color: white;
+      font-size: 11px; line-height: 1.45; padding: 6px 8px; border-radius: 3px;
+      opacity: 0; transition: opacity 0.12s; pointer-events: none;
+      font-family: 'Courier Prime', monospace;
+      white-space: pre-line; z-index: 5;
+      text-align: left;
+    }
+    .tg-cell:hover .tg-meta, .tg-cell.tg-pinned .tg-meta { opacity: 1; }
+    .tg-cell.tg-pinned .tg-meta { background: rgba(0,40,80,0.95); pointer-events: auto; }
+    /* Suppress meta when reject popover is open — popover takes the area */
+    .tg-cell:has(.tg-reject-popover.tg-open) .tg-meta { opacity: 0; }
+    .tg-meta-pin-hint { display: block; margin-top: 4px; font-size: 9px; opacity: 0.6; font-style: italic; }
+
+    /* Info & reject buttons (corner overlays) */
+    .tg-cell-actions {
+      position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; z-index: 6;
+      opacity: 0; transition: opacity 0.12s;
+    }
+    .tg-cell:hover .tg-cell-actions, .tg-cell.tg-pinned .tg-cell-actions, .tg-cell.tg-rejected .tg-cell-actions { opacity: 1; }
+    .tg-action-btn {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(255,255,255,0.95); border: 1px solid #888;
+      cursor: pointer; font-size: 13px; line-height: 1; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .tg-action-btn:hover { transform: scale(1.1); }
+    .tg-action-btn.tg-reject-btn { color: #c00; border-color: #c00; }
+    .tg-action-btn.tg-pin-btn { color: #4f46e5; border-color: #4f46e5; font-size: 11px; font-weight: 700; }
+
+    /* Reject popover */
+    .tg-reject-popover {
+      position: absolute; top: 30px; right: 4px;
+      background: white; border: 1px solid #c00; border-radius: 6px;
+      padding: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 20; min-width: 180px; display: none;
+    }
+    .tg-reject-popover.tg-open { display: block; }
+    .tg-reject-popover-title { font-size: 11px; font-weight: 600; color: #555; margin-bottom: 6px; }
+    .tg-reason-chip {
+      display: block; padding: 4px 8px; margin-bottom: 3px;
+      background: #fff7f7; border: 1px solid #f0c0c0; border-radius: 12px;
+      font-size: 11px; cursor: pointer; text-align: left;
+    }
+    .tg-reason-chip:hover { background: #ffe5e5; border-color: #c00; }
+    .tg-reject-popover textarea {
+      width: 100%; margin-top: 6px; padding: 4px; font-size: 11px;
+      border: 1px solid #ddd; border-radius: 3px; resize: vertical;
+      font-family: inherit; min-height: 32px;
+    }
+    .tg-reject-popover-actions { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
+    .tg-reject-popover-cancel, .tg-reject-popover-confirm {
+      padding: 4px 10px; font-size: 11px; border-radius: 3px; cursor: pointer; border: 1px solid;
+    }
+    .tg-reject-popover-cancel { background: white; border-color: #aaa; color: #555; }
+    .tg-reject-popover-confirm { background: #c00; border-color: #900; color: white; }
+    .tg-reject-popover-confirm:disabled { background: #ddd; border-color: #aaa; color: #888; cursor: not-allowed; }
+
+    /* Rejected cell state */
+    .tg-cell.tg-rejected {
+      background: #ffeaea; border-color: #c00;
+    }
+    .tg-cell.tg-rejected svg { opacity: 0.5; filter: grayscale(0.4); }
+    .tg-rejected-badge {
+      position: absolute; top: 4px; left: 4px; z-index: 7;
+      background: #c00; color: white; padding: 2px 6px; border-radius: 3px;
+      font-size: 9px; font-weight: 600; text-transform: uppercase;
+    }
+
+    /* Status indicators */
+    .tg-status-summary { color: #555; font-size: 12px; padding: 4px 0; }
+    .tg-status-summary .tg-rejected-count { color: #c00; font-weight: 600; }
+  </style>
+</head>
+<body class="page-loading">
+
+  <header class="header">
+    <a href="/admin" class="header-logo"><img src="/logo.png" alt="stampatext" class="header-logo-img"> <span style="color:#4f46e5; font-size:0.75rem; vertical-align:middle;">ADMIN · TEST GALLERY</span></a>
+    <div class="header-actions">
+      <span class="header-user" id="admin-email"></span>
+      <a href="/admin" style="margin-left:12px;color:#4f46e5;font-size:13px;text-decoration:none;">← Admin</a>
+    </div>
+  </header>
+
+  <div class="tg-wrap">
+    <div class="tg-controls">
+      <div class="tg-mode-row">
+        <span style="color:#555;font-weight:600;">Stamp source:</span>
+        <label><input type="radio" name="tg-mode" value="single" checked> Single string</label>
+        <label><input type="radio" name="tg-mode" value="word_list"> Single-word list (12)</label>
+        <label><input type="radio" name="tg-mode" value="multi_list"> Multi-word list (16)</label>
+      </div>
+      <div class="tg-text-row" id="tg-single-row">
+        <input type="text" id="tg-text" class="tg-text-input" placeholder="Type the text to stamp (e.g. APPROVED)" maxlength="40" value="APPROVED">
+        <span id="tg-count" class="tg-count">Count: 0</span>
+        <button id="tg-stamp-btn" class="tg-stamp-btn" disabled>Stamp</button>
+        <button id="tg-send-claude-btn" class="tg-send-btn" disabled title="Copy this batch's rejections to clipboard for sending to Claude">📤 Send to Claude</button>
+      </div>
+      <div class="tg-list-area" id="tg-list-area">
+        <textarea id="tg-list-textarea" class="tg-list-textarea" placeholder="One string per line" spellcheck="false"></textarea>
+        <div class="tg-list-actions">
+          <span id="tg-list-help">One string per line. Empty lines ignored. Auto-saved.</span>
+          <button id="tg-list-reset" type="button">Reset to default</button>
+        </div>
+      </div>
+      <div id="tg-params"></div>
+    </div>
+    <div id="tg-status" class="tg-status"></div>
+    <div id="tg-results" class="tg-results"></div>
+  </div>
+
+  <div id="tg-toast" class="tg-toast"></div>
+
+  <script src="/js/supabase.umd.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/router.js"></script>
+  <script src="/js/hypher-bundle.js"></script>
+  <script src="/js/svg-renderer.js"></script>
+  <script src="/js/iconic-config.js?v=2"></script>
+  <script src="/js/admin-test-gallery.js?v=12"></script>
+
+</body>
+</html>

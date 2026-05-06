@@ -6,11 +6,13 @@
 
   // ---- Init ----
   document.addEventListener('DOMContentLoaded', function () {
-    // Sidebar navigation
+    // Sidebar navigation — fragment links are SPA, absolute paths navigate normally
     document.querySelectorAll('.admin-nav-item').forEach(function (item) {
       item.addEventListener('click', function (e) {
+        var href = this.getAttribute('href');
+        if (!href || !href.startsWith('#')) return; // let absolute/relative URLs navigate
         e.preventDefault();
-        var target = this.getAttribute('href').replace('#', '');
+        var target = href.replace('#', '');
         showSection(target);
       });
     });
